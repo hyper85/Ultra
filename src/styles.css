@@ -76,3 +76,22 @@ td input { margin: 0; padding: 6px 8px; width: 74px; background: #241a12; border
 .btn.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
 .foot { color: var(--muted); font-size: 12px; padding: 12px 4px; }
 @media (prefers-reduced-motion: reduce) { .ribbon div { transition: none; } }
+.quick { display: flex; gap: 6px; margin: 8px 0 0; }
+.quick button { flex: 1; padding: 9px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-weight: 600; cursor: pointer; }
+.quick button.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+.quick + .muted { margin-top: 10px; }
+.import { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.import h3 { font-size: 18px; margin: 0 0 6px; }
+.import-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+.import-row input[type=file] { width: auto; flex: 1 1 260px; padding: 8px; }
+.import-row .btn { padding: 7px 10px; font-size: 13px; }
+.check { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+.check input { width: auto; margin: 0; }
+.import details { font-size: 13px; color: var(--muted); }
+.import summary { cursor: pointer; color: var(--text); }
+.import ul { margin: 8px 0 0; padding-left: 18px; }
+.import li { margin-bottom: 4px; }
+.import code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+.cellwrap { position: relative; display: inline-block; }
+.cellwrap .tag { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 11px; font-style: normal; pointer-events: none; }
+.cellwrap input { padding-right: 20px; }

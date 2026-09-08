@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals } from "./import.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -14,9 +15,7 @@ const PH = {
   "Ultra-prep": "var(--orange)",
   Nedtrapning: "var(--violet)",
 };
-// Parse "YYYY-MM-DD" as local midnight so week boundaries match thisMonday() in every time zone.
-const parseLocal = (str) => { const [y, m, d] = String(str).split("-").map(Number); return new Date(y, m - 1, d); };
-const thisMonday = () => { const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() - ((day + 6) % 7)); d.setHours(0, 0, 0, 0); return d; };
+const thisMonday = () => mondayOf(new Date());
 const fmt = (d) => d.toLocaleDateString("da-DK", { day: "numeric", month: "short" });
 const isoWeek = (d) => {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -29,7 +28,7 @@ const isoWeek = (d) => {
 export function buildPlan(p) {
   const start = parseLocal(p.startDate);
   const race = parseLocal(p.raceDate);
-  const weeks = Math.max(8, Math.floor((race - start) / (7 * 86400000)) + 1);
+  const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
   const restart = p.breakWeeks >= 2 ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
   const peakTarget = Math.min(120, Math.max(45, Math.round(raceKm * 0.95)));
@@ -43,7 +42,7 @@ export function buildPlan(p) {
   const rows = [];
   let km = restart;
   for (let i = 1; i <= weeks; i++) {
-    const wkStart = new Date(start.getTime() + (i - 1) * 7 * 86400000);
+    const wkStart = addDays(start, (i - 1) * 7);
     const isRace = i === weeks;
     let phase, deload = false, quality, focus;
     if (i <= rebuild) {
@@ -86,7 +85,7 @@ export function buildPlan(p) {
     runDays.forEach((d, k) => (days[d] = Math.round((pool * share[k]) / tot)));
     days[p.longDay] = lng; days[p.longDay === 5 ? 6 : 5] = sun;
     const total = days.reduce((a, b) => a + b, 0);
-    rows.push({ i, wkStart, iso: isoWeek(wkStart), phase, km: total, lng, sun, deload, isRace, quality, focus, days });
+    rows.push({ i, wkStart, key: ymd(wkStart), iso: isoWeek(wkStart), phase, km: total, lng, sun, deload, isRace, quality, focus, days });
   }
   return { rows, weeks, peak, restart };
 }
@@ -97,16 +96,19 @@ const PROFILE_VERSION = 2;
 const DEFAULT = {
   v: PROFILE_VERSION,
   name: "", age: 41, height: 181, weight: 89, restHR: 49, maxHR: 186,
-  currentKm: 35, breakWeeks: 0, startDate: PLAN_START,
+  currentKm: 35, breakWeeks: 0, startDate: PLAN_START, includeHikes: false,
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
   runDays: [0, 2, 3], qualityDay: 2, longDay: 5, liftDays: [1, 3],
 };
 
 export default function App() {
   const [p, setP] = useState(DEFAULT);
-  const [log, setLog] = useState({});
+  const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
+  const [acts, setActs] = useState({});        // imported activities keyed by id
+  const [importMsg, setImportMsg] = useState(null);
   const [tab, setTab] = useState("plan");
   const [ready, setReady] = useState(false);
+  const fileRef = useRef(null);
 
   useEffect(() => { (async () => {
     const sp = await store.get("ultraplan-profile");
@@ -115,22 +117,81 @@ export default function App() {
       const migrated = (sp.v || 1) < PROFILE_VERSION ? { ...sp, startDate: PLAN_START, v: PROFILE_VERSION } : sp;
       setP({ ...DEFAULT, ...migrated });
     }
-    const sl = await store.get("ultraplan-log"); if (sl) setLog(sl);
+    const sl = await store.get("ultraplan-log");
+    if (sl) {
+      // Logs saved before v2 were keyed by week number; re-key them by the week's Monday using the start date they were logged against.
+      const legacy = Object.keys(sl).some((k) => /^\d+$/.test(k));
+      if (legacy) {
+        const start = parseLocal(sp?.startDate || PLAN_START);
+        const n = {};
+        for (const [k, v] of Object.entries(sl)) n[/^\d+$/.test(k) ? ymd(addDays(start, (+k - 1) * 7)) : k] = v;
+        setLog(n); store.set("ultraplan-log", n);
+      } else setLog(sl);
+    }
+    const sa = await store.get("ultraplan-activities"); if (sa) setActs(sa);
     setReady(true);
   })(); }, []);
   useEffect(() => { if (ready) store.set("ultraplan-profile", p); }, [p, ready]);
   const saveLog = (n) => { setLog(n); store.set("ultraplan-log", n); };
+  const saveActs = (n) => { setActs(n); store.set("ultraplan-activities", n); };
 
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === "number" ? +e.target.value : e.target.value });
+  // Any chosen date snaps to the Monday of its week so the plan always starts on a Monday.
+  const setStart = (str) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return; setP({ ...p, startDate: ymd(mondayOf(parseLocal(str))) }); };
+  const shiftStart = (weeks) => setStart(ymd(addDays(parseLocal(p.startDate), weeks * 7)));
   const toggle = (key, d) => { const s = new Set(p[key]); s.has(d) ? s.delete(d) : s.add(d); setP({ ...p, [key]: [...s].sort() }); };
 
   const plan = useMemo(() => buildPlan(p), [p]);
   const maxHR = p.maxHR || Math.round(211 - 0.64 * p.age);
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + 5);
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
-  const cur = plan.rows.find((r) => r.wkStart.getTime() === thisMonday().getTime()) || plan.rows[0];
+  const todayKey = ymd(thisMonday());
+  const cur = plan.rows.find((r) => r.key === todayKey) || plan.rows[0];
+  const startD = parseLocal(p.startDate);
 
-  const loads = plan.rows.map((r) => { const l = log[r.i] || {}; return l.km && l.rpe ? l.km * l.rpe : null; });
+  /* ---- Strava / Garmin import ---- */
+  // Write weekly totals from the imported activities into the log. Imported km always win for weeks that have activities;
+  // RPE is only estimated where the user has not typed one.
+  const applyActivities = (nextActs, includeHikes, base = log) => {
+    const weeks = weeklyTotals(nextActs, { includeHikes, maxHR });
+    const n = { ...base };
+    for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
+    for (const [k, w] of Object.entries(weeks)) {
+      const l = n[k] || {};
+      const rpe = l.rpe != null && l.rpe !== "" && !l.rpeAuto ? l.rpe : w.rpe ?? l.rpe;
+      n[k] = { ...l, km: w.km, n: w.n, auto: true, ...(rpe != null ? { rpe, rpeAuto: !(l.rpe != null && l.rpe !== "" && !l.rpeAuto) } : {}) };
+    }
+    saveLog(n);
+    return weeks;
+  };
+  const onFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const errors = []; let parsed = [];
+    for (const f of files) { try { parsed = parsed.concat(await parseFile(f)); } catch (err) { errors.push(err.message); } }
+    const next = { ...acts }; let added = 0;
+    for (const a of parsed) { if (!next[a.id]) added++; next[a.id] = a; }
+    saveActs(next);
+    const weeks = applyActivities(next, p.includeHikes);
+    const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
+    setImportMsg({
+      warn: errors.length > 0 || parsed.length === 0,
+      text: parsed.length === 0 && !errors.length ? "Ingen aktiviteter fundet i filen. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
+        : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${errors.length ? " " + errors.join(" ") : ""}`,
+    });
+    if (fileRef.current) fileRef.current.value = "";
+  };
+  const setHikes = (v) => { setP({ ...p, includeHikes: v }); applyActivities(acts, v); };
+  const clearImports = () => { if (!confirm("Fjern alle importerede aktiviteter? Tal du selv har skrevet, bliver stående.")) return; applyActivities({}, p.includeHikes); saveActs({}); setImportMsg(null); };
+  const nActs = Object.keys(acts).length;
+  const recentAvg = useMemo(() => {
+    const weeks = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR });
+    const keys = [1, 2, 3, 4].map((w) => ymd(addDays(thisMonday(), -7 * w))).filter((k) => weeks[k]);
+    return keys.length ? Math.round(keys.reduce((a, k) => a + weeks[k].km, 0) / keys.length) : null;
+  }, [acts, p.includeHikes, maxHR]);
+  const curLog = log[cur.key] || {};
+
+  const loads = plan.rows.map((r) => { const l = log[r.key] || {}; return l.km && l.rpe ? l.km * l.rpe : null; });
   const acwr = plan.rows.map((r, i) => {
     if (loads[i] == null) return null;
     const prev = loads.slice(Math.max(0, i - 4), i).filter((x) => x != null);
@@ -143,7 +204,7 @@ export default function App() {
   let advice = `Denne uge: ${cur.km} km, hård session ${DAYS[p.qualityDay].toLowerCase()} (${cur.quality}), lang tur ${cur.lng} km. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`;
   let warn = false;
   if (lastIdx != null) {
-    const a = acwr[lastIdx]; const l = log[plan.rows[lastIdx].i];
+    const a = acwr[lastIdx]; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = `ACWR sidste uge var ${a.toFixed(2)} – rødt. Hold denne uge på max ${Math.round(plan.rows[lastIdx].km * 0.75)} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.`; warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = `Du løb ${l.km} km mod ${plan.rows[lastIdx].km} planlagt. Planens tal er et loft. Ram ugens ${cur.km} km – og ikke mere.`; warn = true; }
     else if (l?.hr && p.restHR && l.hr >= p.restHR + 7) { advice = `Hvilepuls ${l.hr} er 7+ over din normal. Skær 30–50 % af ugens km, sov mere, spis mere.`; warn = true; }
@@ -168,6 +229,23 @@ export default function App() {
       <main className="wrap grid">
         <aside style={{ display: "grid", gap: 16 }}>
           <section className="panel">
+            <h2>Start</h2>
+            <label>Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge
+              <input type="date" value={p.startDate} max={p.raceDate} onChange={(e) => setStart(e.target.value)} />
+            </label>
+            <div className="quick">
+              <button onClick={() => setStart(ymd(addDays(thisMonday(), -7)))}>Sidste uge</button>
+              <button className={p.startDate === todayKey ? "on" : ""} onClick={() => setStart(todayKey)}>Denne uge</button>
+              <button onClick={() => setStart(ymd(addDays(thisMonday(), 7)))}>Næste uge</button>
+            </div>
+            <div className="quick">
+              <button onClick={() => shiftStart(-1)}>− 1 uge</button>
+              <button onClick={() => shiftStart(1)}>+ 1 uge</button>
+            </div>
+            <div className="muted">Planen starter mandag {fmt(startD)} (uge {isoWeek(startD)}) og løber {plan.weeks} uger frem til løbet.</div>
+          </section>
+
+          <section className="panel">
             <h2>Dig</h2>
             <div className="row2">
               <label>Alder<input type="number" value={p.age} onChange={set("age")} /></label>
@@ -188,8 +266,7 @@ export default function App() {
             <h2>Løbet</h2>
             <label>Navn<input value={p.raceName} onChange={set("raceName")} /></label>
             <div className="row2">
-              <label>Planstart (mandag)<input type="date" value={p.startDate} onChange={set("startDate")} /></label>
-              <label>Løbsdato<input type="date" value={p.raceDate} onChange={set("raceDate")} /></label>
+              <label>Løbsdato<input type="date" value={p.raceDate} min={p.startDate} onChange={set("raceDate")} /></label>
               <label>Distance (km)<input type="number" value={p.raceKm} onChange={set("raceKm")} /></label>
               <label>Højdemeter<input type="number" value={p.raceVert} onChange={set("raceVert")} /></label>
             </div>
@@ -224,6 +301,7 @@ export default function App() {
                 );
               })}
             </div>
+            {curLog.auto && curLog.km > 0 && <div className="muted" style={{ marginTop: 10 }}>Fra dit ur denne uge: <b style={{ color: "var(--text)" }}>{curLog.km} km</b> på {curLog.n} {curLog.n === 1 ? "tur" : "ture"} af {cur.km} km planlagt.</div>}
             <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
           </div>
 
@@ -283,12 +361,43 @@ export default function App() {
 
             {tab === "log" && (
               <div className="panel scroll">
+                <div className="import">
+                  <h3>Hent fra Strava eller Garmin</h3>
+                  <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
+                  <div className="import-row">
+                    <input ref={fileRef} type="file" multiple accept=".csv,.gpx,.tcx,text/csv,application/gpx+xml,application/vnd.garmin.tcx+xml" onChange={onFiles} />
+                    <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> Tæl vandring og gang med</label>
+                  </div>
+                  {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}
+                  {nActs > 0 && (
+                    <div className="import-row muted">
+                      <span>{nActs} aktiviteter gemt på telefonen{recentAvg != null ? ` · snit sidste 4 uger ${recentAvg} km/uge` : ""}</span>
+                      {recentAvg != null && recentAvg !== p.currentKm && <button className="btn ghost" onClick={() => setP({ ...p, currentKm: recentAvg })}>Brug {recentAvg} som km/uge nu</button>}
+                      <button className="btn ghost" onClick={clearImports}>Fjern importerede</button>
+                    </div>
+                  )}
+                  <details>
+                    <summary>Sådan finder du filerne</summary>
+                    <ul>
+                      <li><b>Strava, alle ture på én gang:</b> strava.com → Settings → My Account → "Download or Delete Your Account" → Request archive. Du får en zip på mail; pak den ud og vælg <code>activities.csv</code>.</li>
+                      <li><b>Strava, én tur:</b> åbn turen → ⋯ → Export GPX.</li>
+                      <li><b>Garmin Connect, mange ture:</b> connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.</li>
+                      <li><b>Garmin Connect, én tur:</b> åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.</li>
+                    </ul>
+                  </details>
+                </div>
                 <table>
                   <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th>RPE</th><th>Hvilepuls</th><th>Vægt</th><th>Søvn t</th><th className="num">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
                     {plan.rows.map((r, i) => {
-                      const l = log[r.i] || {};
-                      const cell = (k) => <input type="number" value={l[k] ?? ""} onChange={(e) => saveLog({ ...log, [r.i]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value } })} />;
+                      const l = log[r.key] || {};
+                      const cell = (k) => (
+                        <span className="cellwrap">
+                          <input type="number" value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : undefined}
+                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : {}) } })} />
+                          {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
+                        </span>
+                      );
                       return (
                         <tr key={r.i} style={r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
                           <td style={{ whiteSpace: "nowrap" }}><b>{r.i}</b> <span className="muted">u{r.iso}</span></td>
@@ -301,7 +410,7 @@ export default function App() {
                     })}
                   </tbody>
                 </table>
-                <p className="foot">ACWR = ugens belastning (km × RPE) ÷ gennemsnittet af de sidste 4 uger. Grøn 0,8–1,3 · gul til 1,5 · rød over 1,5 = skær ned. Alt gemmes på din telefon.</p>
+                <p className="foot">ACWR = ugens belastning (km × RPE) ÷ gennemsnittet af de sidste 4 uger. Grøn 0,8–1,3 · gul til 1,5 · rød over 1,5 = skær ned. ⌚ = tal fra dit ur. Alt gemmes på din telefon.</p>
                 <button className="btn ghost" onClick={() => { if (confirm("Slet hele loggen?")) saveLog({}); }}>Nulstil log</button>
               </div>
             )}
