@@ -251,7 +251,7 @@ export default function App() {
   /* ---- load & ACWR ----
      Chronic load is the mean of the 4 previous calendar weeks. Weeks before the plan start count too (typed in or
      imported from Strava/Garmin); a missing pre-plan week falls back to "Km/uge nu" × RPE 5 so week 1 gets a real ratio. */
-  const loadOf = (l) => (l && l.km && l.rpe ? l.km * l.rpe : null);
+  const loadOf = (l) => (l && l.km && l.rpe ? Math.round(l.km * l.rpe) : null);
   const baseline = (+p.currentKm || 0) * 5;
   const acwrFor = (key) => {
     const own = loadOf(log[key]);
