@@ -24,16 +24,39 @@ const isoWeek = (d) => {
   return Math.ceil(((t - y0) / 86400000 + 1) / 7);
 };
 
+/* ================= everyday life ================= */
+// How much time a day realistically offers. Drives which days get sessions and how big they may be.
+export const AVAIL = [["none", "Ingen tid"], ["short", "Kort (≤ 45 min)"], ["normal", "Normal (1–1½ t)"], ["long", "Lang (2 t+)"]];
+const AV = { none: 0, short: 1, normal: 2, long: 3 };
+export const TIMES = [["", "Når det passer"], ["morning", "Morgen"], ["noon", "Middag"], ["evening", "Aften"]];
+const TIME_ICON = { morning: "☀", noon: "◐", evening: "☾" };
+export const LEVELS = [[1, "Begynder – løber under 1 år"], [2, "Motionist – løber jævnt"], [3, "Erfaren – har løbet maraton/ultra"], [4, "Konkurrence – høj volumen i årevis"]];
+const PEAK_MULT = { 1: 2.0, 2: 2.6, 3: 3.0, 4: 3.3 };
+const LONG_FRAC = { 1: 0.4, 2: 0.5, 3: 0.55, 4: 0.6 };
+export const FAMILY = [["single", "Single"], ["partner", "Par uden børn"], ["kids", "Børn hjemme"]];
+const day = (avail, time = "", note = "") => ({ avail, time, note });
+export const defaultSched = () => [day("normal", "morning"), day("none"), day("normal"), day("normal"), day("none"), day("long"), day("normal")];
+// Build a schedule from the old Mon–Fri run-day toggles so existing profiles keep their plan.
+const schedFromLegacy = (runDays = [0, 2, 3], longDay = 5) => [0, 1, 2, 3, 4, 5, 6].map((d) => d === longDay ? day("long") : d >= 5 ? day("normal") : day(runDays.includes(d) ? "normal" : "none"));
+const schedFor = (p, wkStart) => {
+  const A = p.sched?.A || defaultSched();
+  if (!p.altWeeks || !p.sched?.B) return { sched: A, label: "" };
+  const diff = Math.round((wkStart - parseLocal(p.altStart || p.startDate)) / 86400000 / 7);
+  const isA = ((diff % 2) + 2) % 2 === 0;
+  return { sched: isA ? A : p.sched.B, label: isA ? "A" : "B" };
+};
+
 /* ================= plan engine ================= */
 export function buildPlan(p) {
+  const level = p.level || 2;
   const start = parseLocal(p.startDate);
   const race = parseLocal(p.raceDate);
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
   const restart = p.breakWeeks >= 2 ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
   const peakTarget = Math.min(120, Math.max(45, Math.round(raceKm * 0.95)));
-  const peak = Math.min(peakTarget, Math.round(restart * 2.6));
-  const longCap = Math.min(Math.round(raceKm * 0.5), 50);
+  const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
+  const longCap = Math.min(Math.round(raceKm * LONG_FRAC[level]), 50);
   const taper = 3;
   const rebuild = p.breakWeeks >= 2 ? 4 : 0;
   const ramp = weeks - taper - rebuild;
@@ -77,28 +100,53 @@ export function buildPlan(p) {
     if (phase === "Genopbygning" && i === 1) lng = Math.min(lng, 12);
     let sun = phase === "Ultra-prep" && !deload ? Math.round(lng * 0.45) : 0;
     if (phase === "Nedtrapning" && i === weeks - taper + 1) sun = Math.round(lng * 0.4);
-    const pool = Math.max(0, km - lng - sun);
-    const runDays = p.runDays.length ? p.runDays : [0, 2, 3];
-    const share = runDays.map((d) => (d === p.qualityDay ? 1.15 : 1));
-    const tot = share.reduce((a, b) => a + b, 0);
+    // ---- fit the week into the days everyday life actually offers
+    const { sched, label: schedLabel } = schedFor(p, wkStart);
+    const avail = sched.map((d) => AV[d.avail] ?? 0);
+    const order = [5, 6, 0, 1, 2, 3, 4]; // weekend first when we have to pick
+    let longDay = avail[p.longDay] >= 3 ? p.longDay : order.find((d) => avail[d] >= 3);
+    if (longDay == null) { longDay = order.find((d) => avail[d] >= 2); if (longDay != null && !isRace) lng = Math.min(lng, 16); } // no long slot: long run is capped
+    if (longDay == null) { longDay = order.find((d) => avail[d] >= 1); if (longDay != null && !isRace) lng = Math.min(lng, 8); }
+    const b2bDay = longDay == null ? null : (longDay + 1) % 7;
+    if (b2bDay == null || avail[b2bDay] < 2) sun = 0;
+    const maxRun = Math.min(7, Math.max(2, p.maxRunDays || 4));
+    const slots = Math.max(0, maxRun - (longDay == null ? 0 : 1)); // the back-to-back run in ultra-prep comes on top
+    const cands = [0, 1, 2, 3, 4, 5, 6].filter((d) => d !== longDay && !(sun && d === b2bDay) && avail[d] >= 1)
+      .sort((a, b) => (b === p.qualityDay) - (a === p.qualityDay) || avail[b] - avail[a] || a - b);
+    const runDays = cands.slice(0, slots).sort((a, b) => a - b);
+    const qDay = runDays.includes(p.qualityDay) && avail[p.qualityDay] >= 2 ? p.qualityDay : runDays.find((d) => avail[d] >= 2) ?? null;
+    const pool = Math.max(0, km - (longDay == null ? 0 : lng) - sun);
     const days = [0, 0, 0, 0, 0, 0, 0];
-    runDays.forEach((d, k) => (days[d] = Math.round((pool * share[k]) / tot)));
-    days[p.longDay] = lng; days[p.longDay === 5 ? 6 : 5] = sun;
+    const cap = (d) => (avail[d] === 1 ? Math.min(8, Math.max(4, Math.round(km * 0.15))) : Infinity);
+    let left = pool, open = [...runDays];
+    for (let pass = 0; pass < 3 && left > 0 && open.length; pass++) {
+      const w = open.map((d) => (d === qDay ? 1.15 : avail[d] === 1 ? 0.6 : 1));
+      const tot = w.reduce((a, b) => a + b, 0);
+      const give = open.map((d, k) => Math.min(cap(d) - days[d], Math.round((left * w[k]) / tot)));
+      open.forEach((d, k) => (days[d] += give[k]));
+      left = pool - runDays.reduce((a, d) => a + days[d], 0);
+      open = open.filter((d) => days[d] < cap(d));
+    }
+    if (longDay != null) days[longDay] = lng;
+    if (sun && b2bDay != null) days[b2bDay] = sun;
     const total = days.reduce((a, b) => a + b, 0);
-    rows.push({ i, wkStart, key: ymd(wkStart), iso: isoWeek(wkStart), phase, km: total, lng, sun, deload, isRace, quality, focus, days });
+    const unplaced = Math.max(0, km - total);
+    rows.push({ i, wkStart, key: ymd(wkStart), iso: isoWeek(wkStart), phase, km: total, target: km, unplaced, lng, sun, deload, isRace, quality, focus, days, longDay, qDay, runDays, sched, schedLabel });
   }
   return { rows, weeks, peak, restart };
 }
 
 /* ================= app ================= */
 const PLAN_START = "2026-08-24"; // mandag i uge 35
-const PROFILE_VERSION = 2;
+const PROFILE_VERSION = 3;
 const DEFAULT = {
   v: PROFILE_VERSION,
   name: "", age: 41, height: 181, weight: 89, restHR: 49, maxHR: 186,
   currentKm: 35, breakWeeks: 0, startDate: PLAN_START, includeHikes: false,
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
-  runDays: [0, 2, 3], qualityDay: 2, longDay: 5, liftDays: [1, 3],
+  qualityDay: 2, longDay: 5, liftDays: [1, 3],
+  sex: "m", level: 2, maxRunDays: 4, family: "single", altWeeks: false, altStart: PLAN_START,
+  sched: { A: defaultSched(), B: defaultSched() },
 };
 
 export default function App() {
@@ -113,9 +161,13 @@ export default function App() {
   useEffect(() => { (async () => {
     const sp = await store.get("ultraplan-profile");
     if (sp) {
-      // Profiles saved before v2 carried an auto-generated start date; move them to the fixed plan start.
-      const migrated = (sp.v || 1) < PROFILE_VERSION ? { ...sp, startDate: PLAN_START, v: PROFILE_VERSION } : sp;
-      setP({ ...DEFAULT, ...migrated });
+      const v = sp.v || 1;
+      let migrated = sp;
+      // v1 carried an auto-generated start date; move it to the fixed plan start.
+      if (v < 2) migrated = { ...migrated, startDate: PLAN_START };
+      // v2 had Mon–Fri run toggles; turn them into a 7-day availability schedule.
+      if (v < 3) { const A = schedFromLegacy(migrated.runDays, migrated.longDay); const { runDays, ...rest } = migrated; migrated = { ...rest, sched: { A, B: A.map((d) => ({ ...d })) }, maxRunDays: Math.min(6, (runDays?.length ?? 3) + 1) }; }
+      setP({ ...DEFAULT, ...migrated, v: PROFILE_VERSION });
     }
     const sl = await store.get("ultraplan-log");
     if (sl) {
@@ -139,15 +191,19 @@ export default function App() {
   // Any chosen date snaps to the Monday of its week so the plan always starts on a Monday.
   const setStart = (str) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return; setP({ ...p, startDate: ymd(mondayOf(parseLocal(str))) }); };
   const shiftStart = (weeks) => setStart(ymd(addDays(parseLocal(p.startDate), weeks * 7)));
+  const [schedTab, setSchedTab] = useState("A");
+  const sched = (p.altWeeks ? p.sched?.[schedTab] : p.sched?.A) || defaultSched();
+  const setDay = (i, patch) => { const k = p.altWeeks ? schedTab : "A"; const next = sched.map((d, j) => (j === i ? { ...d, ...patch } : d)); setP({ ...p, sched: { ...(p.sched || {}), [k]: next } }); };
   const toggle = (key, d) => { const s = new Set(p[key]); s.has(d) ? s.delete(d) : s.add(d); setP({ ...p, [key]: [...s].sort() }); };
 
   const plan = useMemo(() => buildPlan(p), [p]);
-  const maxHR = p.maxHR || Math.round(211 - 0.64 * p.age);
-  const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + 5);
+  const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
+  const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
   const todayKey = ymd(thisMonday());
   const cur = plan.rows.find((r) => r.key === todayKey) || plan.rows[0];
   const startD = parseLocal(p.startDate);
+  const curSchedLabel = cur.schedLabel;
 
   /* ---- Strava / Garmin import ---- */
   // Write weekly totals from the imported activities into the log. Imported km always win for weeks that have activities;
@@ -201,8 +257,9 @@ export default function App() {
 
   // coach advice for the current week, based on last logged week
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null);
-  let advice = `Denne uge: ${cur.km} km, hård session ${DAYS[p.qualityDay].toLowerCase()} (${cur.quality}), lang tur ${cur.lng} km. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`;
+  let advice = `Denne uge: ${cur.km} km, ${cur.qDay != null ? `hård session ${DAYS[cur.qDay].toLowerCase()} (${cur.quality})` : "ingen hård session – ingen dag med tid nok"}, lang tur ${cur.lng} km${cur.longDay != null ? ` ${DAYS[cur.longDay].toLowerCase()}` : ""}. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`;
   let warn = false;
+  if (cur.unplaced >= 3) { advice = `Din hverdag giver plads til ${cur.km} af de ${cur.target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de ${cur.km} km – det er ikke en fejl at leve et normalt liv.`; warn = true; }
   if (lastIdx != null) {
     const a = acwr[lastIdx]; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = `ACWR sidste uge var ${a.toFixed(2)} – rødt. Hold denne uge på max ${Math.round(plan.rows[lastIdx].km * 0.75)} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.`; warn = true; }
@@ -255,11 +312,18 @@ export default function App() {
               <label>Makspuls<input type="number" value={p.maxHR} onChange={set("maxHR")} placeholder="tom = estimat" /></label>
               <label>Km/uge nu<input type="number" value={p.currentKm} onChange={set("currentKm")} /></label>
             </div>
-            <label>Uger uden løb for nylig
-              <select value={p.breakWeeks} onChange={(e) => setP({ ...p, breakWeeks: +e.target.value })}>
-                <option value={0}>Ingen pause</option><option value={1}>1 uge</option><option value={2}>2 uger</option><option value={4}>4+ uger</option>
-              </select>
+            <div className="row2">
+              <label>Køn<select value={p.sex} onChange={(e) => setP({ ...p, sex: e.target.value })}><option value="m">Mand</option><option value="f">Kvinde</option><option value="x">Andet</option></select></label>
+              <label>Uger uden løb for nylig
+                <select value={p.breakWeeks} onChange={(e) => setP({ ...p, breakWeeks: +e.target.value })}>
+                  <option value={0}>Ingen pause</option><option value={1}>1 uge</option><option value={2}>2 uger</option><option value={4}>4+ uger</option>
+                </select>
+              </label>
+            </div>
+            <label>Form og erfaring
+              <select value={p.level} onChange={(e) => setP({ ...p, level: +e.target.value })}>{LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
             </label>
+            <div className="muted" style={{ marginTop: 6 }}>Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige.</div>
           </section>
 
           <section className="panel">
@@ -273,30 +337,57 @@ export default function App() {
           </section>
 
           <section className="panel">
-            <h2>Din uge</h2>
-            <label>Hverdage du kan løbe</label>
-            <div className="days">{DAYS.slice(0, 5).map((d, i) => <button key={d} className={p.runDays.includes(i) ? "on" : ""} onClick={() => toggle("runDays", i)}>{d}</button>)}</div>
-            <label>Styrkedage</label>
-            <div className="days">{DAYS.slice(0, 5).map((d, i) => <button key={d} className={p.liftDays.includes(i) ? "on" : ""} onClick={() => toggle("liftDays", i)}>{d}</button>)}</div>
+            <h2>Din hverdag</h2>
             <div className="row2">
-              <label>Hård dag<select value={p.qualityDay} onChange={(e) => setP({ ...p, qualityDay: +e.target.value })}>{p.runDays.map((d) => <option key={d} value={d}>{DAYS[d]}</option>)}</select></label>
-              <label>Lang tur<select value={p.longDay} onChange={(e) => setP({ ...p, longDay: +e.target.value })}><option value={5}>Lørdag</option><option value={6}>Søndag</option></select></label>
+              <label>Familie<select value={p.family} onChange={(e) => setP({ ...p, family: e.target.value, altWeeks: e.target.value === "kids" ? p.altWeeks : false })}>{FAMILY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+              <label>Løbedage om ugen (inkl. lang tur)<select value={p.maxRunDays} onChange={(e) => setP({ ...p, maxRunDays: +e.target.value })}>{[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n} dage</option>)}</select></label>
             </div>
+            {p.family === "kids" && (
+              <div style={{ marginTop: 8 }}>
+                <label className="check"><input type="checkbox" checked={!!p.altWeeks} onChange={(e) => setP({ ...p, altWeeks: e.target.checked })} /> Deleordning – ugerne skifter (uge A / uge B)</label>
+                {p.altWeeks && <label style={{ marginTop: 6 }}>Første uge A starter mandag<input type="date" value={p.altStart} onChange={(e) => { if (e.target.value) setP({ ...p, altStart: ymd(mondayOf(parseLocal(e.target.value))) }); }} /></label>}
+              </div>
+            )}
+            {p.altWeeks && <div className="tabs" style={{ margin: "10px 0 6px" }}>{["A", "B"].map((k) => <button key={k} className={schedTab === k ? "on" : ""} onClick={() => setSchedTab(k)}>Uge {k}{k === curSchedLabel ? " · nu" : ""}</button>)}</div>}
+            <div className="muted" style={{ margin: "8px 0 4px" }}>Hvor meget tid har du hver dag, og hvad skal der ellers ske?</div>
+            <div className="sched">
+              {DAYS.map((d, i) => {
+                const row = sched[i] || day("none");
+                return (
+                  <div key={d} className={`sched-row ${row.avail === "none" ? "off" : ""}`}>
+                    <b>{d}</b>
+                    <select value={row.avail} onChange={(e) => setDay(i, { avail: e.target.value })}>{AVAIL.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                    <select value={row.time} onChange={(e) => setDay(i, { time: e.target.value })} disabled={row.avail === "none"}>{TIMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                    <input value={row.note} placeholder={i === 2 ? "fx hente børn 15.30" : i === 5 ? "fx børn hos den anden" : "note"} maxLength={40} onChange={(e) => setDay(i, { note: e.target.value })} />
+                  </div>
+                );
+              })}
+            </div>
+            <label>Styrkedage</label>
+            <div className="days">{DAYS.map((d, i) => <button key={d} className={p.liftDays.includes(i) ? "on" : ""} onClick={() => toggle("liftDays", i)}>{d}</button>)}</div>
+            <div className="row2">
+              <label>Hård dag (ønsket)<select value={p.qualityDay} onChange={(e) => setP({ ...p, qualityDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 2}>{d}</option>)}</select></label>
+              <label>Lang tur (ønsket)<select value={p.longDay} onChange={(e) => setP({ ...p, longDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 3}>{d}</option>)}</select></label>
+            </div>
+            <div className="muted" style={{ marginTop: 6 }}>Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.</div>
           </section>
         </aside>
 
         <section style={{ display: "grid", gap: 16 }}>
           <div className="panel">
-            <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}</h2>
+            <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
             <div className="thisweek">
               {cur.days.map((v, i) => {
-                const hard = i === p.qualityDay && v > 0; const long = i === p.longDay; const lift = p.liftDays.includes(i);
+                const hard = i === cur.qDay && v > 0; const long = i === cur.longDay && v > 0; const lift = p.liftDays.includes(i);
+                const b2b = cur.sun > 0 && i === (cur.longDay + 1) % 7 && v > 0;
+                const d = cur.sched[i] || {};
                 return (
                   <div key={i} className={long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""}>
-                    <small>{DAYS[i]}</small>
+                    <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
-                    <small>{v ? (long ? "lang" : hard ? "hård" : i === 6 && v ? "B2B" : "rolig") : lift ? "styrke" : "hvile"}</small>
+                    <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? "styrke" : d.avail === "none" ? "fri" : "hvile"}</small>
                     {v > 0 && lift && <small style={{ display: "block", color: "var(--violet)" }}>+ styrke</small>}
+                    {d.note && <small className="note">{d.note}</small>}
                   </div>
                 );
               })}
@@ -332,8 +423,8 @@ export default function App() {
                       <tr key={r.i} style={r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
                         <td style={{ whiteSpace: "nowrap" }}><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""} <span className="muted">u{r.iso} · {fmt(r.wkStart)}</span></td>
                         <td style={{ whiteSpace: "nowrap" }}><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</td>
-                        <td className="num"><b>{r.km}</b></td>
-                        {r.days.map((v, i) => <td key={i} className="num" style={i === p.longDay ? { color: "var(--orange)", fontWeight: 700 } : undefined}>{v || ""}</td>)}
+                        <td className="num"><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</td>
+                        {r.days.map((v, i) => <td key={i} className="num" style={i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>{v || ""}</td>)}
                         <td style={{ whiteSpace: "nowrap" }}>{r.quality}</td>
                         <td className="muted" style={{ minWidth: 220 }}>{r.focus}</td>
                       </tr>
