@@ -166,7 +166,7 @@ export default function App() {
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const [importMsg, setImportMsg] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [tab, setTab] = useState("plan");
+  const [view, setView] = useState("today");
   const [ready, setReady] = useState(false);
   const fileRef = useRef(null);
 
@@ -375,7 +375,7 @@ export default function App() {
     const { next, added } = mergeActivities(acts, [act]);
     if (!added) { setDayMsg({ warn: true, text: "Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert." }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
-    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg({ text: `Gemt: ${act.km} km ${DAYS[dayEdit.i].toLowerCase()}.` });
+    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
   };
   // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
   const renderDayForm = (planKm) => {
@@ -501,18 +501,66 @@ export default function App() {
 
   return (
     <>
-      <header className="hero">
-        <div className="hero-inner">
-          <div>
-            <h1>Ultraplan</h1>
-            <div className="muted">{p.raceName || "Dit løb"} · {p.raceKm} km · {p.raceVert} m+ · {plan.weeks} uger · top {plan.peak} km/uge</div>
-          </div>
-          <div className="count"><b>{daysToRace}</b><span>dage til start</span></div>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">Ultraplan</div>
+          <div className="topbar-race"><b>{daysToRace}</b> dage til {p.raceName || "løbet"}</div>
         </div>
       </header>
+      <nav className="tabbar" aria-label="Hovedmenu">
+        {[["today", "I dag", "◎"], ["plan", "Plan", "▤"], ["log", "Log", "✓"], ["more", "Mere", "⋯"]].map(([k, l, ic]) => (
+          <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>
+        ))}
+      </nav>
 
-      <main className="wrap grid">
-        <aside style={{ display: "grid", gap: 16 }}>
+      <main className="wrap stack">
+        {view === "today" && (() => {
+          const ti = (new Date().getDay() + 6) % 7;
+          const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = p.liftDays.includes(ti);
+          const long = ti === cur.longDay && v > 0, hard = ti === cur.qDay && v > 0, b2b = cur.sun > 0 && ti === (cur.longDay + 1) % 7 && v > 0;
+          const kind = v ? (long ? "Lang tur" : hard ? "Hård session" : b2b ? "Back-to-back" : "Rolig tur") : lift ? "Styrke" : d.avail === "none" ? "Fridag" : "Hviledag";
+          const ran = dayKm[ti]; const done = v > 0 && ran >= v * 0.9;
+          const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
+          const dateStr = new Date().toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long" });
+          return (
+            <>
+              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
+              <section className={`panel today ${done ? "done" : ""}`}>
+                <div className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</div>
+                <div className="today-km">{v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest">{lift ? "S" : "–"}</b>}</div>
+                {hard && <div className="today-sub">{cur.quality}</div>}
+                {long && <div className="today-sub">Rolig puls under {Math.round(maxHR * 0.7)}. Spis fra minut 30.</div>}
+                {!v && lift && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
+                {v > 0 && lift && <div className="today-sub">+ styrke i dag</div>}
+                {d.note && <div className="today-note">{d.note}</div>}
+                {ran > 0 && <div className="today-ran">✓ Løbet {ran} km{v > 0 ? ` af ${v}` : ""}</div>}
+                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 ? "Log dagens tur" : "Log en tur alligevel"}</button>
+                {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
+              </section>
+
+              <section className="panel">
+                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km</span></div>
+                <div className="progress"><span style={{ width: `${pct}%` }} /></div>
+                <div className="thisweek mini">
+                  {cur.days.map((w, i) => (
+                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""}`} onClick={() => setView("plan")} role="button" tabIndex={0}>
+                      <small>{DAYS[i]}</small><b>{w || (p.liftDays.includes(i) ? "S" : "–")}</b>{dayKm[i] > 0 && <small className="ran">{dayKm[i]}</small>}
+                    </div>
+                  ))}
+                </div>
+                <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
+              </section>
+
+              <section className="panel row-between" onClick={() => setView("plan")} role="button" tabIndex={0} style={{ cursor: "pointer" }}>
+                <div><div className="muted">{p.raceName || "Dit løb"}</div><div><b>{p.raceKm} km</b> · {p.raceVert} m+ · top {plan.peak} km/uge</div></div>
+                <div className="count small"><b>{daysToRace}</b><span>dage</span></div>
+              </section>
+            </>
+          );
+        })()}
+
+        {view === "more" && (
+        <aside className="stack">
           <section className="panel">
             <h2>Start</h2>
             <label>Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge
@@ -618,8 +666,10 @@ export default function App() {
             )}
           </section>
         </aside>
+        )}
 
-        <section style={{ display: "grid", gap: 16 }}>
+        <section className="stack">
+          {view === "plan" && (<>
           <div className="panel">
             <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
             <div className="thisweek">
@@ -660,14 +710,12 @@ export default function App() {
             </div>
             <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />nedtrapning</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />løbet</span></div>
           </div>
+          </>)}
 
-          <div>
-            <nav className="tabs">
-              {[["plan", "Ugeplan"], ["zones", "Pulszoner"], ["nut", "Kost"], ["log", "Log & belastning"]].map(([k, l]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
-            </nav>
-
-            {tab === "plan" && (
+          <div className="stack">
+            {view === "plan" && (
               <div className="panel scroll">
+                <h2>Alle uger</h2>
                 <table>
                   <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th><th className="num">Løbet</th>{DAYS.map((d) => <th key={d} className="num">{d}</th>)}<th>Hård session</th><th>Fokus</th></tr></thead>
                   <tbody>
@@ -694,24 +742,27 @@ export default function App() {
               </div>
             )}
 
-            {tab === "zones" && (
+            {view === "more" && (
               <div className="panel">
+                <h2>Pulszoner</h2>
                 <p>Makspuls brugt: <b>{maxHR}</b>{!p.maxHR && " (estimat – skriv din målte ind)"}. Hvilepuls {p.restHR}.</p>
                 <table><tbody>{zones.map(([n, lo, hi, t]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{t}</td></tr>)}</tbody></table>
                 <p className="muted">Rolige ture under {Math.round(maxHR * 0.7)}. Det føles for langsomt. Det er meningen.</p>
               </div>
             )}
 
-            {tab === "nut" && (
+            {view === "more" && (
               <div className="panel">
+                <h2>Kost</h2>
                 <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(p.weight, p.goal)} g</b> hver dag. Kulhydrat følger arbejdet.{p.goal === "lean" ? " Mål: blive lettere, ca. 300 kcal under behov og max 0,5 kg/uge." : p.goal === "perform" ? " Mål: tid, lidt ekstra på kvalitetsdage." : ""}</p>
                 <table><tbody>{nut.map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
                 <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.</p>
               </div>
             )}
 
-            {tab === "log" && (
+            {view === "log" && (
               <div className="panel scroll">
+                <h2>Log & belastning</h2>
                 <div className="import">
                   <h3>Hent fra Strava eller Garmin</h3>
                   <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
@@ -814,9 +865,10 @@ export default function App() {
               </div>
             )}
           </div>
-          <p className="foot">Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning. <span style={{ float: "right", opacity: .7 }}>Ultraplan {__APP_VERSION__}</span></p>
+          {view === "more" && <p className="foot">Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning.<br /><span style={{ opacity: .7 }}>Ultraplan {__APP_VERSION__}</span></p>}
         </section>
       </main>
+
     </>
   );
 }
