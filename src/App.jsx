@@ -198,24 +198,35 @@ export default function App() {
 
   /* ---- account & cloud sync (Supabase, optional) ---- */
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(!syncEnabled); // without Supabase there is nothing to wait for
   const [email, setEmail] = useState("");
   const [authMsg, setAuthMsg] = useState(null);
   const [syncMsg, setSyncMsg] = useState("");
   const pulledRef = useRef(false);
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user ?? null));
     return () => sub.subscription.unsubscribe();
   }, []);
   const clock = () => new Date().toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" });
+  // Wipe everything stored on this device. Used at logout and when a different account logs in, so two people
+  // sharing a phone never see or upload each other's data.
+  const clearLocal = () => {
+    setPRaw(DEFAULT); setLog({}); setActs({}); metaRef.current = { updatedAt: 0 };
+    for (const k of ["ultraplan-profile", "ultraplan-log", "ultraplan-activities", "ultraplan-meta", "ultraplan-owner"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+  };
+  const logout = async () => { await signOut(); clearLocal(); setSyncMsg(""); setAuthMsg(null); };
   // On login: newest copy wins. A device that has never been used keeps nothing local, so the cloud copy is taken.
   useEffect(() => {
     if (!user || !ready) { pulledRef.current = false; return; }
     (async () => {
       try {
+        const owner = await store.get("ultraplan-owner");
+        if (owner && owner !== user.id) clearLocal(); // someone else used this device before
+        store.set("ultraplan-owner", user.id);
         const remote = await pullRemote(user.id);
-        const localAt = metaRef.current.updatedAt || 0;
+        const localAt = owner && owner !== user.id ? 0 : metaRef.current.updatedAt || 0;
         if (remote && remote.updatedAt >= localAt) {
           setPRaw(migrateProfile(remote.profile || {})); setLog(remote.log || {}); setActs(remote.activities || {});
           store.set("ultraplan-profile", remote.profile || {}); store.set("ultraplan-log", remote.log || {}); store.set("ultraplan-activities", remote.activities || {});
@@ -239,7 +250,7 @@ export default function App() {
   const login = async (e) => {
     e.preventDefault();
     try { await sendLoginLink(email.trim()); setAuthMsg({ text: "Tjek din mail og tryk på linket for at logge ind. Åbn linket på den enhed, du vil bruge appen på." }); }
-    catch (err) { setAuthMsg({ warn: true, text: err.message }); }
+    catch (err) { setAuthMsg({ warn: true, text: /fetch|network/i.test(err.message) ? "Kunne ikke kontakte login-serveren. Tjek din internetforbindelse og prøv igen." : err.message }); }
   };
 
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === "number" ? +e.target.value : e.target.value });
@@ -363,6 +374,32 @@ export default function App() {
   const nut = [["Lang tur / løbsdag", bmr * 1.95], ["Kvalitet / styrke", bmr * 1.7], ["Rolig løbedag", bmr * 1.45 - 400], ["Hviledag", bmr * 1.3 - 450]].map(([n, c]) => [n, Math.round(c / 10) * 10]);
   const maxKm = Math.max(...plan.rows.map((r) => r.km));
 
+  if (!authReady) return <div className="splash"><h1>Ultraplan</h1><p className="muted">Et øjeblik…</p></div>;
+  if (syncEnabled && !user) return (
+    <div className="landing">
+      <div className="landing-hero">
+        <h1>Ultraplan</h1>
+        <p className="lead">Din ultraplan, bygget om din hverdag. Periodiseret træning, pulszoner, kost og belastningstjek, der regner selv ud fra dine tal.</p>
+        <ul className="landing-list">
+          <li><b>Planen følger dit liv.</b> Fortæl hvilke dage du har tid, hvornår børnene skal hentes, og hvor ofte du vil løbe. Planen lægger kun løb, hvor der er plads.</li>
+          <li><b>Dine ture fra uret.</b> Hent Strava eller Garmin, eller tast turen på dagen. Ugens km og ACWR-belastning passer, også før ugen er slut.</li>
+          <li><b>Ærlige tal.</b> Planens tal er et loft, ikke et gulv. Bliver belastningen for høj, siger appen det.</li>
+        </ul>
+      </div>
+      <div className="panel landing-login">
+        <h2>Log ind</h2>
+        <p className="muted">Skriv din e-mail, så sender vi et link. Ingen adgangskode. Har du ikke en konto, oprettes den automatisk.</p>
+        <form onSubmit={login}>
+          <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dig@eksempel.dk" autoFocus /></label>
+          <button className="btn" type="submit" style={{ marginTop: 10, width: "100%" }}>Send login-link</button>
+          {authMsg && <div className={`advice ${authMsg.warn ? "warn" : ""}`}>{authMsg.text}</div>}
+        </form>
+        <p className="foot">Åbn linket på den enhed, du vil bruge appen på. Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
+      </div>
+      <p className="foot" style={{ textAlign: "center" }}>Ultraplan {__APP_VERSION__}</p>
+    </div>
+  );
+
   return (
     <>
       <header className="hero">
@@ -471,7 +508,7 @@ export default function App() {
               <>
                 <div>Logget ind som <b>{user.email}</b></div>
                 <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
-                <button className="btn ghost" type="button" onClick={() => { signOut(); setSyncMsg(""); }}>Log ud</button>
+                <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
               </>
             ) : (
               <form onSubmit={login}>
