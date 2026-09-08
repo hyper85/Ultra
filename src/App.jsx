@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities } from "./import.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -154,6 +154,7 @@ export default function App() {
   const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const [importMsg, setImportMsg] = useState(null);
+  const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState("plan");
   const [ready, setReady] = useState(false);
   const fileRef = useRef(null);
@@ -223,10 +224,11 @@ export default function App() {
   const onFiles = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    setImporting(true); setImportMsg(null);
+    await new Promise((r) => setTimeout(r, 50)); // let the "Læser…" state paint
     const errors = []; let parsed = [];
     for (const f of files) { try { parsed = parsed.concat(await parseFile(f)); } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); } }
-    const next = { ...acts }; let added = 0;
-    for (const a of parsed) { if (!next[a.id]) added++; next[a.id] = a; }
+    const { next, added } = mergeActivities(acts, parsed);
     saveActs(next);
     const weeks = applyActivities(next, p.includeHikes);
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
@@ -237,7 +239,9 @@ export default function App() {
         : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${errors.length ? " " + errors.join(" ") : ""}`,
     });
     if (fileRef.current) fileRef.current.value = "";
+    setImporting(false);
   };
+  const actList = useMemo(() => Object.values(acts).sort((x, y) => (x.date < y.date ? 1 : -1)), [acts]);
   const setHikes = (v) => { setP({ ...p, includeHikes: v }); applyActivities(acts, v); };
   const clearImports = () => { if (!confirm("Fjern alle importerede aktiviteter? Tal du selv har skrevet, bliver stående.")) return; applyActivities({}, p.includeHikes); saveActs({}); setImportMsg(null); };
   const nActs = Object.keys(acts).length;
@@ -471,7 +475,8 @@ export default function App() {
                   <h3>Hent fra Strava eller Garmin</h3>
                   <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
                   <div className="import-row">
-                    <input ref={fileRef} type="file" multiple onChange={onFiles} />
+                    <input ref={fileRef} type="file" multiple onChange={onFiles} disabled={importing} />
+                    {importing && <span className="muted">Læser…</span>}
                     <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> Tæl vandring og gang med</label>
                   </div>
                   {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}
@@ -486,6 +491,32 @@ export default function App() {
                     Baseline til ACWR: {preLogged} af de 4 uger før planstart har rigtige tal{preLogged < 4 ? `; resten antages til ${p.currentKm} km × RPE 5` : ""}.
                     {preLogged < 4 && " Hent dit Strava-arkiv eller Garmins CSV med de sidste uger, så bliver de første ACWR-tal ægte."}
                   </div>
+                  {nActs > 0 && (
+                    <details className="actlist">
+                      <summary>Se de importerede ture ({nActs}) – tjek dem mod Garmin/Strava</summary>
+                      <div className="scroll">
+                        <table>
+                          <thead><tr><th>Dato</th><th>Type</th><th className="num">Km</th><th className="num">Min</th><th className="num">Puls</th><th>Tæller i uge</th><th>Kilde</th></tr></thead>
+                          <tbody>
+                            {actList.slice(0, 300).map((x) => {
+                              const k = kind(x.type); const counts = k === "run" || (k === "hike" && p.includeHikes);
+                              const wk = ymd(mondayOf(parseLocal(x.day)));
+                              return (
+                                <tr key={x.id} style={counts ? undefined : { opacity: .45 }}>
+                                  <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}</span></td>
+                                  <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
+                                  <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
+                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? `u${isoWeek(parseLocal(wk))} · ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : "nej (ikke løb)"}</td>
+                                  <td className="muted">{x.source}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {actList.length > 300 && <p className="muted">Viser de 300 nyeste af {actList.length}.</p>}
+                      </div>
+                    </details>
+                  )}
                   <details>
                     <summary>Sådan finder du filerne</summary>
                     <ul>

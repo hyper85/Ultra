@@ -104,3 +104,6 @@ td input { margin: 0; padding: 6px 8px; width: 74px; background: #241a12; border
 .thisweek .note { display: block; margin-top: 4px; font-size: 10px; line-height: 1.2; color: var(--muted); word-break: break-word; }
 tr.pre td { color: var(--muted); }
 tr.pre td input { background: #1c1c1c; border-color: var(--line); }
+.actlist { margin-bottom: 8px; }
+.actlist table { font-size: 13px; margin-top: 8px; }
+.actlist td, .actlist th { padding: 5px 6px; }

@@ -119,9 +119,12 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
   for (const r of rows.slice(1)) {
     const date = parseDate(r[cDate], { utc: isStrava });
     if (!date) continue;
+    // Strava lists distance twice: first in the athlete's unit (km or miles), later in metres. Prefer the metres column
+    // when it clearly is one; otherwise use the first column, treating big values as metres.
+    const first = parseNum(r[distCols[0]]), last = parseNum(r[distCols[distCols.length - 1]]);
     let km;
-    if (distCols.length > 1) km = parseNum(r[distCols[distCols.length - 1]]) / 1000; // Strava: later column is metres
-    else { const v = parseNum(r[distCols[0]]); km = v > 1500 ? v / 1000 : v; }
+    if (distCols.length > 1 && last > 0 && (last > 1500 || (first > 0 && last / first > 100))) km = last / 1000;
+    else km = first > 1500 ? first / 1000 : first;
     if (!(km > 0)) continue;
     if (km > 400) continue; // metres in a "km" column or a garbage row
     const min = cTime >= 0 ? parseMinutes(r[cTime]) : NaN;
@@ -195,7 +198,7 @@ export const activitiesFromTCX = (text, fileName = "tcx") => {
 const mk = (a) => {
   const km = Math.round(a.km * 100) / 100;
   const slot = Math.round((a.date.getHours() * 60 + a.date.getMinutes()) / 5); // 5-minute start slot for dedupe
-  return { id: `${ymd(a.date)}-${slot}-${Math.round(km)}`, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
+  return { id: `${ymd(a.date)}-${slot}-${km.toFixed(1)}`, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
 };
 
 // Minimal zip reader: finds *.csv / *.gpx / *.tcx entries and inflates them with the browser's DecompressionStream.
@@ -260,6 +263,29 @@ export const parseFile = async (file) => {
   return parseText(text, file.name); // any text file: sniff GPX/TCX, otherwise treat as CSV
 };
 
+// Same activity seen twice (e.g. Strava CSV + the GPX of the same run): same day, start within 10 minutes,
+// distance within 3 % or 0.5 km. Returns the existing activity's id, or null.
+export const findDuplicate = (a, existing) => {
+  const t = new Date(a.date).getTime();
+  for (const b of existing) {
+    if (b.day !== a.day) continue;
+    if (Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
+    if (Math.abs(b.km - a.km) <= Math.max(0.5, 0.03 * Math.max(a.km, b.km))) return b.id;
+  }
+  return null;
+};
+// Merge parsed activities into the store; duplicates keep the stored copy. Returns { next, added }.
+export const mergeActivities = (acts, parsed) => {
+  const next = { ...acts }; let added = 0;
+  for (const a of parsed) {
+    if (next[a.id]) continue;
+    const dup = findDuplicate(a, Object.values(next).filter((b) => b.day === a.day));
+    if (dup) continue;
+    next[a.id] = a; added++;
+  }
+  return { next, added };
+};
+
 // RPE estimate (Foster scale) from average heart rate as a share of max.
 export const rpeFromHR = (hr, maxHR) => {
   if (!hr || !maxHR) return null;
@@ -271,7 +297,8 @@ export const rpeFromHR = (hr, maxHR) => {
 export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
   const weeks = {};
   for (const a of Object.values(acts)) {
-    if (!(a.kind === "run" || (includeHikes && a.kind === "hike"))) continue;
+    const k = kind(a.type); // recomputed so improved classification also applies to activities imported earlier
+    if (!(k === "run" || (includeHikes && k === "hike"))) continue;
     const key = ymd(mondayOf(parseLocal(a.day)));
     const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0 });
     w.km += a.km; w.n++; w.min += a.min || 0;
