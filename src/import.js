@@ -247,6 +247,14 @@ const parseText = (text, name) => {
   return activitiesFromCSV(text, name);
 };
 
+// A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity.
+export const manualActivity = ({ day, km, min, rpe }) => {
+  const d = parseLocal(day); d.setHours(12, 0, 0, 0);
+  const a = mk({ date: d, km: +km, min: min ? +min : null, hr: null, type: "Run", name: "Indtastet", source: "Manuel", file: "" });
+  if (rpe) a.rpe = Math.min(10, Math.max(1, Math.round(+rpe)));
+  return a;
+};
+
 export const parseFile = async (file) => {
   const n = file.name.toLowerCase();
   if (n.endsWith(".zip") || file.type === "application/zip" || file.type === "application/x-zip-compressed") {
@@ -267,9 +275,11 @@ export const parseFile = async (file) => {
 // distance within 3 % or 0.5 km. Returns the existing activity's id, or null.
 export const findDuplicate = (a, existing) => {
   const t = new Date(a.date).getTime();
+  const manual = a.source === "Manuel";
   for (const b of existing) {
     if (b.day !== a.day) continue;
-    if (Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
+    // A manual entry carries no exact start time: same day + similar distance is the same run.
+    if (!manual && b.source !== "Manuel" && Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
     if (Math.abs(b.km - a.km) <= Math.max(0.5, 0.03 * Math.max(a.km, b.km))) return b.id;
   }
   return null;
@@ -302,7 +312,7 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
     const key = ymd(mondayOf(parseLocal(a.day)));
     const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0 });
     w.km += a.km; w.n++; w.min += a.min || 0;
-    const rpe = rpeFromHR(a.hr, maxHR);
+    const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
     if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
   }
   for (const w of Object.values(weeks)) { w.km = Math.round(w.km * 10) / 10; w.rpe = w.rpeT ? Math.round(w.rpeW / w.rpeT) : null; }

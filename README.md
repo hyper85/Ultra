@@ -18,3 +18,21 @@ Bygget med Vite + React. PWA: kan lægges på hjemmeskærmen som app.
 - Rigtig APK: kør `npx @capacitor/cli init` + `npx cap add android` og byg i Android Studio – eller brug pwabuilder.com, som pakker PWA'en til en APK/Play Store-pakke.
 
 Data (profil + log) gemmes lokalt på enheden (localStorage). Ingen server, ingen konto.
+
+## Login og sync (valgfrit)
+
+Appen virker uden konto – alt gemmes lokalt på telefonen. Vil du kunne logge ind og få dine indstillinger,
+log og importerede ture med på tværs af enheder, kobles den på et gratis Supabase-projekt:
+
+1. Opret et projekt på https://supabase.com (Free plan rækker).
+2. SQL Editor → indsæt indholdet af `supabase/schema.sql` → Run.
+3. Authentication → URL Configuration: sæt *Site URL* til din Vercel-adresse (fx `https://ultra-lime-nu.vercel.app`)
+   og tilføj den samme adresse under *Redirect URLs*.
+4. Project Settings → API: kopier *Project URL* og *anon public*-nøglen.
+5. Vercel → projektet → Settings → Environment Variables:
+   - `VITE_SUPABASE_URL` = Project URL
+   - `VITE_SUPABASE_ANON_KEY` = anon public key
+6. Redeploy (Deployments → ⋯ → Redeploy). Panelet "Konto" i appen viser nu et login-felt.
+
+Login sker med et link på mail (ingen adgangskode). Anon-nøglen er beregnet til at ligge i klienten;
+adgangen til data styres af row level security i `schema.sql`, så hver bruger kun kan se sin egen række.

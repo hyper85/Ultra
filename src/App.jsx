@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote } from "./sync.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -150,7 +151,12 @@ const DEFAULT = {
 };
 
 export default function App() {
-  const [p, setP] = useState(DEFAULT);
+  const [p, setPRaw] = useState(DEFAULT);
+  // Every user-driven change goes through setP/saveLog/saveActs, which stamp updatedAt for cloud sync.
+  const metaRef = useRef({ updatedAt: 0 });
+  const [dirty, setDirty] = useState(0);
+  const touch = () => { metaRef.current = { updatedAt: Date.now() }; store.set("ultraplan-meta", metaRef.current); setDirty((x) => x + 1); };
+  const setP = (v) => { touch(); setPRaw(v); };
   const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const [importMsg, setImportMsg] = useState(null);
@@ -159,17 +165,19 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const fileRef = useRef(null);
 
+  const migrateProfile = (sp) => {
+    const v = sp.v || 1;
+    let migrated = sp;
+    // v1 carried an auto-generated start date; move it to the fixed plan start.
+    if (v < 2) migrated = { ...migrated, startDate: PLAN_START };
+    // v2 had Mon–Fri run toggles; turn them into a 7-day availability schedule.
+    if (v < 3) { const A = schedFromLegacy(migrated.runDays, migrated.longDay); const { runDays, ...rest } = migrated; migrated = { ...rest, sched: { A, B: A.map((d) => ({ ...d })) }, maxRunDays: Math.min(6, (runDays?.length ?? 3) + 1) }; }
+    return { ...DEFAULT, ...migrated, v: PROFILE_VERSION };
+  };
   useEffect(() => { (async () => {
+    const meta = await store.get("ultraplan-meta"); if (meta?.updatedAt) metaRef.current = meta;
     const sp = await store.get("ultraplan-profile");
-    if (sp) {
-      const v = sp.v || 1;
-      let migrated = sp;
-      // v1 carried an auto-generated start date; move it to the fixed plan start.
-      if (v < 2) migrated = { ...migrated, startDate: PLAN_START };
-      // v2 had Mon–Fri run toggles; turn them into a 7-day availability schedule.
-      if (v < 3) { const A = schedFromLegacy(migrated.runDays, migrated.longDay); const { runDays, ...rest } = migrated; migrated = { ...rest, sched: { A, B: A.map((d) => ({ ...d })) }, maxRunDays: Math.min(6, (runDays?.length ?? 3) + 1) }; }
-      setP({ ...DEFAULT, ...migrated, v: PROFILE_VERSION });
-    }
+    if (sp) setPRaw(migrateProfile(sp));
     const sl = await store.get("ultraplan-log");
     if (sl) {
       // Logs saved before v2 were keyed by week number; re-key them by the week's Monday using the start date they were logged against.
@@ -185,8 +193,54 @@ export default function App() {
     setReady(true);
   })(); }, []);
   useEffect(() => { if (ready) store.set("ultraplan-profile", p); }, [p, ready]);
-  const saveLog = (n) => { setLog(n); store.set("ultraplan-log", n); };
-  const saveActs = (n) => { setActs(n); store.set("ultraplan-activities", n); };
+  const saveLog = (n) => { touch(); setLog(n); store.set("ultraplan-log", n); };
+  const saveActs = (n) => { touch(); setActs(n); store.set("ultraplan-activities", n); };
+
+  /* ---- account & cloud sync (Supabase, optional) ---- */
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState("");
+  const [authMsg, setAuthMsg] = useState(null);
+  const [syncMsg, setSyncMsg] = useState("");
+  const pulledRef = useRef(false);
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user ?? null));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  const clock = () => new Date().toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" });
+  // On login: newest copy wins. A device that has never been used keeps nothing local, so the cloud copy is taken.
+  useEffect(() => {
+    if (!user || !ready) { pulledRef.current = false; return; }
+    (async () => {
+      try {
+        const remote = await pullRemote(user.id);
+        const localAt = metaRef.current.updatedAt || 0;
+        if (remote && remote.updatedAt >= localAt) {
+          setPRaw(migrateProfile(remote.profile || {})); setLog(remote.log || {}); setActs(remote.activities || {});
+          store.set("ultraplan-profile", remote.profile || {}); store.set("ultraplan-log", remote.log || {}); store.set("ultraplan-activities", remote.activities || {});
+          metaRef.current = { updatedAt: remote.updatedAt }; store.set("ultraplan-meta", metaRef.current);
+          setSyncMsg(`Hentet fra skyen ${clock()}`);
+        } else if (localAt > 0) {
+          await pushRemote(user.id, { profile: p, log, activities: acts, updatedAt: localAt });
+          setSyncMsg(`Gemt i skyen ${clock()}`);
+        }
+        pulledRef.current = true;
+      } catch (e) { setSyncMsg(`Synk fejlede: ${e.message}`); }
+    })();
+  }, [user?.id, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  // After any change: push, debounced.
+  useEffect(() => {
+    if (!user || !pulledRef.current || !dirty) return;
+    const snap = { profile: p, log, activities: acts, updatedAt: metaRef.current.updatedAt };
+    const tmr = setTimeout(() => pushRemote(user.id, snap).then(() => setSyncMsg(`Gemt i skyen ${clock()}`)).catch((e) => setSyncMsg(`Synk fejlede: ${e.message}`)), 1500);
+    return () => clearTimeout(tmr);
+  }, [dirty, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const login = async (e) => {
+    e.preventDefault();
+    try { await sendLoginLink(email.trim()); setAuthMsg({ text: "Tjek din mail og tryk på linket for at logge ind. Åbn linket på den enhed, du vil bruge appen på." }); }
+    catch (err) { setAuthMsg({ warn: true, text: err.message }); }
+  };
 
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === "number" ? +e.target.value : e.target.value });
   // Any chosen date snaps to the Monday of its week so the plan always starts on a Monday.
@@ -242,6 +296,25 @@ export default function App() {
     setImporting(false);
   };
   const actList = useMemo(() => Object.values(acts).sort((x, y) => (x.date < y.date ? 1 : -1)), [acts]);
+  const removeActivity = (id) => { const next = { ...acts }; delete next[id]; saveActs(next); applyActivities(next, p.includeHikes); };
+
+  /* ---- day-by-day logging for the current week ---- */
+  const [dayEdit, setDayEdit] = useState(null);
+  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "" });
+  const [dayMsg, setDayMsg] = useState(null);
+  const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
+  const weekActs = useMemo(() => Object.values(acts).filter((x) => counted(x) && ymd(mondayOf(parseLocal(x.day))) === cur.key), [acts, cur.key, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dayKm = [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round(weekActs.filter((x) => x.day === ymd(addDays(cur.wkStart, i))).reduce((s, x) => s + x.km, 0) * 10) / 10);
+  const openDay = (i) => { setDayEdit(dayEdit === i ? null : i); setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); };
+  const saveDay = (e) => {
+    e.preventDefault();
+    if (!(+dayForm.km > 0)) return;
+    const act = manualActivity({ day: ymd(addDays(cur.wkStart, dayEdit)), km: dayForm.km, min: dayForm.min, rpe: dayForm.rpe });
+    const { next, added } = mergeActivities(acts, [act]);
+    if (!added) { setDayMsg({ warn: true, text: "Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert." }); return; }
+    saveActs(next); applyActivities(next, p.includeHikes);
+    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg({ text: `Gemt: ${act.km} km ${DAYS[dayEdit].toLowerCase()}.` });
+  };
   const setHikes = (v) => { setP({ ...p, includeHikes: v }); applyActivities(acts, v); };
   const clearImports = () => { if (!confirm("Fjern alle importerede aktiviteter? Tal du selv har skrevet, bliver stående.")) return; applyActivities({}, p.includeHikes); saveActs({}); setImportMsg(null); };
   const nActs = Object.keys(acts).length;
@@ -275,7 +348,7 @@ export default function App() {
   const cls = (v) => (v == null ? "l" : v > 1.5 ? "r" : v > 1.3 ? "a" : v < 0.8 ? "l" : "g");
 
   // coach advice for the current week, based on last logged week
-  const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null);
+  const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   let advice = `Denne uge: ${cur.km} km, ${cur.qDay != null ? `hård session ${DAYS[cur.qDay].toLowerCase()} (${cur.quality})` : "ingen hård session – ingen dag med tid nok"}, lang tur ${cur.lng} km${cur.longDay != null ? ` ${DAYS[cur.longDay].toLowerCase()}` : ""}. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`;
   let warn = false;
   if (cur.unplaced >= 3) { advice = `Din hverdag giver plads til ${cur.km} af de ${cur.target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de ${cur.km} km – det er ikke en fejl at leve et normalt liv.`; warn = true; }
@@ -390,6 +463,25 @@ export default function App() {
             </div>
             <div className="muted" style={{ marginTop: 6 }}>Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.</div>
           </section>
+          <section className="panel">
+            <h2>Konto</h2>
+            {!syncEnabled ? (
+              <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
+            ) : user ? (
+              <>
+                <div>Logget ind som <b>{user.email}</b></div>
+                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
+                <button className="btn ghost" type="button" onClick={() => { signOut(); setSyncMsg(""); }}>Log ud</button>
+              </>
+            ) : (
+              <form onSubmit={login}>
+                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder. Uden login gemmes alt kun her på enheden.</div>
+                <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dig@eksempel.dk" /></label>
+                <button className="btn" type="submit" style={{ marginTop: 8 }}>Send login-link</button>
+                {authMsg && <div className={`advice ${authMsg.warn ? "warn" : ""}`}>{authMsg.text}</div>}
+              </form>
+            )}
+          </section>
         </aside>
 
         <section style={{ display: "grid", gap: 16 }}>
@@ -401,17 +493,39 @@ export default function App() {
                 const b2b = cur.sun > 0 && i === (cur.longDay + 1) % 7 && v > 0;
                 const d = cur.sched[i] || {};
                 return (
-                  <div key={i} className={long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""}>
+                  <div key={i} role="button" tabIndex={0} title="Tryk for at logge en tur" onClick={() => openDay(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(i); } }}
+                    className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] ? "done" : ""} ${dayEdit === i ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
                     <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? "styrke" : d.avail === "none" ? "fri" : "hvile"}</small>
                     {v > 0 && lift && <small style={{ display: "block", color: "var(--violet)" }}>+ styrke</small>}
+                    {dayKm[i] > 0 && <small className="ran">✓ {dayKm[i]} km</small>}
                     {d.note && <small className="note">{d.note}</small>}
                   </div>
                 );
               })}
             </div>
-            {curLog.auto && curLog.km > 0 && <div className="muted" style={{ marginTop: 10 }}>Fra dit ur denne uge: <b style={{ color: "var(--text)" }}>{curLog.km} km</b> på {curLog.n} {curLog.n === 1 ? "tur" : "ture"} af {cur.km} km planlagt.</div>}
+            {dayEdit != null && (
+              <form className="dayform" onSubmit={saveDay}>
+                <div className="dayform-head"><b>{DAYS[dayEdit]} {fmt(addDays(cur.wkStart, dayEdit))}</b> <span className="muted">· plan {cur.days[dayEdit] || 0} km</span></div>
+                <div className="dayform-row">
+                  <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>
+                  <label>Minutter<input type="number" min="1" inputMode="numeric" value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} /></label>
+                  <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder="valgfri" /></label>
+                </div>
+                <div className="dayform-row">
+                  <button className="btn" type="submit">Gem tur</button>
+                  <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>Luk</button>
+                </div>
+                {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
+                {weekActs.filter((x) => x.day === ymd(addDays(cur.wkStart, dayEdit))).map((x) => (
+                  <div key={x.id} className="dayform-item"><span>{x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
+                ))}
+              </form>
+            )}
+            {curLog.auto && curLog.km > 0
+              ? <div className="muted" style={{ marginTop: 10 }}>Løbet indtil nu i denne uge: <b style={{ color: "var(--text)" }}>{curLog.km} km</b> på {curLog.n} {curLog.n === 1 ? "tur" : "ture"} af {cur.km} km planlagt. Tryk på en dag for at logge en tur.</div>
+              : <div className="muted" style={{ marginTop: 10 }}>Tryk på en dag for at logge en tur – så passer ugens tal, også før ugen er slut.</div>}
             <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
           </div>
 
@@ -496,7 +610,7 @@ export default function App() {
                       <summary>Se de importerede ture ({nActs}) – tjek dem mod Garmin/Strava</summary>
                       <div className="scroll">
                         <table>
-                          <thead><tr><th>Dato</th><th>Type</th><th className="num">Km</th><th className="num">Min</th><th className="num">Puls</th><th>Tæller i uge</th><th>Kilde</th></tr></thead>
+                          <thead><tr><th>Dato</th><th>Type</th><th className="num">Km</th><th className="num">Min</th><th className="num">Puls</th><th>Tæller i uge</th><th>Kilde</th><th></th></tr></thead>
                           <tbody>
                             {actList.slice(0, 300).map((x) => {
                               const k = kind(x.type); const counts = k === "run" || (k === "hike" && p.includeHikes);
@@ -508,6 +622,7 @@ export default function App() {
                                   <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
                                   <td style={{ whiteSpace: "nowrap" }}>{counts ? `u${isoWeek(parseLocal(wk))} · ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : "nej (ikke løb)"}</td>
                                   <td className="muted">{x.source}</td>
+                                  <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>Slet</button></td>
                                 </tr>
                               );
                             })}
@@ -542,7 +657,7 @@ export default function App() {
                       );
                       return (
                         <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span></td>
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span>{r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}</td>
                           <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title="Antaget: km/uge nu × RPE 5">~{p.currentKm}</span> : "") : r.km}</td>
                           <td>{cell("km")}</td><td>{cell("rpe")}</td><td>{cell("hr")}</td><td>{cell("wt")}</td><td>{cell("sleep")}</td>
                           <td className="num">{ld ?? (r.pre && baseline ? <span className="muted" title="Antaget belastning">~{baseline}</span> : "")}</td>

@@ -107,3 +107,15 @@ tr.pre td input { background: #1c1c1c; border-color: var(--line); }
 .actlist { margin-bottom: 8px; }
 .actlist table { font-size: 13px; margin-top: 8px; }
 .actlist td, .actlist th { padding: 5px 6px; }
+.thisweek div[role=button] { cursor: pointer; }
+.thisweek div[role=button]:hover { background: #262626; }
+.thisweek div.edit { outline: 2px solid var(--volt); outline-offset: 1px; }
+.thisweek div.done { background: #1b2418; }
+.thisweek .ran { display: block; margin-top: 4px; color: var(--green); font-weight: 600; font-size: 11px; }
+.dayform { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+.dayform-head { margin-bottom: 6px; }
+.dayform-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.dayform-row label { flex: 1 1 90px; }
+.dayform-row input { margin-top: 2px; }
+.dayform-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+.dayform-item .btn { padding: 4px 10px; font-size: 12px; }
