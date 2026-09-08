@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote } from "./sync.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG } from "./Onboarding.jsx";
 
 /* ================= storage (swappable) ================= */
@@ -208,6 +208,10 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!syncEnabled); // without Supabase there is nothing to wait for
   const [email, setEmail] = useState("");
   const [authMsg, setAuthMsg] = useState(null);
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => { if (cooldown <= 0) return; const tmr = setTimeout(() => setCooldown((c) => c - 1), 1000); return () => clearTimeout(tmr); }, [cooldown]);
   const [syncMsg, setSyncMsg] = useState("");
   const pulledRef = useRef(false);
   const [pulled, setPulled] = useState(false);
@@ -257,10 +261,45 @@ export default function App() {
     return () => clearTimeout(tmr);
   }, [dirty, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const login = async (e) => {
-    e.preventDefault();
-    try { await sendLoginLink(email.trim()); setAuthMsg({ text: "Tjek din mail og tryk på linket for at logge ind. Åbn linket på den enhed, du vil bruge appen på." }); }
-    catch (err) { setAuthMsg({ warn: true, text: /fetch|network/i.test(err.message) ? "Kunne ikke kontakte login-serveren. Tjek din internetforbindelse og prøv igen." : err.message }); }
+    e?.preventDefault();
+    if (cooldown > 0) return;
+    try {
+      await sendLoginLink(email.trim());
+      setCodeSent(true); setCode(""); setCooldown(60);
+      setAuthMsg({ text: `Vi har sendt en 6-cifret kode til ${email.trim()}. Skriv den herunder. Kig i spam, hvis den ikke dukker op inden for et minut.` });
+    } catch (err) {
+      const m = /after (\d+) seconds/i.exec(err.message || "");
+      if (m) { setCooldown(+m[1]); setAuthMsg({ warn: true, text: `Vent lidt, før du beder om en ny kode. Har du allerede fået en, kan du skrive den herunder.` }); setCodeSent(true); }
+      else setAuthMsg({ warn: true, text: /fetch|network/i.test(err.message) ? "Kunne ikke kontakte login-serveren. Tjek din internetforbindelse og prøv igen." : err.message });
+    }
   };
+  const verify = async (e) => {
+    e.preventDefault();
+    if (code.replace(/\D/g, "").length < 6) { setAuthMsg({ warn: true, text: "Koden har 6 cifre." }); return; }
+    try { await verifyCode(email.trim(), code); setAuthMsg(null); }
+    catch (err) { setAuthMsg({ warn: true, text: /expired|invalid|otp/i.test(err.message) ? "Koden er forkert eller udløbet. Bed om en ny." : err.message }); }
+  };
+  const loginForm = (
+    <>
+      {!codeSent ? (
+        <form onSubmit={login}>
+          <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dig@eksempel.dk" autoFocus /></label>
+          <button className="btn" type="submit" style={{ marginTop: 10, width: "100%" }} disabled={cooldown > 0}>{cooldown > 0 ? `Send kode (${cooldown} s)` : "Send kode"}</button>
+        </form>
+      ) : (
+        <form onSubmit={verify}>
+          <div className="muted" style={{ marginBottom: 6 }}>Kode sendt til <b style={{ color: "var(--text)" }}>{email.trim()}</b></div>
+          <label>6-cifret kode fra mailen<input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus className="code" /></label>
+          <button className="btn" type="submit" style={{ marginTop: 10, width: "100%" }}>Log ind</button>
+          <div className="import-row" style={{ justifyContent: "space-between", marginTop: 10 }}>
+            <button className="btn ghost" type="button" onClick={login} disabled={cooldown > 0}>{cooldown > 0 ? `Send ny kode om ${cooldown} s` : "Send ny kode"}</button>
+            <button className="btn ghost" type="button" onClick={() => { setCodeSent(false); setCode(""); setAuthMsg(null); }}>Anden e-mail</button>
+          </div>
+        </form>
+      )}
+      {authMsg && <div className={`advice ${authMsg.warn ? "warn" : ""}`}>{authMsg.text}</div>}
+    </>
+  );
 
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === "number" ? +e.target.value : e.target.value });
   // Any chosen date snaps to the Monday of its week so the plan always starts on a Monday.
@@ -397,13 +436,9 @@ export default function App() {
       </div>
       <div className="panel landing-login">
         <h2>Log ind</h2>
-        <p className="muted">Skriv din e-mail, så sender vi et link. Ingen adgangskode. Har du ikke en konto, oprettes den automatisk.</p>
-        <form onSubmit={login}>
-          <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dig@eksempel.dk" autoFocus /></label>
-          <button className="btn" type="submit" style={{ marginTop: 10, width: "100%" }}>Send login-link</button>
-          {authMsg && <div className={`advice ${authMsg.warn ? "warn" : ""}`}>{authMsg.text}</div>}
-        </form>
-        <p className="foot">Åbn linket på den enhed, du vil bruge appen på. Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
+        <p className="muted">Skriv din e-mail, så sender vi en 6-cifret kode. Ingen adgangskode at huske. Har du ikke en konto, oprettes den automatisk.</p>
+        {loginForm}
+        <p className="foot">Linket i mailen virker også. Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
       </div>
       <p className="foot" style={{ textAlign: "center" }}>Ultraplan {__APP_VERSION__}</p>
     </div>
@@ -524,12 +559,10 @@ export default function App() {
                 <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
               </>
             ) : (
-              <form onSubmit={login}>
-                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder. Uden login gemmes alt kun her på enheden.</div>
-                <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dig@eksempel.dk" /></label>
-                <button className="btn" type="submit" style={{ marginTop: 8 }}>Send login-link</button>
-                {authMsg && <div className={`advice ${authMsg.warn ? "warn" : ""}`}>{authMsg.text}</div>}
-              </form>
+              <div>
+                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.</div>
+                {loginForm}
+              </div>
             )}
           </section>
         </aside>

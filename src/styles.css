@@ -163,3 +163,4 @@ tr.pre td input { background: #1c1c1c; border-color: var(--line); }
 .model dd { margin: 0; font-weight: 600; }
 .model .btn { width: 100%; min-height: 44px; margin-top: 4px; }
 .model .muted { font-size: 13px; }
+input.code { font-size: 26px; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }

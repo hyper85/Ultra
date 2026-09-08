@@ -1,0 +1,41 @@
+<!-- Supabase → Authentication → Email Templates → Magic Link. Subject: Din Ultraplan-kode: {{ .Token }} -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0b0b0b;padding:32px 12px;font-family:Inter,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#161616;border:1px solid #2a2a2a;border-radius:14px;">
+        <tr>
+          <td align="center" style="padding:28px 24px 8px;">
+            <img src="https://ultra-lime-nu.vercel.app/icon-192.png" width="64" height="64" alt="Ultraplan" style="display:block;border-radius:14px;">
+            <div style="font-family:'Barlow Condensed',Impact,'Arial Narrow',sans-serif;font-size:30px;font-weight:800;letter-spacing:.02em;color:#f5f5f5;text-transform:uppercase;margin-top:12px;">Ultraplan</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 24px 0;color:#9a9a9a;font-size:15px;line-height:1.5;text-align:center;">
+            Her er din kode til at logge ind. Den virker i 60 minutter.
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 24px 8px;">
+            <div style="display:inline-block;background:#1f1f1f;border:1px solid #2a2a2a;border-radius:12px;padding:16px 28px;font-family:'Courier New',Courier,monospace;font-size:36px;font-weight:700;letter-spacing:.35em;color:#dfff00;">{{ .Token }}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 24px 0;color:#9a9a9a;font-size:13px;line-height:1.5;text-align:center;">
+            Skriv koden i appen. Er du på samme enhed, kan du også bruge knappen:
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:16px 24px 8px;">
+            <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#fc4c02;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:8px;">Log ind i Ultraplan</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 24px 28px;color:#6f6f6f;font-size:12px;line-height:1.5;text-align:center;">
+            Har du ikke bedt om koden, kan du ignorere mailen. Ingen kan logge ind uden koden.
+          </td>
+        </tr>
+      </table>
+      <div style="color:#5a5a5a;font-size:12px;margin-top:16px;">Ultraplan · ultra-lime-nu.vercel.app</div>
+    </td>
+  </tr>
+</table>

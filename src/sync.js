@@ -26,3 +26,10 @@ export const pushRemote = async (userId, { profile, log, activities, updatedAt }
   const { error } = await supabase.from("ultraplan_user_data").upsert({ user_id: userId, profile, log, activities, updated_at: new Date(updatedAt || Date.now()).toISOString() }, { onConflict: "user_id" });
   if (error) throw error;
 };
+
+// Sign in with the 6-digit code from the email (the Magic Link template must include {{ .Token }}).
+export const verifyCode = async (email, token) => {
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: String(token).replace(/\D/g, ""), type: "email" });
+  if (error) throw error;
+  return data;
+};
