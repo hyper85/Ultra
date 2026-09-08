@@ -14,10 +14,8 @@ const PH = {
   "Ultra-prep": "var(--orange)",
   Nedtrapning: "var(--violet)",
 };
-const nextMonday = (from = new Date()) => {
-  const d = new Date(from); const day = d.getDay();
-  d.setDate(d.getDate() + (day === 1 ? 0 : (8 - day) % 7)); d.setHours(0, 0, 0, 0); return d;
-};
+// Parse "YYYY-MM-DD" as local midnight so week boundaries match thisMonday() in every time zone.
+const parseLocal = (str) => { const [y, m, d] = String(str).split("-").map(Number); return new Date(y, m - 1, d); };
 const thisMonday = () => { const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() - ((day + 6) % 7)); d.setHours(0, 0, 0, 0); return d; };
 const fmt = (d) => d.toLocaleDateString("da-DK", { day: "numeric", month: "short" });
 const isoWeek = (d) => {
@@ -29,8 +27,8 @@ const isoWeek = (d) => {
 
 /* ================= plan engine ================= */
 export function buildPlan(p) {
-  const start = new Date(p.startDate);
-  const race = new Date(p.raceDate);
+  const start = parseLocal(p.startDate);
+  const race = parseLocal(p.raceDate);
   const weeks = Math.max(8, Math.floor((race - start) / (7 * 86400000)) + 1);
   const raceKm = +p.raceKm;
   const restart = p.breakWeeks >= 2 ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
@@ -94,9 +92,12 @@ export function buildPlan(p) {
 }
 
 /* ================= app ================= */
+const PLAN_START = "2026-08-24"; // mandag i uge 35
+const PROFILE_VERSION = 2;
 const DEFAULT = {
+  v: PROFILE_VERSION,
   name: "", age: 41, height: 181, weight: 89, restHR: 49, maxHR: 186,
-  currentKm: 35, breakWeeks: 0, startDate: nextMonday().toISOString().slice(0, 10),
+  currentKm: 35, breakWeeks: 0, startDate: PLAN_START,
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
   runDays: [0, 2, 3], qualityDay: 2, longDay: 5, liftDays: [1, 3],
 };
@@ -108,7 +109,12 @@ export default function App() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => { (async () => {
-    const sp = await store.get("ultraplan-profile"); if (sp) setP({ ...DEFAULT, ...sp });
+    const sp = await store.get("ultraplan-profile");
+    if (sp) {
+      // Profiles saved before v2 carried an auto-generated start date; move them to the fixed plan start.
+      const migrated = (sp.v || 1) < PROFILE_VERSION ? { ...sp, startDate: PLAN_START, v: PROFILE_VERSION } : sp;
+      setP({ ...DEFAULT, ...migrated });
+    }
     const sl = await store.get("ultraplan-log"); if (sl) setLog(sl);
     setReady(true);
   })(); }, []);
@@ -121,7 +127,7 @@ export default function App() {
   const plan = useMemo(() => buildPlan(p), [p]);
   const maxHR = p.maxHR || Math.round(211 - 0.64 * p.age);
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + 5);
-  const daysToRace = Math.max(0, Math.round((new Date(p.raceDate) - new Date()) / 86400000));
+  const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
   const cur = plan.rows.find((r) => r.wkStart.getTime() === thisMonday().getTime()) || plan.rows[0];
 
   const loads = plan.rows.map((r) => { const l = log[r.i] || {}; return l.km && l.rpe ? l.km * l.rpe : null; });
