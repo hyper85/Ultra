@@ -270,3 +270,15 @@ details.acc > summary + * { margin-top: 14px; }
 .pill { font-variant-numeric: tabular-nums; }
 tr.dayrow td { border-radius: var(--r-sm); }
 .import-row input[type=file] { max-width: 100%; min-width: 0; flex-basis: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chips button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-weight: 600; cursor: pointer; min-height: 40px; }
+.chips button.on { background: #2a1a10; border-color: var(--orange); color: var(--text); }
+.tips { display: grid; gap: 10px; margin: 12px 0; }
+.tips div { display: grid; gap: 2px; padding: 10px 12px; background: var(--panel-2); border-radius: var(--r-sm); }
+.tips b { font-size: 13px; color: var(--muted); }
+.tips span { font-size: 14px; }
+.reset-list { display: grid; gap: 14px; }
+.reset-list > div { display: grid; gap: 6px; justify-items: start; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.reset-list > div:last-child { border-bottom: none; padding-bottom: 0; }
+.reset-list span { color: var(--muted); font-size: 13px; }
+.btn.danger { border-color: rgba(255,77,77,.5); color: var(--red); }

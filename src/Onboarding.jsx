@@ -15,6 +15,40 @@ const MODELS = [
   { key: "vol", name: "Volumen", dLevel: 1, dDays: 1, peakScale: 1.15, who: "Til dig der har tiden og disciplinen. Flere dage, højere top, mindre margin." },
 ];
 const PACE = { 1: 7.0, 2: 6.25, 3: 5.75, 4: 5.25 }; // min/km used only for the hours estimate
+export const INJURY = [
+  ["none", "Ingen skavanker", "Kroppen er klar. Planen kører som normalt."],
+  ["sore", "Lidt ømhed, kan løbe", "De første 3 uger uden bakker og hårde intervaller. Toppen sænkes 5 %."],
+  ["injured", "Skadet, kan ikke løbe lige nu", "4 ugers genopbygning med gå/løb, én løbedag mindre, toppen sænkes 10 %."],
+];
+export const AREAS = ["Knæ", "Akillessene", "Læg", "Skinneben", "Fod", "Hofte / ryg", "Andet"];
+export const DIETS = [
+  ["all", "Spiser alt", "Kød, fisk, æg og mejeri er på menuen."],
+  ["veg", "Vegetarisk", "Ingen kød og fisk. Æg og mejeri ok."],
+  ["vegan", "Vegansk", "Kun plantebaseret."],
+  ["lowcarb", "Lavkulhydrat i hverdagen", "Få kulhydrater til daglig. Lange ture kræver stadig sukker."],
+];
+export const INTOL = ["Laktose", "Gluten", "Nødder"];
+// Practical food suggestions that follow the diet the user actually eats.
+export const dietTips = (diet = "all", intol = []) => {
+  const no = (x) => intol.some((i) => x.toLowerCase().includes(i.toLowerCase()));
+  const protein = {
+    all: ["Kylling og kalkun", "Fisk 2–3 gange om ugen", "Æg", "Skyr og kvark", "Bønner og linser"],
+    veg: ["Æg", "Skyr, kvark og hytteost", "Tofu og tempeh", "Bønner, linser og kikærter", "Proteinpulver (valle eller ært)"],
+    vegan: ["Tofu og tempeh", "Linser, bønner og kikærter", "Seitan", "Sojaskyr", "Ærteprotein-pulver"],
+    lowcarb: ["Kød, fisk og æg", "Skyr og ost", "Nødder og frø", "Grønt med olie", "Bønner i små mængder"],
+  }[diet] || [];
+  const fuel = {
+    all: ["Gels eller sportsdrik", "Bananer og dadler", "Rosiner og vingummi", "Rugbrød med honning til de lange ture"],
+    veg: ["Gels eller sportsdrik", "Bananer og dadler", "Rosiner", "Rugbrød med honning"],
+    vegan: ["Veganske gels (tjek etiketten)", "Dadler og figner", "Rosiner og tørret mango", "Havregrød med sirup før lange ture"],
+    lowcarb: ["Lav-kulhydrat i hverdagen, men 40–90 g kulhydrat/time på ture over 90 min", "Dadler og gels på den lange tur", "Øv maven på det i træning, ikke på løbsdagen"],
+  }[diet] || [];
+  const swaps = [];
+  if (intol.includes("Laktose")) swaps.push("Skift skyr og mælk til laktosefri eller havre-/sojaprodukter.");
+  if (intol.includes("Gluten")) swaps.push("Rugbrød og havre byttes til glutenfri havre, ris og kartofler. Tjek gels for hvede.");
+  if (intol.includes("Nødder")) swaps.push("Frø (græskar, solsikke) i stedet for nødder.");
+  return { protein: protein.filter((x) => !no(x)), fuel: fuel.filter((x) => !no(x)), swaps };
+};
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 export const goalKcal = (bmr, goal) => {
@@ -30,7 +64,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const [d, setD] = useState(() => ({ ...initial, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
   const set = (k) => (e) => setD({ ...d, [k]: e.target.type === "number" ? (e.target.value === "" ? "" : +e.target.value) : e.target.value });
   const setDay = (i, patch) => { const A = (d.sched?.A || []).map((x, j) => (j === i ? { ...x, ...patch } : x)); setD({ ...d, sched: { ...(d.sched || {}), A, B: d.sched?.B || A.map((x) => ({ ...x })) } }); };
-  const STEPS = ["Velkommen", "Løbet", "Dig", "Din form", "Din hverdag", "Din plan"];
+  const STEPS = ["Velkommen", "Løbet", "Dig", "Din form", "Din krop", "Din hverdag", "Kost", "Din plan"];
 
   const maxHR = d.maxHR || Math.round(d.sex === "f" ? 206 - 0.88 * (d.age || 40) : 211 - 0.64 * (d.age || 40));
   const bmr = Math.round(10 * (d.weight || 80) + 6.25 * (d.height || 178) - 5 * (d.age || 40) + (d.sex === "f" ? -161 : 5));
@@ -49,6 +83,8 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const balanced = useMemo(() => buildPlan({ ...d, level: d.level || 2, peakScale: 1 }), [d]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canNext = step === 1 ? raceOk && +d.raceKm > 0 : step === 2 ? d.age > 0 && d.weight > 0 && d.height > 0 : step === 3 ? d.currentKm >= 0 && d.currentKm !== "" : true;
+  const toggleIntol = (x) => { const cur = d.intol || []; setD({ ...d, intol: cur.includes(x) ? cur.filter((y) => y !== x) : [...cur, x] }); };
+  const tips = dietTips(d.diet || "all", d.intol || []);
   const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
   const choose = (m) => onDone({ ...m.v, onboarded: true });
@@ -136,6 +172,25 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
 
       {step === 4 && (
         <section className="panel ob-panel">
+          <h2>Din krop</h2>
+          <p className="muted">Ærligt svar giver en plan, du kan holde til. Alt kan ændres senere under "Mere".</p>
+          <div className="ob-cards">
+            {INJURY.map(([k, n, t]) => <button key={k} type="button" className={(d.injury || "none") === k ? "on" : ""} onClick={() => setD({ ...d, injury: k })}><b>{n}</b><span>{t}</span></button>)}
+          </div>
+          {(d.injury || "none") !== "none" && (
+            <div className="row2" style={{ marginTop: 10 }}>
+              <label>Hvor sidder det?<select value={d.injuryArea || ""} onChange={(e) => setD({ ...d, injuryArea: e.target.value })}><option value="">Vælg</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
+              <label>Note (valgfri)<input value={d.injuryNote || ""} maxLength={60} onChange={(e) => setD({ ...d, injuryNote: e.target.value })} placeholder="fx ondt efter 10 km" /></label>
+            </div>
+          )}
+          {d.injury === "injured" && <div className="advice warn">Planen starter med 4 ugers genopbygning: gå/løb-intervaller, blødt underlag og ingen hårde pas. Gør det ondt på en måde, der ændrer dit skridt, så stop. Ved smerte over 2 uger: se en fysioterapeut.</div>}
+          {d.injury === "sore" && <div className="advice">De første 3 uger uden bakker og hårde intervaller, og RPE under 6. Bliver ømheden værre uge for uge, så skift til "Skadet".</div>}
+          <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next}>Næste</button></div>
+        </section>
+      )}
+
+      {step === 5 && (
+        <section className="panel ob-panel">
           <h2>Din hverdag</h2>
           <p className="muted">Det her gør planen din. Sig ærligt, hvor meget tid du har, så lægger vi kun løb, hvor der er plads.</p>
           <div className="row2">
@@ -157,15 +212,31 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
             </select>
           </label>
           <div className="muted" style={{ marginTop: 8 }}>Deleordning med uge A/B, tidspunkt på dagen og styrkedage kan sættes bagefter under "Din hverdag".</div>
+          <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next}>Næste</button></div>
+        </section>
+      )}
+
+      {step === 6 && (
+        <section className="panel ob-panel">
+          <h2>Kost</h2>
+          <p className="muted">Kosten følger planen: mere på hårde dage, mindre på hviledage. Fortæl, hvad du spiser, så passer forslagene til dig.</p>
+          <div className="ob-cards">
+            {DIETS.map(([k, n, t]) => <button key={k} type="button" className={(d.diet || "all") === k ? "on" : ""} onClick={() => setD({ ...d, diet: k })}><b>{n}</b><span>{t}</span></button>)}
+          </div>
+          <div className="muted" style={{ marginTop: 12 }}>Noget du ikke tåler?</div>
+          <div className="chips">{INTOL.map((x) => <button key={x} type="button" className={(d.intol || []).includes(x) ? "on" : ""} onClick={() => toggleIntol(x)}>{x}</button>)}</div>
+          <div className="advice">Protein ca. <b>{proteinG(d.weight || 80, d.goal)} g</b> om dagen, fx fra {tips.protein.slice(0, 3).join(", ").toLowerCase()}. På lange ture: {tips.fuel[0]?.toLowerCase()}.</div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next}>Vis min plan</button></div>
         </section>
       )}
 
-      {step === 5 && (
+      {step === 7 && (
         <section className="ob-result">
           <div className="panel ob-panel">
             <h2>Din plan</h2>
             <p className="muted">Tre bud ud fra dine svar. Tallene er ugens km på toppen, længste tur og cirka-timer om ugen, når det er hårdest. Vælg den, du kan holde i {weeksToRace || "alle"} uger.</p>
+            {d.injury === "injured" && <div className="advice warn">Alle tre starter med 4 ugers genopbygning og én løbedag mindre, fordi du er skadet. Toppen er sænket 10 %.</div>}
+            {d.injury === "sore" && <div className="advice">De første 3 uger er uden bakker og hårde intervaller på grund af ømheden.</div>}
             <div className="model-grid">
               {models.map((m) => (
                 <div key={m.key} className={`model ${m.key === "bal" ? "rec" : ""}`}>
@@ -190,7 +261,12 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
             <h2>Kost</h2>
             <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(d.weight || 80, d.goal)} g</b> hver dag. {GOALS.find(([k]) => k === d.goal)?.[2]}</p>
             <table><tbody>{goalKcal(bmr, d.goal).map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
-            <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Kosttallene følger den model, du vælger, i fanen "Kost".</p>
+            <div className="tips">
+              <div><b>Protein fra</b><span>{tips.protein.join(" · ")}</span></div>
+              <div><b>På lange ture</b><span>{tips.fuel.join(" · ")}</span></div>
+              {tips.swaps.length > 0 && <div><b>Bytte-tips</b><span>{tips.swaps.join(" ")}</span></div>}
+            </div>
+            <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Kosttallene og forslagene findes bagefter under "Mere", Kost.</p>
           </div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button></div>
         </section>

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
-import Onboarding, { goalKcal, proteinG } from "./Onboarding.jsx";
+import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -55,13 +55,14 @@ export function buildPlan(p) {
   const race = parseLocal(p.raceDate);
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
-  const restart = p.breakWeeks >= 2 ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
-  // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model.
-  const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1)));
+  const injured = p.injury === "injured", sore = p.injury === "sore";
+  const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
+  // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model and by injury status.
+  const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1) * (injured ? 0.9 : sore ? 0.95 : 1)));
   const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
   const longCap = Math.min(Math.round(raceKm * LONG_FRAC[level]), 50);
   const taper = 3;
-  const rebuild = p.breakWeeks >= 2 ? 4 : 0;
+  const rebuild = p.breakWeeks >= 2 || injured ? 4 : 0;
   const ramp = weeks - taper - rebuild;
   const ultra = Math.round(ramp * 0.45);
   const build = ramp - ultra;
@@ -75,8 +76,10 @@ export function buildPlan(p) {
       phase = "Genopbygning";
       km = Math.round(restart + restart * 0.35 * ((i - 1) / Math.max(1, rebuild - 1)));
       if (i === rebuild) { deload = true; km = Math.round(km * 0.72); }
-      quality = i === 1 ? "Kun roligt" : i === 2 ? "Stigninger 4×20 s" : "6×2 min tærskel";
-      focus = i === 1 ? "Returuge. Alt roligt, blødt underlag, ankelarbejde dagligt." : "Rolig genopbygning. Ingen smerte, der ændrer skridtet.";
+      quality = injured ? ["Gå/løb 8×(3 min løb / 1 min gang)", "Gå/løb 6×(5 min løb / 1 min gang)", "Rolig 30 min + stigninger 4×15 s", "Rolig 40 min, kun hvis smertefri"][i - 1]
+        : i === 1 ? "Kun roligt" : i === 2 ? "Stigninger 4×20 s" : "6×2 min tærskel";
+      focus = injured ? `Skadesfase${p.injuryArea ? ` (${p.injuryArea.toLowerCase()})` : ""}: stop ved smerte, der ændrer skridtet. Fod- og hoftestyrke 3×/uge.`
+        : i === 1 ? "Returuge. Alt roligt, blødt underlag, ankelarbejde dagligt." : "Rolig genopbygning. Ingen smerte, der ændrer skridtet.";
     } else if (i <= rebuild + build) {
       phase = "Opbygning";
       const j = i - rebuild;
@@ -84,8 +87,8 @@ export function buildPlan(p) {
       const b0 = Math.min(restart * 1.35, peak * 0.85), b1 = Math.max(peak * 0.65, b0);
       km = Math.round(b0 + (b1 - b0) * (j / build));
       if (j % 4 === 0 && j !== build) { deload = true; km = Math.round(km * 0.72); }
-      quality = ["8×2 min tærskel", "20 min tempo", "Bakker 6×90 s", "5×3 min tærskel", "25 min tempo"][j % 5];
-      focus = deload ? "Nedtrapningsuge. Lad tilpasningen sætte sig." : "Stak aerob volumen. Lang tur på trail med 40–60 g kulhydrat/t.";
+      quality = sore && j <= 3 ? ["Rolig tempo 12 min", "Rolig tempo 15 min", "Stigninger 6×20 s"][j - 1] : ["8×2 min tærskel", "20 min tempo", "Bakker 6×90 s", "5×3 min tærskel", "25 min tempo"][j % 5];
+      focus = sore && j <= 3 ? "Øm: RPE under 6, ingen bakker. Bliver det værre, skift til 'Skadet' under Mere." : deload ? "Nedtrapningsuge. Lad tilpasningen sætte sig." : "Stak aerob volumen. Lang tur på trail med 40–60 g kulhydrat/t.";
     } else if (i <= weeks - taper) {
       phase = "Ultra-prep";
       const j = i - rebuild - build;
@@ -102,7 +105,7 @@ export function buildPlan(p) {
     }
     let lng = Math.min(longCap, Math.round(km * (phase === "Ultra-prep" ? 0.5 : 0.42)));
     if (isRace) lng = raceKm;
-    if (phase === "Genopbygning" && i === 1) lng = Math.min(lng, 12);
+    if (phase === "Genopbygning") lng = Math.min(lng, injured ? 5 + 3 * i : i === 1 ? 12 : lng);
     let sun = phase === "Ultra-prep" && !deload ? Math.round(lng * 0.45) : 0;
     if (phase === "Nedtrapning" && i === weeks - taper + 1) sun = Math.round(lng * 0.4);
     // ---- fit the week into the days everyday life actually offers
@@ -114,7 +117,7 @@ export function buildPlan(p) {
     if (longDay == null) { longDay = order.find((d) => avail[d] >= 1); if (longDay != null && !isRace) lng = Math.min(lng, 8); }
     const b2bDay = longDay == null ? null : (longDay + 1) % 7;
     if (b2bDay == null || avail[b2bDay] < 2) sun = 0;
-    const maxRun = Math.min(7, Math.max(2, p.maxRunDays || 4));
+    const maxRun = Math.min(7, Math.max(2, (p.maxRunDays || 4) - (injured ? 1 : 0)));
     const slots = Math.max(0, maxRun - (longDay == null ? 0 : 1)); // the back-to-back run in ultra-prep comes on top
     const cands = [0, 1, 2, 3, 4, 5, 6].filter((d) => d !== longDay && !(sun && d === b2bDay) && avail[d] >= 1)
       .sort((a, b) => (b === p.qualityDay) - (a === p.qualityDay) || avail[b] - avail[a] || a - b);
@@ -151,7 +154,7 @@ const DEFAULT = {
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
   qualityDay: 2, longDay: 5, liftDays: [1, 3],
   sex: "m", level: 2, maxRunDays: 4, family: "single", altWeeks: false, altStart: PLAN_START,
-  goal: "finish", onboarded: false,
+  goal: "finish", onboarded: false, injury: "none", injuryArea: "", injuryNote: "", diet: "all", intol: [],
   sched: { A: defaultSched(), B: defaultSched() },
 };
 
@@ -536,6 +539,7 @@ export default function App() {
                 {hard && <div className="today-sub">{cur.quality}</div>}
                 {long && <div className="today-sub">Rolig puls under {Math.round(maxHR * 0.7)}. Spis fra minut 30.</div>}
                 {!v && lift && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
+                {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>Skadesfase: {cur.quality}. Stop ved smerte, der ændrer skridtet.</div>}
                 {v > 0 && lift && <div className="today-sub">+ styrke i dag</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ Løbet {ran} km{v > 0 ? ` af ${v}` : ""}</div>}
@@ -623,8 +627,11 @@ export default function App() {
             <label>Form og erfaring
               <select value={p.level} onChange={(e) => setP({ ...p, level: +e.target.value })}>{LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
             </label>
-            <div className="muted" style={{ marginTop: 6 }}>Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige.</div>
-            <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => setP({ ...p, onboarded: false, rerun: true })}>Kør spørgeskemaet igen</button>
+            <div className="row2" style={{ marginTop: 8 }}>
+              <label>Krop<select value={p.injury || "none"} onChange={(e) => setP({ ...p, injury: e.target.value })}>{INJURY.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
+              {(p.injury || "none") !== "none" && <label>Hvor<select value={p.injuryArea || ""} onChange={(e) => setP({ ...p, injuryArea: e.target.value })}><option value="">Vælg</option>{AREAS.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>}
+            </div>
+            <div className="muted" style={{ marginTop: 6 }}>Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige. "Skadet" giver 4 ugers genopbygning med gå/løb.</div>
           </details>
 
           <details className="panel acc">
@@ -671,6 +678,14 @@ export default function App() {
               <label>Lang tur (ønsket)<select value={p.longDay} onChange={(e) => setP({ ...p, longDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 3}>{d}</option>)}</select></label>
             </div>
             <div className="muted" style={{ marginTop: 6 }}>Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.</div>
+          </details>
+          <details className="panel acc">
+            <summary><h2>Nulstil</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <div className="reset-list">
+              <div><b>Svar på spørgsmålene igen</b><span>Dine nuværende svar er udfyldt på forhånd. Log og ture bevares.</span><button className="btn ghost" type="button" onClick={() => setP({ ...p, onboarded: false, rerun: true })}>Kør spørgeskemaet igen</button></div>
+              <div><b>Nulstil indstillinger</b><span>Profil, løb, hverdag og kost slettes, og du starter forfra i spørgeskemaet. Log og ture bevares.</span><button className="btn ghost" type="button" onClick={() => { if (confirm("Nulstil alle indstillinger? Din log og dine ture bevares.")) setP({ ...DEFAULT, v: PROFILE_VERSION, onboarded: false }); }}>Nulstil indstillinger</button></div>
+              <div><b>Slet alt</b><span>Indstillinger, log og alle ture slettes, også i skyen, hvis du er logget ind. Kan ikke fortrydes.</span><button className="btn ghost danger" type="button" onClick={() => { if (confirm("Slet ALT – indstillinger, log og ture? Kan ikke fortrydes.")) { saveActs({}); saveLog({}); setP({ ...DEFAULT, v: PROFILE_VERSION, onboarded: false }); } }}>Slet alt</button></div>
+            </div>
           </details>
         </aside>
         )}
@@ -764,6 +779,16 @@ export default function App() {
                 <summary><h2>Kost</h2><span className="chev" aria-hidden="true">›</span></summary>
                 <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(p.weight, p.goal)} g</b> hver dag. Kulhydrat følger arbejdet.{p.goal === "lean" ? " Mål: blive lettere, ca. 300 kcal under behov og max 0,5 kg/uge." : p.goal === "perform" ? " Mål: tid, lidt ekstra på kvalitetsdage." : ""}</p>
                 <table><tbody>{nut.map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
+                {(() => { const tips = dietTips(p.diet || "all", p.intol || []); return (
+                  <div className="tips">
+                    <div><b>Protein fra</b><span>{tips.protein.join(" · ")}</span></div>
+                    <div><b>På lange ture</b><span>{tips.fuel.join(" · ")}</span></div>
+                    {tips.swaps.length > 0 && <div><b>Bytte-tips</b><span>{tips.swaps.join(" ")}</span></div>}
+                  </div>); })()}
+                <div className="row2" style={{ marginTop: 10 }}>
+                  <label>Kost<select value={p.diet || "all"} onChange={(e) => setP({ ...p, diet: e.target.value })}>{DIETS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
+                  <label>Tåler ikke<div className="chips" style={{ marginTop: 6 }}>{INTOL.map((x) => <button key={x} type="button" className={(p.intol || []).includes(x) ? "on" : ""} onClick={() => setP({ ...p, intol: (p.intol || []).includes(x) ? p.intol.filter((y) => y !== x) : [...(p.intol || []), x] })}>{x}</button>)}</div></label>
+                </div>
                 <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.</p>
               </details>
             )}
