@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote } from "./sync.js";
+import Onboarding, { goalKcal, proteinG } from "./Onboarding.jsx";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -55,7 +56,8 @@ export function buildPlan(p) {
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
   const restart = p.breakWeeks >= 2 ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
-  const peakTarget = Math.min(120, Math.max(45, Math.round(raceKm * 0.95)));
+  // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model.
+  const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1)));
   const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
   const longCap = Math.min(Math.round(raceKm * LONG_FRAC[level]), 50);
   const taper = 3;
@@ -78,7 +80,9 @@ export function buildPlan(p) {
     } else if (i <= rebuild + build) {
       phase = "Opbygning";
       const j = i - rebuild;
-      km = Math.round(restart * 1.35 + (peak * 0.65 - restart * 1.35) * (j / build));
+      // Build phase: from a step above current volume (but not above 85 % of peak) up to 65 % of peak.
+      const b0 = Math.min(restart * 1.35, peak * 0.85), b1 = Math.max(peak * 0.65, b0);
+      km = Math.round(b0 + (b1 - b0) * (j / build));
       if (j % 4 === 0 && j !== build) { deload = true; km = Math.round(km * 0.72); }
       quality = ["8×2 min tærskel", "20 min tempo", "Bakker 6×90 s", "5×3 min tærskel", "25 min tempo"][j % 5];
       focus = deload ? "Nedtrapningsuge. Lad tilpasningen sætte sig." : "Stak aerob volumen. Lang tur på trail med 40–60 g kulhydrat/t.";
@@ -139,7 +143,7 @@ export function buildPlan(p) {
 
 /* ================= app ================= */
 const PLAN_START = "2026-08-24"; // mandag i uge 35
-const PROFILE_VERSION = 3;
+const PROFILE_VERSION = 4;
 const DEFAULT = {
   v: PROFILE_VERSION,
   name: "", age: 41, height: 181, weight: 89, restHR: 49, maxHR: 186,
@@ -147,6 +151,7 @@ const DEFAULT = {
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
   qualityDay: 2, longDay: 5, liftDays: [1, 3],
   sex: "m", level: 2, maxRunDays: 4, family: "single", altWeeks: false, altStart: PLAN_START,
+  goal: "finish", onboarded: false,
   sched: { A: defaultSched(), B: defaultSched() },
 };
 
@@ -172,6 +177,8 @@ export default function App() {
     if (v < 2) migrated = { ...migrated, startDate: PLAN_START };
     // v2 had Mon–Fri run toggles; turn them into a 7-day availability schedule.
     if (v < 3) { const A = schedFromLegacy(migrated.runDays, migrated.longDay); const { runDays, ...rest } = migrated; migrated = { ...rest, sched: { A, B: A.map((d) => ({ ...d })) }, maxRunDays: Math.min(6, (runDays?.length ?? 3) + 1) }; }
+    // v3 predates the questionnaire; a profile that already exists has been set up by hand, so don't force it.
+    if (v < 4 && Object.keys(sp).length > 0) migrated = { ...migrated, onboarded: true };
     return { ...DEFAULT, ...migrated, v: PROFILE_VERSION };
   };
   useEffect(() => { (async () => {
@@ -203,6 +210,7 @@ export default function App() {
   const [authMsg, setAuthMsg] = useState(null);
   const [syncMsg, setSyncMsg] = useState("");
   const pulledRef = useRef(false);
+  const [pulled, setPulled] = useState(false);
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
@@ -219,7 +227,7 @@ export default function App() {
   const logout = async () => { await signOut(); clearLocal(); setSyncMsg(""); setAuthMsg(null); };
   // On login: newest copy wins. A device that has never been used keeps nothing local, so the cloud copy is taken.
   useEffect(() => {
-    if (!user || !ready) { pulledRef.current = false; return; }
+    if (!user || !ready) { pulledRef.current = false; setPulled(false); return; }
     (async () => {
       try {
         const owner = await store.get("ultraplan-owner");
@@ -238,6 +246,7 @@ export default function App() {
         }
         pulledRef.current = true;
       } catch (e) { setSyncMsg(`Synk fejlede: ${e.message}`); }
+      setPulled(true);
     })();
   }, [user?.id, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   // After any change: push, debounced.
@@ -371,10 +380,10 @@ export default function App() {
   }
 
   const zones = [["Z1 restitution", .5, .6, "Gang, nedjog"], ["Z2 aerob", .6, .7, "80 % af al løb. Hele sætninger."], ["Z3 tempo", .7, .8, "Behageligt hårdt"], ["Z4 tærskel", .8, .9, "Én sætning ad gangen"], ["Z5 VO2", .9, 1, "Kun korte intervaller"]];
-  const nut = [["Lang tur / løbsdag", bmr * 1.95], ["Kvalitet / styrke", bmr * 1.7], ["Rolig løbedag", bmr * 1.45 - 400], ["Hviledag", bmr * 1.3 - 450]].map(([n, c]) => [n, Math.round(c / 10) * 10]);
+  const nut = goalKcal(bmr, p.goal);
   const maxKm = Math.max(...plan.rows.map((r) => r.km));
 
-  if (!authReady) return <div className="splash"><h1>Ultraplan</h1><p className="muted">Et øjeblik…</p></div>;
+  if (!authReady || !ready || (user && !pulled)) return <div className="splash"><h1>Ultraplan</h1><p className="muted">Et øjeblik…</p></div>;
   if (syncEnabled && !user) return (
     <div className="landing">
       <div className="landing-hero">
@@ -399,6 +408,9 @@ export default function App() {
       <p className="foot" style={{ textAlign: "center" }}>Ultraplan {__APP_VERSION__}</p>
     </div>
   );
+
+  if (!p.onboarded) return <Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL} LEVELS={LEVELS} FAMILY={FAMILY} buildPlan={buildPlan}
+    onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} />;
 
   return (
     <>
@@ -453,6 +465,7 @@ export default function App() {
               <select value={p.level} onChange={(e) => setP({ ...p, level: +e.target.value })}>{LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
             </label>
             <div className="muted" style={{ marginTop: 6 }}>Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige.</div>
+            <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => setP({ ...p, onboarded: false, rerun: true })}>Kør spørgeskemaet igen</button>
           </section>
 
           <section className="panel">
@@ -614,7 +627,7 @@ export default function App() {
 
             {tab === "nut" && (
               <div className="panel">
-                <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{Math.round(p.weight * 2)} g</b> hver dag. Kulhydrat følger arbejdet.</p>
+                <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(p.weight, p.goal)} g</b> hver dag. Kulhydrat følger arbejdet.{p.goal === "lean" ? " Mål: blive lettere, ca. 300 kcal under behov og max 0,5 kg/uge." : p.goal === "perform" ? " Mål: tid, lidt ekstra på kvalitetsdage." : ""}</p>
                 <table><tbody>{nut.map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
                 <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.</p>
               </div>
