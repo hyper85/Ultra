@@ -224,7 +224,7 @@ export default function App() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     const errors = []; let parsed = [];
-    for (const f of files) { try { parsed = parsed.concat(await parseFile(f)); } catch (err) { errors.push(err.message); } }
+    for (const f of files) { try { parsed = parsed.concat(await parseFile(f)); } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); } }
     const next = { ...acts }; let added = 0;
     for (const a of parsed) { if (!next[a.id]) added++; next[a.id] = a; }
     saveActs(next);
@@ -232,7 +232,8 @@ export default function App() {
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
     setImportMsg({
       warn: errors.length > 0 || parsed.length === 0,
-      text: parsed.length === 0 && !errors.length ? "Ingen aktiviteter fundet i filen. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
+      text: parsed.length === 0 && errors.length ? errors.join(" ")
+        : parsed.length === 0 ? "Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
         : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${errors.length ? " " + errors.join(" ") : ""}`,
     });
     if (fileRef.current) fileRef.current.value = "";
@@ -470,7 +471,7 @@ export default function App() {
                   <h3>Hent fra Strava eller Garmin</h3>
                   <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
                   <div className="import-row">
-                    <input ref={fileRef} type="file" multiple accept=".csv,.gpx,.tcx,text/csv,application/gpx+xml,application/vnd.garmin.tcx+xml" onChange={onFiles} />
+                    <input ref={fileRef} type="file" multiple onChange={onFiles} />
                     <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> Tæl vandring og gang med</label>
                   </div>
                   {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}

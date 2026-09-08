@@ -98,9 +98,10 @@ export const parseCSV = (text) => {
 const norm = (h) => String(h).toLowerCase().replace(/[^a-zæøå0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 const findCol = (headers, tests) => { for (const t of tests) { const i = headers.findIndex((h) => t.test(h)); if (i >= 0) return i; } return -1; };
 
+export class ImportError extends Error {}
 export const activitiesFromCSV = (text, fileName = "csv") => {
   const rows = parseCSV(text);
-  if (rows.length < 2) return [];
+  if (rows.length < 2) throw new ImportError(`${fileName}: filen er tom eller har kun en overskriftslinje.`);
   const headers = rows[0].map(norm);
   const isStrava = headers.includes("activity date");
   const cDate = findCol(headers, [/^activity date$/, /^start time$/, /^starttid/, /^date$/, /^dato$/, /^tidspunkt/, /date|dato/]);
@@ -108,8 +109,12 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
   const cName = findCol(headers, [/^activity name$/, /^title$/, /^titel$/, /^name$/, /^navn$/]);
   const cTime = findCol(headers, [/^moving time$/, /^bevægelsestid$/, /^elapsed time$/, /^time$/, /^tid$/, /^duration$/, /^varighed$/, /time|tid/]);
   const cHR = findCol(headers, [/^average heart rate$/, /^avg hr$/, /^gns puls$/, /gennemsnitlig puls/, /^average hr$/, /avg.*(hr|heart)|gns.*puls|puls.*gns/]);
-  const distCols = headers.map((h, i) => (/^distance$|^afstand$|^distance km$/.test(h) ? i : -1)).filter((i) => i >= 0);
-  if (cDate < 0 || !distCols.length) return [];
+  let distCols = headers.map((h, i) => (/^distance$|^afstand$|^distance km$|^distance m$/.test(h) ? i : -1)).filter((i) => i >= 0);
+  if (!distCols.length) distCols = headers.map((h, i) => (/dist|afstand/.test(h) ? i : -1)).filter((i) => i >= 0);
+  if (cDate < 0 || !distCols.length) {
+    const found = rows[0].slice(0, 8).join(", ");
+    throw new ImportError(`${fileName}: kunne ikke finde ${cDate < 0 ? "en dato-kolonne" : "en distance-kolonne"}. Kolonnerne i filen begynder med: ${found}${rows[0].length > 8 ? ", …" : ""}. Send gerne filen, så kan formatet blive understøttet.`);
+  }
   const out = [];
   for (const r of rows.slice(1)) {
     const date = parseDate(r[cDate], { utc: isStrava });
@@ -118,6 +123,7 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
     if (distCols.length > 1) km = parseNum(r[distCols[distCols.length - 1]]) / 1000; // Strava: later column is metres
     else { const v = parseNum(r[distCols[0]]); km = v > 1500 ? v / 1000 : v; }
     if (!(km > 0)) continue;
+    if (km > 400) continue; // metres in a "km" column or a garbage row
     const min = cTime >= 0 ? parseMinutes(r[cTime]) : NaN;
     const hr = cHR >= 0 ? parseNum(r[cHR]) : NaN;
     out.push(mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: cType >= 0 ? r[cType] : "Run", name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : "CSV", file: fileName }));
@@ -192,15 +198,60 @@ const mk = (a) => {
   return { id: `${ymd(a.date)}-${slot}-${Math.round(km)}`, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
 };
 
+// Minimal zip reader: finds *.csv / *.gpx / *.tcx entries and inflates them with the browser's DecompressionStream.
+const readZip = async (file) => {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new ImportError(`${file.name}: kunne ikke læse zip-filen.`);
+  const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  const dec = new TextDecoder();
+  const entries = []; let o = cdOff;
+  for (let k = 0; k < count && o + 46 <= buf.length; k++) {
+    if (dv.getUint32(o, true) !== 0x02014b50) break;
+    const method = dv.getUint16(o + 10, true), csize = dv.getUint32(o + 20, true), nlen = dv.getUint16(o + 28, true), elen = dv.getUint16(o + 30, true), clen = dv.getUint16(o + 32, true), loff = dv.getUint32(o + 42, true);
+    entries.push({ name: dec.decode(buf.subarray(o + 46, o + 46 + nlen)), method, csize, loff });
+    o += 46 + nlen + elen + clen;
+  }
+  const wanted = entries.filter((e) => /\.(csv|gpx|tcx)$/i.test(e.name) && !/\/\./.test(e.name));
+  if (!wanted.length) throw new ImportError(`${file.name}: zip-filen indeholder ingen CSV-, GPX- eller TCX-filer.`);
+  const out = [];
+  for (const e of wanted.slice(0, 500)) {
+    const nlen = dv.getUint16(e.loff + 26, true), elen = dv.getUint16(e.loff + 28, true);
+    const start = e.loff + 30 + nlen + elen;
+    const raw = buf.subarray(start, start + e.csize);
+    let bytes = raw;
+    if (e.method === 8) {
+      if (typeof DecompressionStream === "undefined") throw new ImportError(`${file.name}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg activities.csv.`);
+      bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    } else if (e.method !== 0) continue;
+    out.push({ name: e.name.split("/").pop(), text: dec.decode(bytes) });
+  }
+  return out;
+};
+
+const parseText = (text, name) => {
+  const n = name.toLowerCase();
+  if (n.endsWith(".gpx") || /<gpx[\s>]/i.test(text.slice(0, 2000))) return activitiesFromGPX(text, name);
+  if (n.endsWith(".tcx") || /<TrainingCenterDatabase/i.test(text.slice(0, 2000))) return activitiesFromTCX(text, name);
+  return activitiesFromCSV(text, name);
+};
+
 export const parseFile = async (file) => {
-  const text = await file.text();
   const n = file.name.toLowerCase();
-  if (n.endsWith(".gpx") || /<gpx[\s>]/i.test(text.slice(0, 2000))) return activitiesFromGPX(text, file.name);
-  if (n.endsWith(".tcx") || /<TrainingCenterDatabase/i.test(text.slice(0, 2000))) return activitiesFromTCX(text, file.name);
-  if (n.endsWith(".csv") || n.endsWith(".txt")) return activitiesFromCSV(text, file.name);
-  if (n.endsWith(".fit")) throw new Error(`${file.name}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.`);
-  if (n.endsWith(".zip")) throw new Error(`${file.name}: pak zip-filen ud og vælg activities.csv (Strava) eller de enkelte GPX/TCX-filer.`);
-  throw new Error(`${file.name}: ukendt filtype.`);
+  if (n.endsWith(".zip") || file.type === "application/zip" || file.type === "application/x-zip-compressed") {
+    const parts = await readZip(file);
+    // Strava's archive: prefer activities.csv (one row per activity) over hundreds of GPX files that describe the same runs.
+    const csvs = parts.filter((x) => /activities\.csv$/i.test(x.name));
+    const use = csvs.length ? csvs : parts;
+    return use.flatMap((x) => parseText(x.text, x.name));
+  }
+  if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(`${file.name}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.`);
+  const text = await file.text();
+  if (!text.trim()) throw new ImportError(`${file.name}: filen er tom.`);
+  if (text.charCodeAt(0) === 0x50 && text.charCodeAt(1) === 0x4b) throw new ImportError(`${file.name}: det ligner en zip-fil – omdøb den til .zip eller pak den ud.`);
+  return parseText(text, file.name); // any text file: sniff GPX/TCX, otherwise treat as CSV
 };
 
 // RPE estimate (Foster scale) from average heart rate as a share of max.
