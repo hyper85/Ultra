@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
+import coachPlan from "./data/coach-plan.json";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -48,6 +49,23 @@ const schedFor = (p, wkStart) => {
   return { sched: isA ? A : p.sched.B, label: isA ? "A" : "B" };
 };
 
+/* ================= coach plan (trænerplan) =================
+   The real plan from the coach, week by week, used as-is. Principle 1: its numbers are a ceiling, not a floor.
+   Principle 3: the days are fixed (run Mon/Wed/Thu/Sat, lift Tue/Thu, long Sat, back-to-back Sun). */
+const PHASE_DA = { Rebuild: "Genopbygning", Build: "Opbygning", "Ultra Prep": "Ultra-prep", Taper: "Nedtrapning" };
+export function buildCoachPlan(p) {
+  const sched = p.sched?.A || defaultSched();
+  const W = coachPlan.week;
+  const rows = coachPlan.weeks.map((w) => {
+    const days = [...w.days];
+    const runDays = days.map((v, i) => (v > 0 ? i : -1)).filter((i) => i >= 0);
+    const qDay = /kun roligt/i.test(w.session) || w.race ? null : W.qualityDay;
+    return { i: w.n, wkStart: parseLocal(w.start), key: w.start, iso: w.iso, phase: PHASE_DA[w.phase] || w.phase, km: w.km, target: w.km, unplaced: 0,
+      lng: days[W.longDay], sun: days[W.b2bDay], deload: !!w.deload, isRace: !!w.race, quality: w.session, focus: w.focus, days, longDay: W.longDay, qDay, runDays, sched, schedLabel: "", coach: true };
+  });
+  return { rows, weeks: rows.length, peak: Math.max(...rows.filter((r) => !r.isRace).map((r) => r.km)), restart: rows[0].km, coach: true };
+}
+
 /* ================= plan engine ================= */
 export function buildPlan(p) {
   const level = p.level || 2;
@@ -56,7 +74,7 @@ export function buildPlan(p) {
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
   const injured = p.injury === "injured", sore = p.injury === "sore";
-  const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : +p.currentKm;
+  const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : Math.round(+p.currentKm * 1.1);
   // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model and by injury status.
   const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1) * (injured ? 0.9 : sore ? 0.95 : 1)));
   const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
@@ -154,7 +172,7 @@ const DEFAULT = {
   raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
   qualityDay: 2, longDay: 5, liftDays: [1, 3],
   sex: "m", level: 2, maxRunDays: 4, family: "single", altWeeks: false, altStart: PLAN_START,
-  goal: "finish", onboarded: false, injury: "none", injuryArea: "", injuryNote: "", diet: "all", intol: [],
+  goal: "finish", onboarded: false, injury: "none", injuryArea: "", injuryNote: "", diet: "all", intol: [], coachMode: true,
   sched: { A: defaultSched(), B: defaultSched() },
 };
 
@@ -313,14 +331,16 @@ export default function App() {
   const setDay = (i, patch) => { const k = p.altWeeks ? schedTab : "A"; const next = sched.map((d, j) => (j === i ? { ...d, ...patch } : d)); setP({ ...p, sched: { ...(p.sched || {}), [k]: next } }); };
   const toggle = (key, d) => { const s = new Set(p[key]); s.has(d) ? s.delete(d) : s.add(d); setP({ ...p, [key]: [...s].sort() }); };
 
-  const plan = useMemo(() => buildPlan(p), [p]);
+  const plan = useMemo(() => (p.coachMode !== false ? buildCoachPlan(p) : buildPlan(p)), [p]);
+  const liftDays = plan.coach ? coachPlan.week.liftDays : p.liftDays;
+  const liftName = (i) => (liftDays.indexOf(i) === 0 ? "Styrke A" : liftDays.indexOf(i) === 1 ? "Styrke B" : "Styrke");
   const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
   const todayKey = ymd(thisMonday());
-  const cur = plan.rows.find((r) => r.key === todayKey) || plan.rows[0];
+  const curBase = plan.rows.find((r) => r.key === todayKey) || plan.rows[0];
   const startD = parseLocal(p.startDate);
-  const curSchedLabel = cur.schedLabel;
+  const curSchedLabel = curBase.schedLabel;
 
   /* ---- Strava / Garmin import ---- */
   // Write weekly totals from the imported activities into the log. Imported km always win for weeks that have activities;
@@ -368,7 +388,7 @@ export default function App() {
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
-  const dayKm = dayKmFor(cur.key);
+  const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
   const openDay = (key, i) => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); };
   const saveDay = (e) => {
@@ -431,7 +451,7 @@ export default function App() {
     const keys = [1, 2, 3, 4].map((w) => ymd(addDays(thisMonday(), -7 * w))).filter((k) => weeks[k]);
     return keys.length ? Math.round(keys.reduce((a, k) => a + weeks[k].km, 0) / keys.length) : null;
   }, [acts, p.includeHikes, maxHR]);
-  const curLog = log[cur.key] || {};
+  const curLog = log[curBase.key] || {};
 
   /* ---- load & ACWR ----
      Chronic load is the mean of the 4 previous calendar weeks. Weeks before the plan start count too (typed in or
@@ -462,11 +482,45 @@ export default function App() {
   const cls = (v) => (v == null ? "l" : v > 1.5 ? "r" : v > 1.3 ? "a" : v < 0.8 ? "l" : "g");
 
   // coach advice for the current week, based on last logged week
+  /* ---- trænerråd: principle 2, the advice overrides the plan for the week in progress ----
+     Triggers from the last completed week: ACWR > 1.5, or ran > 1.4 × its plan, or resting HR ≥ normal + 7.
+     Cap = last week's plan km × 0.75 (× 0.6 when the trigger is resting HR). Run days scale to the cap (< 4 km → 0),
+     the hard session becomes easy, the back-to-back run is dropped. Saved in log[week].adjusted so it stays. */
+  const [showOriginal, setShowOriginal] = useState(false);
+  const lastKey = ymd(addDays(parseLocal(curBase.key), -7));
+  const lastRow = plan.rows.find((r) => r.key === lastKey) || null;
+  const lastLog = log[lastKey] || null;
+  const lastA = acwrFor(lastKey)?.v ?? null;
+  const overKm = !!(lastLog?.km && lastRow && lastLog.km > 1.4 * lastRow.km);
+  const hrHigh = !!(lastLog?.hr && p.restHR && lastLog.hr >= p.restHR + 7);
+  const trigger = !!(lastRow && curBase.km > 0 && !curBase.isRace && ((lastA != null && lastA > 1.5) || overKm || hrHigh));
+  const adjRow = useMemo(() => {
+    if (!trigger) return null;
+    const cap = Math.round(lastRow.km * (hrHigh ? 0.6 : 0.75));
+    const base = curBase.days.map((v, i) => (i === 6 && curBase.sun > 0 ? 0 : v));
+    let days = base.map((v) => { const s = v * Math.min(1, cap / curBase.km); return s >= 4 ? Math.round(s) : 0; });
+    // days that fell under 4 km are dropped; the remaining days share the cap so the week is not far below it
+    const kept = base.map((v, i) => (days[i] > 0 ? v : 0)); const keptSum = kept.reduce((x, y) => x + y, 0);
+    if (keptSum > 0) days = kept.map((v) => Math.round(v * Math.min(1, cap / keptSum)));
+    const km = days.reduce((x, y) => x + y, 0);
+    const reason = hrHigh ? `hvilepuls ${lastLog.hr}` : lastA != null && lastA > 1.5 ? `ACWR ${lastA.toFixed(2)}` : `${lastLog.km} km mod ${lastRow.km} planlagt`;
+    return { ...curBase, days, km, target: curBase.km, lng: days[curBase.longDay ?? 5] || 0, sun: 0, quality: "Rolig – ingen hård session", qDay: null,
+      adjusted: { cap, reason, acwr: lastA, original: curBase.days, originalKm: curBase.km, originalQuality: curBase.quality } };
+  }, [trigger, lastRow?.km, hrHigh, lastA, curBase.key, curBase.km, lastLog?.km, lastLog?.hr]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ready) return;
+    const stored = log[curBase.key]?.adjusted || null; const next = adjRow?.adjusted || null;
+    if (JSON.stringify(stored) !== JSON.stringify(next)) { const l = { ...(log[curBase.key] || {}) }; if (next) l.adjusted = next; else delete l.adjusted; saveLog({ ...log, [curBase.key]: l }); }
+  }, [adjRow, curBase.key, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cur = adjRow && !showOriginal ? adjRow : curBase;
+  const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
+
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   let advice = `Denne uge: ${cur.km} km, ${cur.qDay != null ? `hård session ${DAYS[cur.qDay].toLowerCase()} (${cur.quality})` : "ingen hård session – ingen dag med tid nok"}, lang tur ${cur.lng} km${cur.longDay != null ? ` ${DAYS[cur.longDay].toLowerCase()}` : ""}. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`;
   let warn = false;
-  if (cur.unplaced >= 3) { advice = `Din hverdag giver plads til ${cur.km} af de ${cur.target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de ${cur.km} km – det er ikke en fejl at leve et normalt liv.`; warn = true; }
-  if (lastIdx != null) {
+  if (adjRow) { advice = `Trænerråd: ${adjRow.adjusted.reason} i sidste uge – rødt. Ugen er sat ned til ${adjRow.km} km (loft ${adjRow.adjusted.cap} km), ingen hård session, ingen back-to-back. Rolige ture under ${Math.round(maxHR * 0.7)} i puls.`; warn = true; }
+  else if (cur.unplaced >= 3) { advice = `Din hverdag giver plads til ${cur.km} af de ${cur.target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de ${cur.km} km – det er ikke en fejl at leve et normalt liv.`; warn = true; }
+  if (lastIdx != null && !adjRow) {
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = `ACWR sidste uge var ${a.toFixed(2)} – rødt. Hold denne uge på max ${Math.round(plan.rows[lastIdx].km * 0.75)} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.`; warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = `Du løb ${l.km} km mod ${plan.rows[lastIdx].km} planlagt. Planens tal er et loft. Ram ugens ${cur.km} km – og ikke mere.`; warn = true; }
@@ -475,7 +529,7 @@ export default function App() {
 
   const zones = [["Z1 restitution", .5, .6, "Gang, nedjog"], ["Z2 aerob", .6, .7, "80 % af al løb. Hele sætninger."], ["Z3 tempo", .7, .8, "Behageligt hårdt"], ["Z4 tærskel", .8, .9, "Én sætning ad gangen"], ["Z5 VO2", .9, 1, "Kun korte intervaller"]];
   const nut = goalKcal(bmr, p.goal);
-  const maxKm = Math.max(...plan.rows.map((r) => r.km));
+  const maxKm = Math.max(...planRows.map((r) => r.km));
 
   if (!authReady || !ready || (user && !pulled)) return <div className="splash"><h1>Ultraplan</h1><p className="muted">Et øjeblik…</p></div>;
   if (syncEnabled && !user) return (
@@ -524,9 +578,12 @@ export default function App() {
       <main key={view} className="wrap stack view-in">
         {view === "today" && (() => {
           const ti = (new Date().getDay() + 6) % 7;
-          const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = p.liftDays.includes(ti);
+          const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = liftDays.includes(ti);
           const long = ti === cur.longDay && v > 0, hard = ti === cur.qDay && v > 0, b2b = cur.sun > 0 && ti === (cur.longDay + 1) % 7 && v > 0;
-          const kind = v ? (long ? "Lang tur" : hard ? "Hård session" : b2b ? "Back-to-back" : "Rolig tur") : lift ? "Styrke" : d.avail === "none" ? "Fridag" : "Hviledag";
+          const kind = v ? (long ? "Lang tur" : hard ? "Hård session" : b2b ? "Back-to-back" : "Rolig tur") : lift ? liftName(ti) : "Hvile";
+          const easy = v > 0 && !long && !hard && !b2b; const hrCap = Math.round(maxHR * 0.7);
+          const carbs = cur.phase === "Ultra-prep" ? "60–90" : "40–60";
+          const strength = plan.coach ? (liftDays.indexOf(ti) === 0 ? coachPlan.strength.A_tue : liftDays.indexOf(ti) === 1 ? coachPlan.strength.B_thu : null) : null;
           const ran = dayKm[ti]; const done = v > 0 && ran >= v * 0.9;
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long" });
@@ -535,12 +592,18 @@ export default function App() {
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
               <section className={`panel today ${done ? "done" : ""}`}>
                 <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
-                <div className="today-km">{v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest">{lift ? "S" : "–"}</b>}</div>
-                {hard && <div className="today-sub">{cur.quality}</div>}
-                {long && <div className="today-sub">Rolig puls under {Math.round(maxHR * 0.7)}. Spis fra minut 30.</div>}
-                {!v && lift && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
+                <div className="today-km">{v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
+                {hard && <div className="today-sub">{cur.quality} · 15 min opv./10 min nedjog</div>}
+                {easy && <div className="today-sub">Puls under {hrCap}. Det føles for langsomt. Det er meningen.</div>}
+                {long && <div className="today-sub">Gå stigningerne. {carbs} g kulhydrat/t.</div>}
+                {b2b && <div className="today-sub">Back-to-back på trætte ben. Puls under {hrCap}. {carbs} g kulhydrat/t.</div>}
+                {!v && lift && strength && <ul className="today-list">{strength.map((x) => <li key={x}>{x}</li>)}</ul>}
+                {!v && lift && !strength && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
+                {!v && !lift && <div className="today-sub">Hviledag. Sov, spis, gå en tur.</div>}
+                {plan.coach && <div className="today-ankle">Ankel i dag: {coachPlan.strength.daily_ankle.join(" · ")}</div>}
+                {adjRow && !showOriginal && <div className="today-sub" style={{ color: "var(--amber)" }}>Justeret af trænerråd ({adjRow.adjusted.reason}). Original: {adjRow.adjusted.original[ti] || "hvile"}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>Skadesfase: {cur.quality}. Stop ved smerte, der ændrer skridtet.</div>}
-                {v > 0 && lift && <div className="today-sub">+ styrke i dag</div>}
+                {v > 0 && lift && <div className="today-sub">+ {liftName(ti)} i dag{strength ? `: ${strength.join(", ")}` : ""}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ Løbet {ran} km{v > 0 ? ` af ${v}` : ""}</div>}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 ? "Log dagens tur" : "Log en tur alligevel"}</button>
@@ -553,7 +616,7 @@ export default function App() {
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
                     <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""}`} onClick={() => setView("plan")} role="button" tabIndex={0}>
-                      <small>{DAYS[i]}</small><b>{w || (p.liftDays.includes(i) ? "S" : "–")}</b>{dayKm[i] > 0 && <small className="ran">{dayKm[i]}</small>}
+                      <small>{DAYS[i]}</small><b>{w || (liftDays.includes(i) ? (plan.coach ? liftName(i).replace("Styrke ", "S") : "S") : "–")}</b>{dayKm[i] > 0 && <small className="ran">{dayKm[i]}</small>}
                     </div>
                   ))}
                 </div>
@@ -591,6 +654,8 @@ export default function App() {
 
           <details className="panel acc">
             <summary><h2>Start</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={p.coachMode !== false} onChange={(e) => setP({ ...p, coachMode: e.target.checked })} /> Trænerplan – brug trænerens uger som de er</label>
+            {plan.coach && <div className="muted" style={{ margin: "6px 0 10px" }}>Trænerplanen har faste datoer: uge 1 starter 24. aug. 2026, løbet er 30. jan. 2027. Startdato og dage nedenfor bruges kun, når trænerplanen er slået fra.</div>}
             <label>Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge
               <input type="date" value={p.startDate} max={p.raceDate} onChange={(e) => setStart(e.target.value)} />
             </label>
@@ -679,6 +744,17 @@ export default function App() {
             </div>
             <div className="muted" style={{ marginTop: 6 }}>Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.</div>
           </details>
+          {plan.coach && (
+            <details className="panel acc">
+              <summary><h2>Styrke</h2><span className="chev" aria-hidden="true">›</span></summary>
+              <div className="tips">
+                <div><b>Styrke A · tirsdag</b><span>{coachPlan.strength.A_tue.join(" · ")}</span></div>
+                <div><b>Styrke B · torsdag</b><span>{coachPlan.strength.B_thu.join(" · ")}</span></div>
+                <div><b>Ankel · hver dag</b><span>{coachPlan.strength.daily_ankle.join(" · ")}</span></div>
+              </div>
+              <div className="muted" style={{ marginBottom: 14 }}>Mål: {Object.entries(coachPlan.race.goals).map(([k, v]) => `${k} ${v}`).join(" · ")} · spænde {coachPlan.race.target}.</div>
+            </details>
+          )}
           <details className="panel acc">
             <summary><h2>Nulstil</h2><span className="chev" aria-hidden="true">›</span></summary>
             <div className="reset-list">
@@ -695,9 +771,15 @@ export default function App() {
           <h1 className="screen-title">Plan</h1>
           <div className="panel">
             <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
+            {adjRow && (
+              <div className="adj-badge">
+                <span>{showOriginal ? `Original plan · ${curBase.km} km` : `Justeret af trænerråd (${adjRow.adjusted.reason})`}</span>
+                <button type="button" className="btn ghost" onClick={() => setShowOriginal((s) => !s)}>{showOriginal ? "Vis justeret" : "Vis original"}</button>
+              </div>
+            )}
             <div className="thisweek">
               {cur.days.map((v, i) => {
-                const hard = i === cur.qDay && v > 0; const long = i === cur.longDay && v > 0; const lift = p.liftDays.includes(i);
+                const hard = i === cur.qDay && v > 0; const long = i === cur.longDay && v > 0; const lift = liftDays.includes(i);
                 const b2b = cur.sun > 0 && i === (cur.longDay + 1) % 7 && v > 0;
                 const d = cur.sched[i] || {};
                 return (
@@ -705,7 +787,7 @@ export default function App() {
                     className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
-                    <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? "styrke" : d.avail === "none" ? "fri" : "hvile"}</small>
+                    <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? liftName(i) : "Hvile"}</small>
                     {v > 0 && lift && <small style={{ display: "block", color: "var(--violet)" }}>+ styrke</small>}
                     {dayKm[i] > 0 && <small className="ran">✓ {dayKm[i]} km</small>}
                     {d.note && <small className="note">{d.note}</small>}
@@ -723,7 +805,7 @@ export default function App() {
           <div className="panel">
             <h2>Hele planen</h2>
             <div className="ribbon">
-              {plan.rows.map((r) => (
+              {planRows.map((r) => (
                 <div key={r.i} className={r.i === cur.i ? "cur" : ""} title={`Uge ${r.i} · plan ${r.km} km${log[r.key]?.km ? ` · løbet ${log[r.key].km} km` : ""}`}
                   style={{ height: `${(r.km / maxKm) * 100}%`, background: PH[r.phase], opacity: r.deload ? 0.5 : 1 }}>
                   {log[r.key]?.km > 0 && <i className="actual" style={{ height: `${Math.min(100, (log[r.key].km / Math.max(1, r.km)) * 100)}%` }} />}
@@ -742,7 +824,7 @@ export default function App() {
                 <table>
                   <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th><th className="num">Løbet</th>{DAYS.map((d) => <th key={d} className="num">{d}</th>)}<th>Hård session</th><th>Fokus</th></tr></thead>
                   <tbody>
-                    {[...preRows.filter((r) => log[r.key]?.km > 0), ...plan.rows].map((r) => {
+                    {[...preRows.filter((r) => log[r.key]?.km > 0), ...planRows].map((r) => {
                       const ran = log[r.key]?.km; const km = dayKmFor(r.key);
                       const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
                       return (
@@ -863,7 +945,7 @@ export default function App() {
                 <table>
                   <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th>RPE</th><th>Hvilepuls</th><th>Vægt</th><th>Søvn t</th><th className="num">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
-                    {[...preRows, ...plan.rows].map((r) => {
+                    {[...preRows, ...planRows].map((r) => {
                       const l = log[r.key] || {};
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (

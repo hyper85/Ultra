@@ -10,9 +10,9 @@ const GOALS = [
   ["lean", "Gennemføre og blive lettere", "Roligt underskud på ca. 300 kcal/dag, max 0,5 kg/uge."],
 ];
 const MODELS = [
-  { key: "min", name: "Minimum", dLevel: -1, dDays: -1, peakScale: 0.85, who: "Til dig med lidt tid eller skavanker. Færrest dage, mest restitution, lavere top." },
-  { key: "bal", name: "Balanceret", dLevel: 0, dDays: 0, peakScale: 1, who: "Den vi anbefaler ud fra dine svar. Stiger roligt og passer i din uge." },
-  { key: "vol", name: "Volumen", dLevel: 1, dDays: 1, peakScale: 1.15, who: "Til dig der har tiden og disciplinen. Flere dage, højere top, mindre margin." },
+  { key: "min", name: "Minimum", dLevel: 0, dDays: 0, peakScale: 0.8, who: "Samme dage, lavere top (80 %). Til dig med lidt tid eller skavanker." },
+  { key: "bal", name: "Balanceret", dLevel: 0, dDays: 0, peakScale: 1, who: "Den vi anbefaler ud fra dine svar. Stiger roligt fra din base." },
+  { key: "vol", name: "Volumen", dLevel: 0, dDays: 0, peakScale: 1.15, who: "Samme dage, højere top (115 %). Kræver disciplin med søvn og mad." },
 ];
 const PACE = { 1: 7.0, 2: 6.25, 3: 5.75, 4: 5.25 }; // min/km used only for the hours estimate
 export const INJURY = [
@@ -87,7 +87,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const tips = dietTips(d.diet || "all", d.intol || []);
   const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
-  const choose = (m) => onDone({ ...m.v, onboarded: true });
+  const choose = (m) => onDone({ ...m.v, onboarded: true, coachMode: false });
   const sched = d.sched?.A || [];
   const longDays = DAYS.map((n, i) => [n, i]).filter(([, i]) => sched[i]?.avail === "long");
 
@@ -158,14 +158,16 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
             {LEVELS.map(([v, l]) => { const [n, t] = l.split(" – "); return <button key={v} type="button" className={d.level === v ? "on" : ""} onClick={() => setD({ ...d, level: v })}><b>{n}</b><span>{t}</span></button>; })}
           </div>
           <div className="row2" style={{ marginTop: 10 }}>
-            <label>Km om ugen lige nu<input type="number" inputMode="numeric" value={d.currentKm} onChange={set("currentKm")} /></label>
+            <label style={{ gridColumn: "1 / -1" }}>Km de sidste 4 uger (ældste først)
+              <div className="row4">{[0, 1, 2, 3].map((k) => <input key={k} type="number" inputMode="numeric" placeholder={`uge -${4 - k}`} value={(d.last4 || [])[k] ?? ""} onChange={(e) => { const l4 = [...(d.last4 || ["", "", "", ""])]; l4[k] = e.target.value === "" ? "" : +e.target.value; const vals = l4.filter((x) => x !== "" && x != null); setD({ ...d, last4: l4, currentKm: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0 }); }} />)}</div>
+            </label>
             <label>Uger uden løb for nylig
               <select value={d.breakWeeks} onChange={(e) => setD({ ...d, breakWeeks: +e.target.value })}>
                 <option value={0}>Ingen pause</option><option value={1}>1 uge</option><option value={2}>2 uger</option><option value={4}>4+ uger</option>
               </select>
             </label>
           </div>
-          <div className="advice">Med {d.currentKm || 0} km/uge nu topper en balanceret plan på ca. <b>{balanced.peak} km/uge</b>{d.breakWeeks >= 2 ? ", efter 4 ugers rolig genopbygning" : ""}. Bruger du dit ur, kan appen senere hente det rigtige tal fra Strava eller Garmin.</div>
+          <div className="advice">Base <b>{d.currentKm || 0} km/uge</b> (gennemsnit af de 4 uger), start ca. {Math.round((d.currentKm || 0) * 1.1)} km. En balanceret plan topper på ca. <b>{balanced.peak} km/uge</b>{d.breakWeeks >= 2 ? ", efter 4 ugers rolig genopbygning" : ""}. Bruger du dit ur, kan appen senere hente det rigtige tal fra Strava eller Garmin.</div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next} disabled={!canNext}>Næste</button></div>
         </section>
       )}

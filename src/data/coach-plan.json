@@ -1,0 +1,528 @@
+{
+  "athlete": {
+    "name": "Hyper",
+    "age": 41,
+    "height": 181,
+    "weight": 89,
+    "restHR": 49,
+    "maxHR": 186,
+    "goalWeight": 85
+  },
+  "race": {
+    "name": "Hammer Trail Winter 50 miles",
+    "date": "2027-01-30",
+    "km": 83,
+    "vert": 3400,
+    "goals": {
+      "A+": "11:11:11",
+      "A": "sub-12",
+      "B": "sub-13",
+      "C": "finish"
+    },
+    "target": "sub-12:30"
+  },
+  "week": {
+    "runDays": [
+      0,
+      2,
+      3,
+      5
+    ],
+    "liftDays": [
+      1,
+      3
+    ],
+    "qualityDay": 2,
+    "longDay": 5,
+    "b2bDay": 6
+  },
+  "strength": {
+    "A_tue": [
+      "Squat 4×5",
+      "RDL 3×6",
+      "Lunge 3×8/ben",
+      "Calf raise 4×10 + single-leg eccentric 3×8",
+      "Copenhagen plank 3×20s"
+    ],
+    "B_thu": [
+      "Press 4×6",
+      "Row 4×8",
+      "Pull-ups 3×max-2",
+      "OH press 3×8",
+      "Farmer's carry 3×40m",
+      "Pallof 3/side"
+    ],
+    "daily_ankle": [
+      "Single-leg calf raise 3×12",
+      "1-leg balance 2×60s",
+      "Banded inversion/eversion 2×15"
+    ]
+  },
+  "principles": [
+    "Planens tal er et loft, ikke et gulv",
+    "Rådet overstyrer planen",
+    "Mine dage er mine dage"
+  ],
+  "weeks": [
+    {
+      "n": 1,
+      "iso": 35,
+      "start": "2026-08-24",
+      "phase": "Rebuild",
+      "km": 22,
+      "days": [
+        5,
+        0,
+        4,
+        3,
+        0,
+        10,
+        0
+      ],
+      "session": "Kun roligt",
+      "focus": "Returuge, alt roligt, ankelregel",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 2,
+      "iso": 36,
+      "start": "2026-08-31",
+      "phase": "Rebuild",
+      "km": 26,
+      "days": [
+        6,
+        0,
+        4,
+        4,
+        0,
+        12,
+        0
+      ],
+      "session": "Stigninger 4×20s",
+      "focus": "Dagligt ankelarbejde starter",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 3,
+      "iso": 37,
+      "start": "2026-09-07",
+      "phase": "Rebuild",
+      "km": 30,
+      "days": [
+        6,
+        0,
+        5,
+        5,
+        0,
+        14,
+        0
+      ],
+      "session": "6×2 min tærskel",
+      "focus": "Lør = Lerbjerg-sløjfe 14,6 km/500 m",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 4,
+      "iso": 38,
+      "start": "2026-09-14",
+      "phase": "Rebuild",
+      "km": 22,
+      "days": [
+        5,
+        0,
+        4,
+        3,
+        0,
+        10,
+        0
+      ],
+      "session": "Stigninger 6×20s",
+      "focus": "Deload, sov +1 t",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 5,
+      "iso": 39,
+      "start": "2026-09-21",
+      "phase": "Build",
+      "km": 33,
+      "days": [
+        7,
+        0,
+        5,
+        5,
+        0,
+        16,
+        0
+      ],
+      "session": "8×2 min tærskel",
+      "focus": "40 g kulhydrat/t på lang tur",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 6,
+      "iso": 40,
+      "start": "2026-09-28",
+      "phase": "Build",
+      "km": 38,
+      "days": [
+        8,
+        0,
+        6,
+        6,
+        0,
+        18,
+        0
+      ],
+      "session": "20 min tempo",
+      "focus": "Lange ture på trail",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 7,
+      "iso": 41,
+      "start": "2026-10-05",
+      "phase": "Build",
+      "km": 42,
+      "days": [
+        8,
+        0,
+        6,
+        7,
+        0,
+        21,
+        0
+      ],
+      "session": "Bakker 6×90s",
+      "focus": "Lørdage i Svanninge, 2 omgange = 29 km",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 8,
+      "iso": 42,
+      "start": "2026-10-12",
+      "phase": "Build",
+      "km": 30,
+      "days": [
+        6,
+        0,
+        5,
+        5,
+        0,
+        14,
+        0
+      ],
+      "session": "Stigninger + 10 min tempo",
+      "focus": "Deload",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 9,
+      "iso": 43,
+      "start": "2026-10-19",
+      "phase": "Build",
+      "km": 47,
+      "days": [
+        9,
+        0,
+        7,
+        7,
+        0,
+        24,
+        0
+      ],
+      "session": "5×3 min tærskel",
+      "focus": "45–55 g/t, dårligt vejr er træning",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 10,
+      "iso": 44,
+      "start": "2026-10-26",
+      "phase": "Build",
+      "km": 50,
+      "days": [
+        10,
+        0,
+        7,
+        7,
+        0,
+        26,
+        0
+      ],
+      "session": "25 min tempo",
+      "focus": "Fuld fuelling-rytme",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 11,
+      "iso": 45,
+      "start": "2026-11-02",
+      "phase": "Ultra Prep",
+      "km": 56,
+      "days": [
+        6,
+        0,
+        5,
+        5,
+        0,
+        28,
+        12
+      ],
+      "session": "Bakker 8×90s",
+      "focus": "Første back-to-back, gå det stejle",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 12,
+      "iso": 46,
+      "start": "2026-11-09",
+      "phase": "Ultra Prep",
+      "km": 61,
+      "days": [
+        7,
+        0,
+        5,
+        5,
+        0,
+        30,
+        14
+      ],
+      "session": "2×15 min tempo",
+      "focus": "Pandelampe, mørkt kl. 16:30",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 13,
+      "iso": 47,
+      "start": "2026-11-16",
+      "phase": "Ultra Prep",
+      "km": 42,
+      "days": [
+        10,
+        0,
+        7,
+        7,
+        0,
+        18,
+        0
+      ],
+      "session": "Stigninger + 10 min tempo",
+      "focus": "Deload",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 14,
+      "iso": 48,
+      "start": "2026-11-23",
+      "phase": "Ultra Prep",
+      "km": 66,
+      "days": [
+        8,
+        0,
+        6,
+        5,
+        0,
+        32,
+        15
+      ],
+      "session": "6×3 min tærskel på bakker",
+      "focus": "Fuld vinter-kit-test",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 15,
+      "iso": 49,
+      "start": "2026-11-30",
+      "phase": "Ultra Prep",
+      "km": 72,
+      "days": [
+        8,
+        0,
+        6,
+        7,
+        0,
+        35,
+        16
+      ],
+      "session": "Løbstempo 2×15 min",
+      "focus": "Spis med kolde hænder, 60 g/t",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 16,
+      "iso": 50,
+      "start": "2026-12-07",
+      "phase": "Ultra Prep",
+      "km": 47,
+      "days": [
+        10,
+        0,
+        8,
+        7,
+        0,
+        22,
+        0
+      ],
+      "session": "Stigninger + 2×10 min tempo",
+      "focus": "Deload før de to største uger",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 17,
+      "iso": 51,
+      "start": "2026-12-14",
+      "phase": "Ultra Prep",
+      "km": 76,
+      "days": [
+        8,
+        0,
+        6,
+        6,
+        0,
+        38,
+        18
+      ],
+      "session": "3×10 min tærskel",
+      "focus": "Største uge til nu, søvn og mad",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 18,
+      "iso": 52,
+      "start": "2026-12-21",
+      "phase": "Ultra Prep",
+      "km": 80,
+      "days": [
+        8,
+        0,
+        6,
+        6,
+        0,
+        40,
+        20
+      ],
+      "session": "2×20 min tempo",
+      "focus": "Juleuge, top-volumen, i dagslys",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 19,
+      "iso": 53,
+      "start": "2026-12-28",
+      "phase": "Ultra Prep",
+      "km": 72,
+      "days": [
+        6,
+        0,
+        4,
+        5,
+        0,
+        42,
+        15
+      ],
+      "session": "Løbstempo 2×15 min",
+      "focus": "Generalprøve: 3 omgange Lerbjerg i fuldt kit",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 20,
+      "iso": 1,
+      "start": "2027-01-04",
+      "phase": "Taper",
+      "km": 53,
+      "days": [
+        7,
+        0,
+        5,
+        5,
+        0,
+        26,
+        10
+      ],
+      "session": "2×12 min tempo",
+      "focus": "Nedtrapning begynder, book logistik",
+      "deload": false,
+      "race": false
+    },
+    {
+      "n": 21,
+      "iso": 2,
+      "start": "2027-01-11",
+      "phase": "Taper",
+      "km": 44,
+      "days": [
+        10,
+        0,
+        7,
+        7,
+        0,
+        20,
+        0
+      ],
+      "session": "Løbstempo 2×10 min",
+      "focus": "Sidste lag-test på 20 km",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 22,
+      "iso": 3,
+      "start": "2027-01-18",
+      "phase": "Taper",
+      "km": 31,
+      "days": [
+        7,
+        0,
+        5,
+        5,
+        0,
+        14,
+        0
+      ],
+      "session": "Åbnere 4×2 min",
+      "focus": "Dyb taper, kit og drop bag klar",
+      "deload": true,
+      "race": false
+    },
+    {
+      "n": 23,
+      "iso": 4,
+      "start": "2027-01-25",
+      "phase": "Taper",
+      "km": 98,
+      "days": [
+        4,
+        0,
+        4,
+        4,
+        3,
+        83,
+        0
+      ],
+      "session": "Åbnere 3×1 min",
+      "focus": "LØB lør 06:00: start roligt, gå stigninger, spis fra min 30",
+      "deload": false,
+      "race": true
+    }
+  ]
+}
