@@ -226,9 +226,15 @@ const readZip = async (file) => {
       if (typeof DecompressionStream === "undefined") throw new ImportError(`${file.name}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg activities.csv.`);
       bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
     } else if (e.method !== 0) continue;
-    out.push({ name: e.name.split("/").pop(), text: dec.decode(bytes) });
+    out.push({ name: e.name.split("/").pop(), text: decodeText(bytes) });
   }
   return out;
+};
+
+// Garmin's Danish export is sometimes Windows-1252 rather than UTF-8; a strict UTF-8 decode tells us which.
+const decodeText = (buf) => {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { return new TextDecoder("windows-1252").decode(buf); }
 };
 
 const parseText = (text, name) => {
@@ -248,7 +254,7 @@ export const parseFile = async (file) => {
     return use.flatMap((x) => parseText(x.text, x.name));
   }
   if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(`${file.name}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.`);
-  const text = await file.text();
+  const text = decodeText(await file.arrayBuffer());
   if (!text.trim()) throw new ImportError(`${file.name}: filen er tom.`);
   if (text.charCodeAt(0) === 0x50 && text.charCodeAt(1) === 0x4b) throw new ImportError(`${file.name}: det ligner en zip-fil – omdøb den til .zip eller pak den ud.`);
   return parseText(text, file.name); // any text file: sniff GPX/TCX, otherwise treat as CSV
