@@ -266,7 +266,7 @@ export default function App() {
     try {
       await sendLoginLink(email.trim());
       setCodeSent(true); setCode(""); setCooldown(60);
-      setAuthMsg({ text: `Vi har sendt en 6-cifret kode til ${email.trim()}. Skriv den herunder. Kig i spam, hvis den ikke dukker op inden for et minut.` });
+      setAuthMsg({ text: `Vi har sendt en mail til ${email.trim()}. Står der en 6-cifret kode, så skriv den herunder. Ellers tryk på linket i mailen. Kig i spam, hvis den ikke dukker op inden for et minut.` });
     } catch (err) {
       const m = /after (\d+) seconds/i.exec(err.message || "");
       if (m) { setCooldown(+m[1]); setAuthMsg({ warn: true, text: `Vent lidt, før du beder om en ny kode. Har du allerede fået en, kan du skrive den herunder.` }); setCodeSent(true); }
@@ -289,7 +289,7 @@ export default function App() {
       ) : (
         <form onSubmit={verify}>
           <div className="muted" style={{ marginBottom: 6 }}>Kode sendt til <b style={{ color: "var(--text)" }}>{email.trim()}</b></div>
-          <label>6-cifret kode fra mailen<input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus className="code" /></label>
+          <label>Kode fra mailen<input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus className="code" /></label>
           <button className="btn" type="submit" style={{ marginTop: 10, width: "100%" }}>Log ind</button>
           <div className="import-row" style={{ justifyContent: "space-between", marginTop: 10 }}>
             <button className="btn ghost" type="button" onClick={login} disabled={cooldown > 0}>{cooldown > 0 ? `Send ny kode om ${cooldown} s` : "Send ny kode"}</button>
@@ -436,9 +436,9 @@ export default function App() {
       </div>
       <div className="panel landing-login">
         <h2>Log ind</h2>
-        <p className="muted">Skriv din e-mail, så sender vi en 6-cifret kode. Ingen adgangskode at huske. Har du ikke en konto, oprettes den automatisk.</p>
+        <p className="muted">Skriv din e-mail, så sender vi en kode eller et link. Ingen adgangskode at huske. Har du ikke en konto, oprettes den automatisk.</p>
         {loginForm}
-        <p className="foot">Linket i mailen virker også. Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
+        <p className="foot">Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
       </div>
       <p className="foot" style={{ textAlign: "center" }}>Ultraplan {__APP_VERSION__}</p>
     </div>
