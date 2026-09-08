@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG } from "./Onboarding.jsx";
@@ -358,21 +358,67 @@ export default function App() {
   const removeActivity = (id) => { const next = { ...acts }; delete next[id]; saveActs(next); applyActivities(next, p.includeHikes); };
 
   /* ---- day-by-day logging for the current week ---- */
-  const [dayEdit, setDayEdit] = useState(null);
+  const [dayEdit, setDayEdit] = useState(null); // { key: Monday of the week, i: weekday index }
   const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "" });
   const [dayMsg, setDayMsg] = useState(null);
+  const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
-  const weekActs = useMemo(() => Object.values(acts).filter((x) => counted(x) && ymd(mondayOf(parseLocal(x.day))) === cur.key), [acts, cur.key, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dayKm = [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round(weekActs.filter((x) => x.day === ymd(addDays(cur.wkStart, i))).reduce((s, x) => s + x.km, 0) * 10) / 10);
-  const openDay = (i) => { setDayEdit(dayEdit === i ? null : i); setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); };
+  const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
+  const dayKm = dayKmFor(cur.key);
+  const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
+  const openDay = (key, i) => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); };
   const saveDay = (e) => {
     e.preventDefault();
-    if (!(+dayForm.km > 0)) return;
-    const act = manualActivity({ day: ymd(addDays(cur.wkStart, dayEdit)), km: dayForm.km, min: dayForm.min, rpe: dayForm.rpe });
+    if (!dayEdit || !(+dayForm.km > 0)) return;
+    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: dayForm.km, min: dayForm.min, rpe: dayForm.rpe });
     const { next, added } = mergeActivities(acts, [act]);
     if (!added) { setDayMsg({ warn: true, text: "Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert." }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
-    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg({ text: `Gemt: ${act.km} km ${DAYS[dayEdit].toLowerCase()}.` });
+    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg({ text: `Gemt: ${act.km} km ${DAYS[dayEdit.i].toLowerCase()}.` });
+  };
+  // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
+  const renderDayForm = (planKm) => {
+    if (!dayEdit) return null;
+    const day = ymd(addDays(parseLocal(dayEdit.key), dayEdit.i));
+    return (
+      <form className="dayform" onSubmit={saveDay}>
+        <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? `· plan ${planKm || 0} km` : "· før planen"}</span></div>
+        <div className="dayform-row">
+          <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>
+          <label>Minutter<input type="number" min="1" inputMode="numeric" value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} /></label>
+          <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder="valgfri" /></label>
+        </div>
+        <div className="dayform-row">
+          <button className="btn" type="submit">Gem tur</button>
+          <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>Luk</button>
+        </div>
+        {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
+        {(actsByDay[day] || []).map((x) => (
+          <div key={x.id} className="dayform-item"><span>{x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
+        ))}
+      </form>
+    );
+  };
+  // Day-by-day strip for one week: plan on top, what was actually run below. Tap a day to log or edit.
+  const renderDayGrid = (r) => {
+    const km = dayKmFor(r.key);
+    return (
+      <div className="daygrid">
+        {DAYS.map((n, i) => {
+          const planKm = r.pre ? null : r.days[i];
+          const ok = planKm != null && planKm > 0 && km[i] >= planKm * 0.9;
+          return (
+            <div key={n} role="button" tabIndex={0} className={`${km[i] > 0 ? (ok || planKm === null || !planKm ? "done" : "part") : ""} ${isEditing(r.key, i) ? "edit" : ""}`}
+              onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title="Tryk for at logge eller rette">
+              <small>{n}</small>
+              <b>{km[i] > 0 ? km[i] : "–"}</b>
+              <small className="muted">{planKm != null ? (planKm ? `plan ${planKm}` : "hvile") : "\u00a0"}</small>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
   const setHikes = (v) => { setP({ ...p, includeHikes: v }); applyActivities(acts, v); };
   const clearImports = () => { if (!confirm("Fjern alle importerede aktiviteter? Tal du selv har skrevet, bliver stående.")) return; applyActivities({}, p.includeHikes); saveActs({}); setImportMsg(null); };
@@ -400,7 +446,13 @@ export default function App() {
     }
     return prev.length ? { v: own / (prev.reduce((a, b) => a + b, 0) / prev.length), est } : null;
   };
-  const preRows = [4, 3, 2, 1].map((k) => { const d = addDays(startD, -7 * k); return { i: -k, key: ymd(d), wkStart: d, iso: isoWeek(d), pre: true }; });
+  const nPre = useMemo(() => {
+    const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < p.startDate);
+    const earliest = keys.length ? keys.reduce((a, b) => (a < b ? a : b)) : null;
+    const back = earliest ? Math.round((startD - parseLocal(earliest)) / 86400000 / 7) : 0;
+    return Math.min(30, Math.max(4, back));
+  }, [log, acts, p.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const preRows = Array.from({ length: nPre }, (_, j) => nPre - j).map((k) => { const d = addDays(startD, -7 * k); return { i: -k, key: ymd(d), wkStart: d, iso: isoWeek(d), pre: true }; });
   const preLogged = preRows.filter((r) => loadOf(log[r.key]) != null).length;
   const loads = plan.rows.map((r) => loadOf(log[r.key]));
   const acwr = plan.rows.map((r) => acwrFor(r.key));
@@ -576,8 +628,8 @@ export default function App() {
                 const b2b = cur.sun > 0 && i === (cur.longDay + 1) % 7 && v > 0;
                 const d = cur.sched[i] || {};
                 return (
-                  <div key={i} role="button" tabIndex={0} title="Tryk for at logge en tur" onClick={() => openDay(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(i); } }}
-                    className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] ? "done" : ""} ${dayEdit === i ? "edit" : ""}`}>
+                  <div key={i} role="button" tabIndex={0} title="Tryk for at logge en tur" onClick={() => openDay(cur.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
+                    className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
                     <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? "styrke" : d.avail === "none" ? "fri" : "hvile"}</small>
@@ -588,24 +640,7 @@ export default function App() {
                 );
               })}
             </div>
-            {dayEdit != null && (
-              <form className="dayform" onSubmit={saveDay}>
-                <div className="dayform-head"><b>{DAYS[dayEdit]} {fmt(addDays(cur.wkStart, dayEdit))}</b> <span className="muted">· plan {cur.days[dayEdit] || 0} km</span></div>
-                <div className="dayform-row">
-                  <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>
-                  <label>Minutter<input type="number" min="1" inputMode="numeric" value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} /></label>
-                  <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder="valgfri" /></label>
-                </div>
-                <div className="dayform-row">
-                  <button className="btn" type="submit">Gem tur</button>
-                  <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>Luk</button>
-                </div>
-                {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
-                {weekActs.filter((x) => x.day === ymd(addDays(cur.wkStart, dayEdit))).map((x) => (
-                  <div key={x.id} className="dayform-item"><span>{x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
-                ))}
-              </form>
-            )}
+            {dayEdit?.key === cur.key && renderDayForm(cur.days[dayEdit.i])}
             {curLog.auto && curLog.km > 0
               ? <div className="muted" style={{ marginTop: 10 }}>Løbet indtil nu i denne uge: <b style={{ color: "var(--text)" }}>{curLog.km} km</b> på {curLog.n} {curLog.n === 1 ? "tur" : "ture"} af {cur.km} km planlagt. Tryk på en dag for at logge en tur.</div>
               : <div className="muted" style={{ marginTop: 10 }}>Tryk på en dag for at logge en tur – så passer ugens tal, også før ugen er slut.</div>}
@@ -616,13 +651,14 @@ export default function App() {
             <h2>Hele planen</h2>
             <div className="ribbon">
               {plan.rows.map((r) => (
-                <div key={r.i} className={r.i === cur.i ? "cur" : ""} title={`Uge ${r.i} · ${r.km} km`}
+                <div key={r.i} className={r.i === cur.i ? "cur" : ""} title={`Uge ${r.i} · plan ${r.km} km${log[r.key]?.km ? ` · løbet ${log[r.key].km} km` : ""}`}
                   style={{ height: `${(r.km / maxKm) * 100}%`, background: PH[r.phase], opacity: r.deload ? 0.5 : 1 }}>
+                  {log[r.key]?.km > 0 && <i className="actual" style={{ height: `${Math.min(100, (log[r.key].km / Math.max(1, r.km)) * 100)}%` }} />}
                   {r.isRace && <span className="star">★</span>}
                 </div>
               ))}
             </div>
-            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />nedtrapning</span></div>
+            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />nedtrapning</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />løbet</span></div>
           </div>
 
           <div>
@@ -633,18 +669,26 @@ export default function App() {
             {tab === "plan" && (
               <div className="panel scroll">
                 <table>
-                  <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th>{DAYS.map((d) => <th key={d} className="num">{d}</th>)}<th>Hård session</th><th>Fokus</th></tr></thead>
+                  <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th><th className="num">Løbet</th>{DAYS.map((d) => <th key={d} className="num">{d}</th>)}<th>Hård session</th><th>Fokus</th></tr></thead>
                   <tbody>
-                    {plan.rows.map((r) => (
-                      <tr key={r.i} style={r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                        <td style={{ whiteSpace: "nowrap" }}><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""} <span className="muted">u{r.iso} · {fmt(r.wkStart)}</span></td>
-                        <td style={{ whiteSpace: "nowrap" }}><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</td>
-                        <td className="num"><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</td>
-                        {r.days.map((v, i) => <td key={i} className="num" style={i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>{v || ""}</td>)}
-                        <td style={{ whiteSpace: "nowrap" }}>{r.quality}</td>
-                        <td className="muted" style={{ minWidth: 220 }}>{r.focus}</td>
-                      </tr>
-                    ))}
+                    {[...preRows.filter((r) => log[r.key]?.km > 0), ...plan.rows].map((r) => {
+                      const ran = log[r.key]?.km; const km = dayKmFor(r.key);
+                      const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
+                      return (
+                        <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">u{r.iso} · {fmt(r.wkStart)}</span></td>
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <span className="muted">historik</span> : <><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</>}</td>
+                          <td className="num">{r.pre ? "" : <><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</>}</td>
+                          <td className={`num ran ${ranCls}`}>{ran > 0 ? ran : ""}</td>
+                          {DAYS.map((_, i) => { const v = r.pre ? 0 : r.days[i]; return (
+                            <td key={i} className="num" style={!r.pre && i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : !r.pre && i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>
+                              {v || ""}{km[i] > 0 && <small className={`act ${v && km[i] >= v * 0.9 ? "ok" : ""}`}>{km[i]}</small>}
+                            </td>); })}
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? "" : r.quality}</td>
+                          <td className="muted" style={{ minWidth: 220 }}>{r.pre ? "Før planen. Tallene er fra dit ur eller det, du har tastet." : r.focus}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -738,14 +782,29 @@ export default function App() {
                           {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
                         </span>
                       );
+                      const open = openWeek === r.key;
                       return (
-                        <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span>{r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}</td>
+                        <Fragment key={r.key}>
+                        <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title="Vis dagene i ugen" aria-expanded={open}>
+                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span>
+                            </button>
+                            {r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}
+                          </td>
                           <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title="Antaget: km/uge nu × RPE 5">~{p.currentKm}</span> : "") : r.km}</td>
                           <td>{cell("km")}</td><td>{cell("rpe")}</td><td>{cell("hr")}</td><td>{cell("wt")}</td><td>{cell("sleep")}</td>
                           <td className="num">{ld ?? (r.pre && baseline ? <span className="muted" title="Antaget belastning">~{baseline}</span> : "")}</td>
                           <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? "Bygger delvist på estimater (antaget baseline eller RPE fra puls)" : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
                         </tr>
+                        {open && (
+                          <tr className="dayrow"><td colSpan={9}>
+                            <div className="muted" style={{ marginBottom: 6 }}>Uge {r.pre ? `u${r.iso}` : r.i} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.</div>
+                            {renderDayGrid(r)}
+                            {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
+                          </td></tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

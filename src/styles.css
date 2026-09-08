@@ -164,3 +164,22 @@ tr.pre td input { background: #1c1c1c; border-color: var(--line); }
 .model .btn { width: 100%; min-height: 44px; margin-top: 4px; }
 .model .muted { font-size: 13px; }
 input.code { font-size: 26px; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+/* plan vs actual */
+.ribbon div i.actual { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,.45); border-radius: 3px 3px 0 0; }
+td.ran { font-weight: 700; color: var(--muted); }
+td.ran.ok { color: var(--green); }
+td.ran.low { color: var(--amber); }
+td small.act { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+td small.act.ok { color: var(--green); }
+button.wk { background: none; border: none; padding: 0; color: inherit; cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 4px; }
+button.wk .chev { color: var(--muted); font-size: 11px; width: 10px; }
+button.wk.on .chev { color: var(--orange); }
+tr.dayrow td { background: #141414; padding: 10px 8px 12px; }
+.daygrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; min-width: 420px; }
+.daygrid div { background: var(--panel-2); border-radius: 8px; padding: 8px 4px; text-align: center; border-top: 3px solid var(--line); cursor: pointer; }
+.daygrid div:hover { background: #262626; }
+.daygrid div b { display: block; font-family: "Barlow Condensed", sans-serif; font-size: 22px; font-weight: 800; }
+.daygrid div small { font-size: 11px; }
+.daygrid div.done { border-top-color: var(--green); }
+.daygrid div.part { border-top-color: var(--amber); }
+.daygrid div.edit { outline: 2px solid var(--volt); outline-offset: 1px; }
