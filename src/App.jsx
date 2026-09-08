@@ -508,12 +508,17 @@ export default function App() {
         </div>
       </header>
       <nav className="tabbar" aria-label="Hovedmenu">
-        {[["today", "I dag", "◎"], ["plan", "Plan", "▤"], ["log", "Log", "✓"], ["more", "Mere", "⋯"]].map(([k, l, ic]) => (
+        {[
+          ["today", "I dag", <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>],
+          ["plan", "Plan", <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>],
+          ["log", "Log", <svg viewBox="0 0 24 24"><path d="M4 12.5l4 4L20 5" /><path d="M4 19h16" opacity=".4" /></svg>],
+          ["more", "Mere", <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="17" r="2" fill="currentColor" stroke="none" /></svg>],
+        ].map(([k, l, ic]) => (
           <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>
         ))}
       </nav>
 
-      <main className="wrap stack">
+      <main key={view} className="wrap stack view-in">
         {view === "today" && (() => {
           const ti = (new Date().getDay() + 6) % 7;
           const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = p.liftDays.includes(ti);
@@ -526,7 +531,7 @@ export default function App() {
             <>
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
               <section className={`panel today ${done ? "done" : ""}`}>
-                <div className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</div>
+                <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
                 <div className="today-km">{v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest">{lift ? "S" : "–"}</b>}</div>
                 {hard && <div className="today-sub">{cur.quality}</div>}
                 {long && <div className="today-sub">Rolig puls under {Math.round(maxHR * 0.7)}. Spis fra minut 30.</div>}
@@ -561,8 +566,27 @@ export default function App() {
 
         {view === "more" && (
         <aside className="stack">
-          <section className="panel">
-            <h2>Start</h2>
+          <h1 className="screen-title">Mere</h1>
+          <details className="panel acc" open>
+            <summary><h2>Konto</h2><span className="chev" aria-hidden="true">›</span></summary>
+            {!syncEnabled ? (
+              <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
+            ) : user ? (
+              <>
+                <div>Logget ind som <b>{user.email}</b></div>
+                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
+                <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
+              </>
+            ) : (
+              <div>
+                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.</div>
+                {loginForm}
+              </div>
+            )}
+          </details>
+
+          <details className="panel acc">
+            <summary><h2>Start</h2><span className="chev" aria-hidden="true">›</span></summary>
             <label>Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge
               <input type="date" value={p.startDate} max={p.raceDate} onChange={(e) => setStart(e.target.value)} />
             </label>
@@ -576,10 +600,10 @@ export default function App() {
               <button onClick={() => shiftStart(1)}>+ 1 uge</button>
             </div>
             <div className="muted">Planen starter mandag {fmt(startD)} (uge {isoWeek(startD)}) og løber {plan.weeks} uger frem til løbet.</div>
-          </section>
+          </details>
 
-          <section className="panel">
-            <h2>Dig</h2>
+          <details className="panel acc">
+            <summary><h2>Dig</h2><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
               <label>Alder<input type="number" value={p.age} onChange={set("age")} /></label>
               <label>Vægt (kg)<input type="number" value={p.weight} onChange={set("weight")} /></label>
@@ -601,20 +625,20 @@ export default function App() {
             </label>
             <div className="muted" style={{ marginTop: 6 }}>Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige.</div>
             <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => setP({ ...p, onboarded: false, rerun: true })}>Kør spørgeskemaet igen</button>
-          </section>
+          </details>
 
-          <section className="panel">
-            <h2>Løbet</h2>
+          <details className="panel acc">
+            <summary><h2>Løbet</h2><span className="chev" aria-hidden="true">›</span></summary>
             <label>Navn<input value={p.raceName} onChange={set("raceName")} /></label>
             <div className="row2">
               <label>Løbsdato<input type="date" value={p.raceDate} min={p.startDate} onChange={set("raceDate")} /></label>
               <label>Distance (km)<input type="number" value={p.raceKm} onChange={set("raceKm")} /></label>
               <label>Højdemeter<input type="number" value={p.raceVert} onChange={set("raceVert")} /></label>
             </div>
-          </section>
+          </details>
 
-          <section className="panel">
-            <h2>Din hverdag</h2>
+          <details className="panel acc">
+            <summary><h2>Din hverdag</h2><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
               <label>Familie<select value={p.family} onChange={(e) => setP({ ...p, family: e.target.value, altWeeks: e.target.value === "kids" ? p.altWeeks : false })}>{FAMILY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
               <label>Løbedage om ugen (inkl. lang tur)<select value={p.maxRunDays} onChange={(e) => setP({ ...p, maxRunDays: +e.target.value })}>{[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n} dage</option>)}</select></label>
@@ -647,29 +671,13 @@ export default function App() {
               <label>Lang tur (ønsket)<select value={p.longDay} onChange={(e) => setP({ ...p, longDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 3}>{d}</option>)}</select></label>
             </div>
             <div className="muted" style={{ marginTop: 6 }}>Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.</div>
-          </section>
-          <section className="panel">
-            <h2>Konto</h2>
-            {!syncEnabled ? (
-              <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
-            ) : user ? (
-              <>
-                <div>Logget ind som <b>{user.email}</b></div>
-                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
-                <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
-              </>
-            ) : (
-              <div>
-                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.</div>
-                {loginForm}
-              </div>
-            )}
-          </section>
+          </details>
         </aside>
         )}
 
         <section className="stack">
           {view === "plan" && (<>
+          <h1 className="screen-title">Plan</h1>
           <div className="panel">
             <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
             <div className="thisweek">
@@ -743,26 +751,33 @@ export default function App() {
             )}
 
             {view === "more" && (
-              <div className="panel">
-                <h2>Pulszoner</h2>
+              <details className="panel acc">
+                <summary><h2>Pulszoner</h2><span className="chev" aria-hidden="true">›</span></summary>
                 <p>Makspuls brugt: <b>{maxHR}</b>{!p.maxHR && " (estimat – skriv din målte ind)"}. Hvilepuls {p.restHR}.</p>
                 <table><tbody>{zones.map(([n, lo, hi, t]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{t}</td></tr>)}</tbody></table>
                 <p className="muted">Rolige ture under {Math.round(maxHR * 0.7)}. Det føles for langsomt. Det er meningen.</p>
-              </div>
+              </details>
             )}
 
             {view === "more" && (
-              <div className="panel">
-                <h2>Kost</h2>
+              <details className="panel acc">
+                <summary><h2>Kost</h2><span className="chev" aria-hidden="true">›</span></summary>
                 <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(p.weight, p.goal)} g</b> hver dag. Kulhydrat følger arbejdet.{p.goal === "lean" ? " Mål: blive lettere, ca. 300 kcal under behov og max 0,5 kg/uge." : p.goal === "perform" ? " Mål: tid, lidt ekstra på kvalitetsdage." : ""}</p>
                 <table><tbody>{nut.map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
                 <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.</p>
-              </div>
+              </details>
             )}
 
             {view === "log" && (
               <div className="panel scroll">
-                <h2>Log & belastning</h2>
+                <h1 className="screen-title" style={{ marginTop: 0 }}>Log</h1>
+                {nActs === 0 && !Object.values(log).some((l) => l?.km) && (
+                  <div className="empty">
+                    <b>Ingen ture endnu</b>
+                    <span>Log dagens tur på forsiden, eller hent dine ture fra Strava eller Garmin herunder. Så passer ugens tal og belastningen fra første dag.</span>
+                    <button className="btn" type="button" onClick={() => setView("today")}>Gå til i dag</button>
+                  </div>
+                )}
                 <div className="import">
                   <h3>Hent fra Strava eller Garmin</h3>
                   <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>

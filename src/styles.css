@@ -228,3 +228,45 @@ main.wrap { max-width: 720px; padding: 16px 16px 92px; }
 
 .stack > * { min-width: 0; }
 .thisweek div { min-width: 0; overflow: hidden; }
+/* ===== polish layer ===== */
+:root { --bg: #111010; --panel: #1a1918; --panel-2: #232120; --line: #2d2b29; --text: #f4f2ef; --muted: #a29d97; --r: 16px; --r-sm: 10px; }
+body { font-size: 15px; }
+.panel { border-radius: var(--r); padding: 18px; box-shadow: 0 1px 0 rgba(255,255,255,.03) inset; }
+h2 { font-size: 20px; letter-spacing: .02em; }
+input, select { border-radius: var(--r-sm); padding: 11px 12px; min-height: 44px; }
+select { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+.btn { border-radius: var(--r-sm); min-height: 44px; transition: transform .08s ease, filter .15s ease; }
+.btn:active { transform: scale(.98); }
+.btn:hover { filter: brightness(1.06); }
+.screen-title { font-size: 34px; font-weight: 800; text-transform: none; letter-spacing: 0; margin: 4px 2px 2px; line-height: 1; }
+.today-date { padding: 4px 2px 0; }
+.today { padding: 28px 20px 20px; background: radial-gradient(120% 90% at 50% 0%, #26221d 0%, var(--panel) 60%); border-color: #3a3531; }
+.today-kind { text-transform: none; letter-spacing: 0; font-size: 22px; font-weight: 700; color: var(--text); margin: 0; }
+.today-km b { color: var(--volt); }
+.today.done .today-km b { color: var(--green); }
+.today .btn.big { border-radius: 14px; }
+.tabbar button .ic { width: 22px; height: 22px; display: grid; place-items: center; }
+.tabbar button .ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tabbar button.on { color: var(--orange); }
+.tabbar button.on .ic { color: var(--orange); }
+@media (min-width: 900px) { .tabbar button .ic { width: 16px; height: 16px; } .tabbar button .ic svg { width: 16px; height: 16px; } }
+.view-in { animation: viewin .22s ease-out both; }
+@keyframes viewin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .view-in { animation: none; } .btn:active { transform: none; } }
+details.acc { padding: 0; }
+details.acc > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; min-height: 56px; }
+details.acc > summary::-webkit-details-marker { display: none; }
+details.acc > summary h2 { margin: 0; }
+details.acc > summary .chev { color: var(--muted); font-size: 22px; transition: transform .2s ease; }
+details.acc[open] > summary .chev { transform: rotate(90deg); }
+details.acc[open] > summary { border-bottom: 1px solid var(--line); }
+details.acc > :not(summary) { margin-left: 18px; margin-right: 18px; }
+details.acc > :last-child { margin-bottom: 18px; }
+details.acc > summary + * { margin-top: 14px; }
+.empty { display: grid; gap: 8px; justify-items: start; padding: 18px; margin-bottom: 14px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px dashed var(--line); }
+.empty b { font-size: 17px; }
+.empty span { color: var(--muted); font-size: 14px; }
+.thisweek div, .daygrid div, .model, .ob-cards button { border-radius: 12px; }
+.pill { font-variant-numeric: tabular-nums; }
+tr.dayrow td { border-radius: var(--r-sm); }
+.import-row input[type=file] { max-width: 100%; min-width: 0; flex-basis: 100%; }
