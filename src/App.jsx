@@ -247,12 +247,26 @@ export default function App() {
   }, [acts, p.includeHikes, maxHR]);
   const curLog = log[cur.key] || {};
 
-  const loads = plan.rows.map((r) => { const l = log[r.key] || {}; return l.km && l.rpe ? l.km * l.rpe : null; });
-  const acwr = plan.rows.map((r, i) => {
-    if (loads[i] == null) return null;
-    const prev = loads.slice(Math.max(0, i - 4), i).filter((x) => x != null);
-    return prev.length ? loads[i] / (prev.reduce((a, b) => a + b, 0) / prev.length) : null;
-  });
+  /* ---- load & ACWR ----
+     Chronic load is the mean of the 4 previous calendar weeks. Weeks before the plan start count too (typed in or
+     imported from Strava/Garmin); a missing pre-plan week falls back to "Km/uge nu" × RPE 5 so week 1 gets a real ratio. */
+  const loadOf = (l) => (l && l.km && l.rpe ? l.km * l.rpe : null);
+  const baseline = (+p.currentKm || 0) * 5;
+  const acwrFor = (key) => {
+    const own = loadOf(log[key]);
+    if (own == null) return null;
+    const d = parseLocal(key); const prev = []; let est = false;
+    for (let k = 1; k <= 4; k++) {
+      const pk = ymd(addDays(d, -7 * k)); const l = log[pk]; const v = loadOf(l);
+      if (v != null) { prev.push(v); if (l.rpeAuto) est = true; }
+      else if (pk < p.startDate && baseline) { prev.push(baseline); est = true; }
+    }
+    return prev.length ? { v: own / (prev.reduce((a, b) => a + b, 0) / prev.length), est } : null;
+  };
+  const preRows = [4, 3, 2, 1].map((k) => { const d = addDays(startD, -7 * k); return { i: -k, key: ymd(d), wkStart: d, iso: isoWeek(d), pre: true }; });
+  const preLogged = preRows.filter((r) => loadOf(log[r.key]) != null).length;
+  const loads = plan.rows.map((r) => loadOf(log[r.key]));
+  const acwr = plan.rows.map((r) => acwrFor(r.key));
   const cls = (v) => (v == null ? "l" : v > 1.5 ? "r" : v > 1.3 ? "a" : v < 0.8 ? "l" : "g");
 
   // coach advice for the current week, based on last logged week
@@ -261,7 +275,7 @@ export default function App() {
   let warn = false;
   if (cur.unplaced >= 3) { advice = `Din hverdag giver plads til ${cur.km} af de ${cur.target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de ${cur.km} km – det er ikke en fejl at leve et normalt liv.`; warn = true; }
   if (lastIdx != null) {
-    const a = acwr[lastIdx]; const l = log[plan.rows[lastIdx].key];
+    const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = `ACWR sidste uge var ${a.toFixed(2)} – rødt. Hold denne uge på max ${Math.round(plan.rows[lastIdx].km * 0.75)} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.`; warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = `Du løb ${l.km} km mod ${plan.rows[lastIdx].km} planlagt. Planens tal er et loft. Ram ugens ${cur.km} km – og ikke mere.`; warn = true; }
     else if (l?.hr && p.restHR && l.hr >= p.restHR + 7) { advice = `Hvilepuls ${l.hr} er 7+ over din normal. Skær 30–50 % af ugens km, sov mere, spis mere.`; warn = true; }
@@ -467,6 +481,10 @@ export default function App() {
                       <button className="btn ghost" onClick={clearImports}>Fjern importerede</button>
                     </div>
                   )}
+                  <div className="muted" style={{ margin: "6px 0 10px" }}>
+                    Baseline til ACWR: {preLogged} af de 4 uger før planstart har rigtige tal{preLogged < 4 ? `; resten antages til ${p.currentKm} km × RPE 5` : ""}.
+                    {preLogged < 4 && " Hent dit Strava-arkiv eller Garmins CSV med de sidste uger, så bliver de første ACWR-tal ægte."}
+                  </div>
                   <details>
                     <summary>Sådan finder du filerne</summary>
                     <ul>
@@ -480,8 +498,9 @@ export default function App() {
                 <table>
                   <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th>RPE</th><th>Hvilepuls</th><th>Vægt</th><th>Søvn t</th><th className="num">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
-                    {plan.rows.map((r, i) => {
+                    {[...preRows, ...plan.rows].map((r) => {
                       const l = log[r.key] || {};
+                      const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
                         <span className="cellwrap">
                           <input type="number" value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : undefined}
@@ -490,18 +509,18 @@ export default function App() {
                         </span>
                       );
                       return (
-                        <tr key={r.i} style={r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}><b>{r.i}</b> <span className="muted">u{r.iso}</span></td>
-                          <td className="num">{r.km}</td>
+                        <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span></td>
+                          <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title="Antaget: km/uge nu × RPE 5">~{p.currentKm}</span> : "") : r.km}</td>
                           <td>{cell("km")}</td><td>{cell("rpe")}</td><td>{cell("hr")}</td><td>{cell("wt")}</td><td>{cell("sleep")}</td>
-                          <td className="num">{loads[i] ?? ""}</td>
-                          <td className="num"><span className={`pill ${cls(acwr[i])}`}>{acwr[i] != null ? acwr[i].toFixed(2) : "–"}</span></td>
+                          <td className="num">{ld ?? (r.pre && baseline ? <span className="muted" title="Antaget belastning">~{baseline}</span> : "")}</td>
+                          <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? "Bygger delvist på estimater (antaget baseline eller RPE fra puls)" : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-                <p className="foot">ACWR = ugens belastning (km × RPE) ÷ gennemsnittet af de sidste 4 uger. Grøn 0,8–1,3 · gul til 1,5 · rød over 1,5 = skær ned. ⌚ = tal fra dit ur. Alt gemmes på din telefon.</p>
+                <p className="foot">ACWR = ugens belastning (km × RPE) ÷ gennemsnittet af de 4 foregående uger. Grøn 0,8–1,3 · gul til 1,5 · rød over 1,5 = skær ned. ⌚ = tal fra dit ur · ~ = bygger på estimat. Alt gemmes på din telefon.</p>
                 <button className="btn ghost" onClick={() => { if (confirm("Slet hele loggen?")) saveLog({}); }}>Nulstil log</button>
               </div>
             )}

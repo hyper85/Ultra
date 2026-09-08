@@ -102,3 +102,5 @@ td input { margin: 0; padding: 6px 8px; width: 74px; background: #241a12; border
 .sched-row input { grid-column: 2 / 4; }
 .sched-row.off { opacity: .6; }
 .thisweek .note { display: block; margin-top: 4px; font-size: 10px; line-height: 1.2; color: var(--muted); word-break: break-word; }
+tr.pre td { color: var(--muted); }
+tr.pre td input { background: #1c1c1c; border-color: var(--line); }
