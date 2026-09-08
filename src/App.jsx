@@ -526,7 +526,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <p className="foot">Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning.</p>
+          <p className="foot">Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning. <span style={{ float: "right", opacity: .7 }}>Ultraplan {__APP_VERSION__}</span></p>
         </section>
       </main>
     </>
