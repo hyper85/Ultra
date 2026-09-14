@@ -15,7 +15,7 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
 |---|---|
 | `src/App.jsx` | Everything except the questionnaire: constants, `buildPlan()` (plan engine), state, sync, the four screens (I dag, Plan, Log, Mere) and the tab bar |
 | `src/Onboarding.jsx` | First-login questionnaire (8 steps) plus `goalKcal`, `proteinG`, `dietTips`, `INJURY`, `DIETS` |
-| `src/import.js` | Date helpers (`ymd`, `parseLocal`, `addDays`, `mondayOf`), CSV/GPX/TCX/zip parsing, activity classification, de-duplication, weekly totals; `isWellnessCSV` / `wellnessFromCSV` turn Garmin's weekly `Sleep.csv` ("Sep 8-14", "Dec 30, 2025 - Jan 5, 2026" – unquoted commas split the label, glued back) or a date + "Resting" table into `{ monday: { sleep, hr } }` |
+| `src/import.js` | Date helpers (`ymd`, `parseLocal`, `addDays`, `mondayOf`), CSV/GPX/TCX/zip parsing, activity classification, de-duplication, weekly totals; `isWellnessCSV` / `isReportCSV` / `wellnessFromCSV` turn Garmin reports into `{ monday: { sleep, hr, wt, vo2, hrv, stress, endurance } }` (`WELLNESS_METRICS` maps headers; daily rows are averaged per week, week labels like "Sep 8-14" / "Dec 30, 2025 - Jan 5, 2026" (unquoted commas split the label, glued back), month labels like "Oct 2025" fan out to that month's Mondays; unknown reports throw a Danish message instead of reaching the activity parser) |
 | `src/sync.js` | Supabase client, code login (`verifyCode`), `pullRemote` / `pushRemote` |
 | `src/insights.js` | `buildInsights()` – deterministic "what the app has learned" (adherence, skipped/extra weekdays, long-run completion, easy-run HR vs cap, aerobic efficiency, resting-HR drift, streak) with one-tap profile patches; `watchSummary()` – last N weeks from activities (km, runs, longest, HR, pace); `coachContext()` – anonymous JSON for the AI coach incl. `fra_uret_12_uger` |
 | `src/coach.js` | Client for the AI coach: `askCoach()`, chat persisted in `ultraplan-coach` (device only, never synced), suggested questions |
@@ -33,8 +33,8 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
   form (`level 1–4`, `currentKm`, `breakWeeks`), life (`family`, `maxRunDays`, `sched.A/B` with
   `avail none|short|normal|long`, `time`, `note`; `altWeeks/altStart` for deleordning), `goal`,
   `injury none|sore|injured`, `diet`, `intol[]`, `peakScale`, `startDate` (always a Monday), `onboarded`.
-- `ultraplan-log` – keyed by the Monday of the week (`YYYY-MM-DD`): `{ km, rpe, hr, wt, sleep, auto, rpeAuto, sleepAuto, hrAuto, n }`.
-  `auto` = km came from activities, `sleepAuto`/`hrAuto` = imported from a wellness CSV (typing clears the flag); never re-key by week number.
+- `ultraplan-log` – keyed by the Monday of the week (`YYYY-MM-DD`): `{ km, rpe, hr, wt, sleep, vo2, hrv, stress, endurance, auto, rpeAuto, <field>Auto, n }`.
+  `auto` = km came from activities, `<field>Auto` = imported from a Garmin report (typing clears the flag); vo2/hrv/stress/endurance are not shown in the table but feed insights and the coach context; never re-key by week number.
 - `ultraplan-activities` – imported or typed runs keyed by id; `kind()` is recomputed at read time.
 - `ultraplan-meta` (`updatedAt`) and `ultraplan-owner` (user id) drive sync and device isolation.
 

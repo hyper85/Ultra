@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, wellnessFromCSV } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
@@ -375,28 +375,33 @@ export default function App() {
     for (const f of files) {
       try {
         // Garmin's Sleep.csv or a resting-HR table goes into the weekly log; everything else is activities.
-        if (/\.csv$/i.test(f.name)) { const text = await f.text(); if (isWellnessCSV(text)) { wellness.push(wellnessFromCSV(text, f.name)); continue; } }
+        // Reports (Sleep.csv, VO2 max, HRV, resting HR, weight …) go into the weekly log; a report the app has no numbers
+        // from (pace, distance, fitness age …) throws a clear message instead of falling into the activity parser.
+        if (/\.csv$/i.test(f.name)) { const text = await f.text(); if (isWellnessCSV(text) || isReportCSV(text)) { wellness.push(wellnessFromCSV(text, f.name)); continue; } }
         parsed = parsed.concat(await parseFile(f));
       } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); }
     }
-    let logBase = log, nSleep = 0, nHR = 0;
+    let logBase = log; const got = {}; const skippedCols = [];
     if (wellness.length) {
       const n = { ...log };
-      for (const w of wellness) for (const [k, v] of Object.entries(w.weeks)) {
-        const l = n[k] || {};
-        // imported values win where the user has not typed a number
-        if (v.sleep != null && (l.sleep == null || l.sleep === "" || l.sleepAuto)) { l.sleep = v.sleep; l.sleepAuto = true; }
-        if (v.hr != null && (l.hr == null || l.hr === "" || l.hrAuto)) { l.hr = v.hr; l.hrAuto = true; }
-        n[k] = l;
+      for (const w of wellness) {
+        for (const [k, v] of Object.entries(w.weeks)) {
+          const l = { ...(n[k] || {}) };
+          // imported values win where the user has not typed a number
+          for (const [key, val] of Object.entries(v)) if (l[key] == null || l[key] === "" || l[`${key}Auto`]) { l[key] = val; l[`${key}Auto`] = true; }
+          n[k] = l;
+        }
+        for (const [key, c] of Object.entries(w.counts)) got[key] = { n: Math.max(got[key]?.n || 0, c), label: w.labels[key] };
+        skippedCols.push(...w.skipped);
       }
-      nSleep = wellness.reduce((a, w) => a + w.nSleep, 0); nHR = wellness.reduce((a, w) => a + w.nHR, 0);
       logBase = n; if (!parsed.length) saveLog(n);
     }
     const { next, added } = mergeActivities(acts, parsed);
     let weeks = {};
     if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
-    const wellText = wellness.length ? ` Søvn for ${nSleep} uger${nHR ? ` og hvilepuls for ${nHR} uger` : ""} lagt i loggen.` : "";
+    const gotText = Object.values(got).map((g) => `${g.label} for ${g.n} uger`).join(", ");
+    const wellText = wellness.length ? ` ${gotText.charAt(0).toUpperCase() + gotText.slice(1)} lagt i loggen.${skippedCols.length ? ` Sprunget over: ${[...new Set(skippedCols)].slice(0, 5).join(", ")}.` : ""}` : "";
     setImportMsg({
       warn: errors.length > 0 || (parsed.length === 0 && !wellness.length),
       text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
@@ -1040,7 +1045,7 @@ export default function App() {
                 )}
                 <div className="import">
                   <h3>Hent fra Strava eller Garmin</h3>
-                  <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins Sleep.csv giver søvn pr. uge, og en CSV med hvilepuls giver hvilepuls pr. uge – begge dele bruges af trænerrådet og AI-træneren. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
+                  <p className="muted">Vælg en eller flere filer på én gang. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>
                   <div className="import-row">
                     <input ref={fileRef} type="file" multiple onChange={onFiles} disabled={importing} />
                     {importing && <span className="muted">Læser…</span>}
@@ -1093,7 +1098,8 @@ export default function App() {
                       <li><b>Garmin Connect, mange ture:</b> connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.</li>
                       <li><b>Garmin Connect, én tur:</b> åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.</li>
                       <li><b>Garmin Connect, søvn:</b> Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.</li>
-                      <li><b>Hvilepuls:</b> en CSV med en dato-kolonne og en kolonne "Resting" (fx tabellen under Rapporter → Puls, kopieret til et regneark og gemt som CSV). Ugerne får "Hvilepuls" udfyldt.</li>
+                      <li><b>Garmin Connect, rapporter:</b> Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.</li>
+                      <li><b>Hvilepuls fra en tabel:</b> en CSV med en dato-kolonne og en kolonne "Resting" virker også.</li>
                     </ul>
                   </details>
                 </div>
@@ -1105,9 +1111,9 @@ export default function App() {
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
                         <span className="cellwrap">
-                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : (k === "sleep" && l.sleepAuto) || (k === "hr" && l.hrAuto) ? "Fra dit ur" : undefined}
-                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : {}), ...(k === "sleep" ? { sleepAuto: false } : {}), ...(k === "hr" ? { hrAuto: false } : {}) } })} />
-                          {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto) || (k === "sleep" && l.sleepAuto) || (k === "hr" && l.hrAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
+                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : l[`${k}Auto`] ? "Fra dit ur" : undefined}
+                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
+                          {((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) && <i className="tag" aria-label="importeret">⌚</i>}
                         </span>
                       );
                       const open = openWeek === r.key;

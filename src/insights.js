@@ -139,6 +139,12 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const sleepAvg = sleeps.length >= 2 ? r1(mean(sleeps)) : null;
   if (sleepAvg != null && sleepAvg < 6.5) add("sleep-low", "warn", `Du sover ${sleepAvg} timer i snit de sidste uger. Under 7 timer bygger kroppen ikke det, træningen beder om. En time mere søvn slår en time mere løb.`);
   if (sleepAvg != null && sleepAvg >= 7.5) add("sleep-ok", "good", `${sleepAvg} timers søvn i snit. Det er den bedste restitution, der findes.`);
+  // Fitness metrics from the watch (VO2 max, HRV), when a report has been imported.
+  const series = (key, n = 8) => done.slice(-n).map((r) => log[r.key]?.[key]).filter((x) => x > 0);
+  const vo2 = series("vo2"); const hrv = series("hrv");
+  if (vo2.length >= 3 && vo2.at(-1) - vo2[0] >= 1) add("vo2-up", "good", `VO2 max fra uret er gået fra ${vo2[0]} til ${vo2.at(-1)}. Motoren vokser.`);
+  if (vo2.length >= 3 && vo2[0] - vo2.at(-1) >= 2) add("vo2-down", "info", `VO2 max fra uret er faldet fra ${vo2[0]} til ${vo2.at(-1)}. Det følger tit lav volumen eller sygdom – ikke noget at jage, men værd at kende.`);
+  if (hrv.length >= 4) { const base = mean(hrv.slice(0, -1)); const last = hrv.at(-1); if (base > 0 && last < base * 0.85) add("hrv-low", "warn", `HRV er ${last} mod normalt ${Math.round(base)}. Kroppen er under pres – sov, spis, og hold ugen rolig.`); }
   if (streak >= 4) add("streak", "good", `${streak} uger i træk med logget træning. Kontinuitet slår alt.`);
 
   if (findings.length === 0) add("empty", "info", "Appen kender dig ikke endnu. Log dine ture eller hent dem fra Garmin/Strava i et par uger, så begynder den at se mønstre: hvilke dage du faktisk løber, om planen passer til dig, og om de rolige ture er rolige nok.");
@@ -152,7 +158,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
 /* Compact, anonymous context for the AI coach: numbers only, no name or e-mail. */
 export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice }) {
   const ur = watchSummary(acts, { includeHikes: !!p.includeHikes, todayKey: ymd(mondayOf(parseLocal(todayStr))), weeks: 12 });
-  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
+  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
   return {
     dato: todayStr,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
