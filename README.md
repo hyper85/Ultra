@@ -38,3 +38,28 @@ log og importerede ture med på tværs af enheder, kobles den på et gratis Supa
 
 Login sker med en 6-cifret kode på mail (ingen adgangskode); linket i mailen virker også. Anon-nøglen er beregnet til at ligge i klienten;
 adgangen til data styres af row level security i `schema.sql`, så hver bruger kun kan se sin egen række.
+
+## Træner: det appen lærer om dig, og en AI-træner (valgfrit)
+
+Under "Mere" → "Træner" viser appen, hvad den har lært af din log og dine ture: om du rammer planen, hvilke
+dage der bliver sprunget over (og hvilke du løber på alligevel), om den lange tur bliver gennemført, om de
+rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet deterministisk i `src/insights.js`, og
+hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
+"I dag".
+
+Samme sted kan du spørge en AI-træner, der får dine tal som kontekst – aldrig navn eller e-mail. Den kører som
+en Vercel-funktion (`api/coach.js`) og kræver én API-nøgle. Vælg én af tre udbydere og sæt nøglen under
+Vercel → projektet → Settings → Environment Variables, og redeploy:
+
+| Udbyder | Miljøvariabel | Standardmodel | Noter |
+|---|---|---|---|
+| OpenCode Zen (https://opencode.ai/zen) | `OPENCODE_API_KEY` | `glm-5.3-flash` | AI-gateway, betaling efter forbrug. Claude-modeller (`claude-…`) og GLM/Kimi/MiniMax/Qwen på samme nøgle. |
+| Z.ai direkte (https://z.ai) | `ZAI_API_KEY` | `glm-5.3-flash` | GLM-modellerne fra producenten. |
+| Anthropic (https://console.anthropic.com) | `ANTHROPIC_API_KEY` | `claude-opus-5` | Claude direkte. |
+
+Modellen skiftes med `COACH_MODEL`, fx `glm-5.1`, `kimi-k2.6` eller `claude-sonnet-4-6`. Er flere nøgler sat,
+vælger `COACH_PROVIDER=opencode|zai|anthropic`. Formatet følger modelnavnet: `claude-…` går via Messages-API'et,
+alt andet via chat completions. Uden nøgle viser appen en venlig besked i stedet for en chat; findes modellen ikke
+hos udbyderen, står det i chatten.
+
+Samtalen gemmes kun på enheden. Ikke lægefaglig rådgivning.

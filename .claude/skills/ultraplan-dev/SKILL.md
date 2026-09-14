@@ -17,6 +17,10 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
 | `src/Onboarding.jsx` | First-login questionnaire (8 steps) plus `goalKcal`, `proteinG`, `dietTips`, `INJURY`, `DIETS` |
 | `src/import.js` | Date helpers (`ymd`, `parseLocal`, `addDays`, `mondayOf`), CSV/GPX/TCX/zip parsing, activity classification, de-duplication, weekly totals |
 | `src/sync.js` | Supabase client, code login (`verifyCode`), `pullRemote` / `pushRemote` |
+| `src/insights.js` | `buildInsights()` – deterministic "what the app has learned" (adherence, skipped/extra weekdays, long-run completion, easy-run HR vs cap, aerobic efficiency, resting-HR drift, streak) with one-tap profile patches; `coachContext()` – anonymous JSON for the AI coach |
+| `src/coach.js` | Client for the AI coach: `askCoach()`, chat persisted in `ultraplan-coach` (device only, never synced), suggested questions |
+| `api/coach.js` | Vercel serverless function: the AI coach. Provider by key: `OPENCODE_API_KEY` → OpenCode Zen (default `glm-5.3-flash`), `ZAI_API_KEY` → Z.ai (`https://api.z.ai/api/paas/v4`, default `glm-5.3-flash`), `ANTHROPIC_API_KEY` → Anthropic (`claude-opus-5`, effort medium, server-side fallbacks). Wire format follows the model id: `claude-…` → Anthropic Messages API (SDK, gateway baseURL), anything else → OpenAI-style `chat/completions` via plain fetch. `COACH_PROVIDER` / `COACH_MODEL` override. 503 with a Danish message without a key, 502 naming the model when the provider does not know it. `vercel.json` excludes `/api/` from the SPA rewrite |
+| `src/data/coach-plan.json` | The coach's fixed 23-week plan (trænerplan) used as-is when `coachMode` is on |
 | `src/styles.css` | One file; later sections override earlier ones (a "polish layer" sits at the end) |
 | `supabase/schema.sql` | Table `ultraplan_user_data` with row-level security |
 | `supabase/email-magic-link.html` | Branded login email with `{{ .Token }}` |
@@ -39,6 +43,7 @@ debounced push runs. Loading and pulling use the raw setters so they never count
 
 ## Plan engine rules (buildPlan)
 
+- Restart = current × 1.1 (floor 15 km, 12 for beginners); after a break/injury 65 % (floor 20). Week 1 of the build sits at the restart volume, never a jump.
 - Weeks from `startDate` to `raceDate`, min 8. Phases: Genopbygning (4 weeks if `breakWeeks ≥ 2`
   or injured) → Opbygning → Ultra-prep → Nedtrapning (3). Deload every 4th build week / 3rd ultra week.
 - Peak = min(peakTarget, restart × PEAK_MULT[level]); peakTarget = max(45, 0.95×race, 1.2×current)
@@ -54,6 +59,8 @@ debounced push runs. Loading and pulling use the raw setters so they never count
 Load = km × RPE. ACWR = this week ÷ mean of the 4 previous calendar weeks, including weeks before
 the plan (typed, imported, or assumed `currentKm × 5`). Estimates are marked with `~`. Advice uses
 the last completed week, never the week in progress.
+- Trænerråd (ACWR > 1.5, > 140 % of plan, or resting HR +7) rewrites the week in progress and stores it in `log[week].adjusted`. That write is derived state: it goes through the raw setters, never `touch()`, so a stale device cannot outrank the cloud copy.
+- Today screen has three extra states: before the plan starts, race day (`Løbsdag`, race km), and after the race ("Sæt et nyt løb" reruns the questionnaire). A deload week is labelled "let uge", never "nedtrapning" (that is the taper phase).
 
 ## Build, test, ship
 
@@ -61,6 +68,7 @@ the last completed week, never the week in progress.
 npm ci && npm run build            # Vite; version stamp comes from git sha via vite.config.js
 npx vite preview --port 4174       # serve dist for tests
 node scratch/test.mjs              # Playwright: import chromium from /opt/node22/lib/node_modules/playwright/index.mjs
+# insights.js and api/coach.js are plain modules: unit-test them in node (mock the Anthropic endpoint with ANTHROPIC_BASE_URL).
 ```
 
 Test like a first-time user: fresh storage (`addInitScript` to seed), `timezoneId: "Europe/Copenhagen"`,
@@ -70,7 +78,7 @@ Push to `main` deploys; the footer shows `version · sha · bygget <time>` so us
 
 ## Supabase (once per project)
 
-Env vars in Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (publishable key). Run
+Env vars in Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (publishable key); `OPENCODE_API_KEY`, `ZAI_API_KEY` or `ANTHROPIC_API_KEY` for the AI coach (`COACH_MODEL` picks the model). Run
 `supabase/schema.sql`. Custom SMTP is required before email templates can be edited; the
 "Magic link or OTP" template must contain `{{ .Token }}` for code login. URL Configuration needs the
 Vercel URL as Site URL and `…/**` as redirect.

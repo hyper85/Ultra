@@ -102,7 +102,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
       {step === 0 && (
         <section className="panel ob-panel">
           <h2>Lad os bygge din plan</h2>
-          <p className="lead">Fem korte spørgsmål, så får du en periodiseret plan frem til dit løb, pulszoner og kosttal, der passer til din hverdag.</p>
+          <p className="lead">Seks korte trin, så får du en periodiseret plan frem til dit løb, pulszoner og kosttal, der passer til din hverdag.</p>
           <ul className="landing-list">
             <li><b>Tager 3 minutter.</b> Alt kan ændres bagefter.</li>
             <li><b>Du vælger selv modellen.</b> Til sidst ser du tre bud på en plan og vælger den, der passer.</li>
