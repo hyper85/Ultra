@@ -38,3 +38,20 @@ log og importerede ture med på tværs af enheder, kobles den på et gratis Supa
 
 Login sker med en 6-cifret kode på mail (ingen adgangskode); linket i mailen virker også. Anon-nøglen er beregnet til at ligge i klienten;
 adgangen til data styres af row level security i `schema.sql`, så hver bruger kun kan se sin egen række.
+
+## Træner: det appen lærer om dig, og en AI-træner (valgfrit)
+
+Under "Mere" → "Træner" viser appen, hvad den har lært af din log og dine ture: om du rammer planen, hvilke
+dage der bliver sprunget over (og hvilke du løber på alligevel), om den lange tur bliver gennemført, om de
+rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet deterministisk i `src/insights.js`, og
+hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
+"I dag".
+
+Samme sted kan du spørge en AI-træner (Claude), der får dine tal som kontekst – aldrig navn eller e-mail.
+Den kører som en Vercel-funktion (`api/coach.js`) og kræver én miljøvariabel:
+
+1. Opret en API-nøgle på https://console.anthropic.com.
+2. Vercel → projektet → Settings → Environment Variables: `ANTHROPIC_API_KEY` = nøglen.
+3. Redeploy. Uden nøglen viser appen en venlig besked i stedet for en chat.
+
+Samtalen gemmes kun på enheden. Ikke lægefaglig rådgivning.

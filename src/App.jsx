@@ -3,6 +3,8 @@ import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, merg
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
+import { buildInsights, coachContext } from "./insights.js";
+import { askCoach, loadChat, saveChat, SUGGESTED } from "./coach.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -74,7 +76,8 @@ export function buildPlan(p) {
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
   const raceKm = +p.raceKm;
   const injured = p.injury === "injured", sore = p.injury === "sore";
-  const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : Math.round(+p.currentKm * 1.1);
+  // Never below a small floor: a runner who types 0 km still needs a plan that starts somewhere.
+  const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : Math.max(level === 1 ? 12 : 15, Math.round(+p.currentKm * 1.1));
   // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model and by injury status.
   const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1) * (injured ? 0.9 : sore ? 0.95 : 1)));
   const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
@@ -102,8 +105,9 @@ export function buildPlan(p) {
       phase = "Opbygning";
       const j = i - rebuild;
       // Build phase: from a step above current volume (but not above 85 % of peak) up to 65 % of peak.
-      const b0 = Math.min(restart * 1.35, peak * 0.85), b1 = Math.max(peak * 0.65, b0);
-      km = Math.round(b0 + (b1 - b0) * (j / build));
+      // Week 1 of the build sits at the restart volume (after a rebuild block: a step above it), never a 35 % jump.
+      const b0 = Math.min(rebuild ? restart * 1.35 : restart, peak * 0.85), b1 = Math.max(peak * 0.65, b0);
+      km = Math.round(b0 + (b1 - b0) * ((j - 1) / Math.max(1, build - 1)));
       if (j % 4 === 0 && j !== build) { deload = true; km = Math.round(km * 0.72); }
       quality = sore && j <= 3 ? ["Rolig tempo 12 min", "Rolig tempo 15 min", "Stigninger 6×20 s"][j - 1] : ["8×2 min tærskel", "20 min tempo", "Bakker 6×90 s", "5×3 min tærskel", "25 min tempo"][j % 5];
       focus = sore && j <= 3 ? "Øm: RPE under 6, ingen bakker. Bliver det værre, skift til 'Skadet' under Mere." : deload ? "Nedtrapningsuge. Lad tilpasningen sætte sig." : "Stak aerob volumen. Lang tur på trail med 40–60 g kulhydrat/t.";
@@ -188,6 +192,7 @@ export default function App() {
   const [importMsg, setImportMsg] = useState(null);
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState("today");
+  const [openMore, setOpenMore] = useState(null); // which "Mere" section to open when arriving from another screen
   const [ready, setReady] = useState(false);
   const fileRef = useRef(null);
 
@@ -338,7 +343,11 @@ export default function App() {
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
   const todayKey = ymd(thisMonday());
-  const curBase = plan.rows.find((r) => r.key === todayKey) || plan.rows[0];
+  const lastPlanRow = plan.rows[plan.rows.length - 1];
+  const curBase = plan.rows.find((r) => r.key === todayKey) || (todayKey > lastPlanRow.key ? lastPlanRow : plan.rows[0]);
+  const todayStr = ymd(new Date());
+  const beforePlan = todayKey < plan.rows[0].key;   // the plan has not started yet
+  const afterRace = todayStr > p.raceDate;            // the race is behind us
   const startD = parseLocal(p.startDate);
   const curSchedLabel = curBase.schedLabel;
 
@@ -510,7 +519,7 @@ export default function App() {
   useEffect(() => {
     if (!ready) return;
     const stored = log[curBase.key]?.adjusted || null; const next = adjRow?.adjusted || null;
-    if (JSON.stringify(stored) !== JSON.stringify(next)) { const l = { ...(log[curBase.key] || {}) }; if (next) l.adjusted = next; else delete l.adjusted; saveLog({ ...log, [curBase.key]: l }); }
+    if (JSON.stringify(stored) !== JSON.stringify(next)) { const l = { ...(log[curBase.key] || {}) }; if (next) l.adjusted = next; else delete l.adjusted; const n = { ...log, [curBase.key]: l }; setLog(n); store.set("ultraplan-log", n); }
   }, [adjRow, curBase.key, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
@@ -526,6 +535,32 @@ export default function App() {
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = `Du løb ${l.km} km mod ${plan.rows[lastIdx].km} planlagt. Planens tal er et loft. Ram ugens ${cur.km} km – og ikke mere.`; warn = true; }
     else if (l?.hr && p.restHR && l.hr >= p.restHR + 7) { advice = `Hvilepuls ${l.hr} er 7+ over din normal. Skær 30–50 % af ugens km, sov mere, spis mere.`; warn = true; }
   }
+
+  /* ---- what the app has learned about the runner (deterministic, see insights.js) ---- */
+  const insights = useMemo(() => buildInsights({ plan, log, acts, p, todayKey, maxHR, includeHikes: p.includeHikes }), [plan, log, acts, p, todayKey, maxHR]);
+  const topInsight = insights.findings.find((f) => f.id !== "empty") || null;
+  const applyInsight = (f) => { setP({ ...p, ...f.action.patch }); };
+
+  /* ---- AI coach (Claude via /api/coach; the chat stays on this device) ---- */
+  const [chat, setChat] = useState(() => loadChat());
+  const [coachQ, setCoachQ] = useState("");
+  const [coachBusy, setCoachBusy] = useState(false);
+  const [coachErr, setCoachErr] = useState(null);
+  const ask = async (q) => {
+    const question = (q ?? coachQ).trim();
+    if (!question || coachBusy) return;
+    setCoachBusy(true); setCoachErr(null); setCoachQ("");
+    const history = chat.slice(-8).map(({ role, text }) => ({ role, text }));
+    const next = [...chat, { role: "user", text: question, at: Date.now() }];
+    setChat(next);
+    try {
+      const context = coachContext({ p, plan, cur, log, acwrFor, insights, todayStr, maxHR, advice });
+      const text = await askCoach({ question, history, context });
+      const done = [...next, { role: "assistant", text, at: Date.now() }];
+      setChat(done); saveChat(done);
+    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup }); setChat(chat); }
+    setCoachBusy(false);
+  };
 
   const zones = [["Z1 restitution", .5, .6, "Gang, nedjog"], ["Z2 aerob", .6, .7, "80 % af al løb. Hele sætninger."], ["Z3 tempo", .7, .8, "Behageligt hårdt"], ["Z4 tærskel", .8, .9, "Én sætning ad gangen"], ["Z5 VO2", .9, 1, "Kun korte intervaller"]];
   const nut = goalKcal(bmr, p.goal);
@@ -571,7 +606,7 @@ export default function App() {
           ["log", "Log", <svg viewBox="0 0 24 24"><path d="M4 12.5l4 4L20 5" /><path d="M4 19h16" opacity=".4" /></svg>],
           ["more", "Mere", <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="17" r="2" fill="currentColor" stroke="none" /></svg>],
         ].map(([k, l, ic]) => (
-          <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>
+          <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); setOpenMore(null); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>
         ))}
       </nav>
 
@@ -580,33 +615,58 @@ export default function App() {
           const ti = (new Date().getDay() + 6) % 7;
           const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = liftDays.includes(ti);
           const long = ti === cur.longDay && v > 0, hard = ti === cur.qDay && v > 0, b2b = cur.sun > 0 && ti === (cur.longDay + 1) % 7 && v > 0;
-          const kind = v ? (long ? "Lang tur" : hard ? "Hård session" : b2b ? "Back-to-back" : "Rolig tur") : lift ? liftName(ti) : "Hvile";
+          const raceDay = todayStr === p.raceDate;
+          const kind = raceDay ? "Løbsdag" : v ? (long ? "Lang tur" : hard ? "Hård session" : b2b ? "Back-to-back" : "Rolig tur") : lift ? liftName(ti) : "Hvile";
           const easy = v > 0 && !long && !hard && !b2b; const hrCap = Math.round(maxHR * 0.7);
           const carbs = cur.phase === "Ultra-prep" ? "60–90" : "40–60";
           const strength = plan.coach ? (liftDays.indexOf(ti) === 0 ? coachPlan.strength.A_tue : liftDays.indexOf(ti) === 1 ? coachPlan.strength.B_thu : null) : null;
           const ran = dayKm[ti]; const done = v > 0 && ran >= v * 0.9;
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long" });
+          if (afterRace) return (
+            <>
+              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
+              <section className="panel today done">
+                <h2 className="today-kind">{p.raceName || "Løbet"} er overstået</h2>
+                <div className="today-km"><b className="today-rest text">Tillykke</b></div>
+                <div className="today-sub">Tag mindst en uge helt fri, og løb kun roligt de næste 2–3 uger. Så er du klar til at sætte et nyt mål.</div>
+                <button className="btn big" type="button" onClick={() => setP({ ...p, onboarded: false, rerun: true })}>Sæt et nyt løb</button>
+              </section>
+            </>
+          );
+          if (beforePlan) { const days = Math.round((parseLocal(plan.rows[0].key) - parseLocal(todayStr)) / 86400000); return (
+            <>
+              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
+              <section className="panel today">
+                <h2 className="today-kind">Planen starter mandag {fmt(plan.rows[0].wkStart)}</h2>
+                <div className="today-km"><b>{days}</b><span>{days === 1 ? "dag" : "dage"}</span></div>
+                <div className="today-sub">Uge 1 er {plan.rows[0].km} km i {plan.rows[0].phase.toLowerCase()}. Indtil da: løb roligt, sov godt, og log det du løber, så ACWR-tallet bliver ægte fra dag ét.</div>
+                <button className="btn big" type="button" onClick={() => setView("plan")}>Se planen</button>
+                <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => setView("more")}>Flyt startdato</button>
+              </section>
+            </>
+          ); }
           return (
             <>
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
               <section className={`panel today ${done ? "done" : ""}`}>
                 <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
-                <div className="today-km">{v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
+                <div className="today-km">{raceDay ? <><b>{p.raceKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
                 {hard && <div className="today-sub">{cur.quality} · 15 min opv./10 min nedjog</div>}
                 {easy && <div className="today-sub">Puls under {hrCap}. Det føles for langsomt. Det er meningen.</div>}
-                {long && <div className="today-sub">Gå stigningerne. {carbs} g kulhydrat/t.</div>}
+                {raceDay && <div className="today-sub">Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.</div>}
+                {long && !raceDay && <div className="today-sub">Gå stigningerne. {carbs} g kulhydrat/t.</div>}
                 {b2b && <div className="today-sub">Back-to-back på trætte ben. Puls under {hrCap}. {carbs} g kulhydrat/t.</div>}
-                {!v && lift && strength && <ul className="today-list">{strength.map((x) => <li key={x}>{x}</li>)}</ul>}
-                {!v && lift && !strength && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
-                {!v && !lift && <div className="today-sub">Hviledag. Sov, spis, gå en tur.</div>}
+                {!v && !raceDay && lift && strength && <ul className="today-list">{strength.map((x) => <li key={x}>{x}</li>)}</ul>}
+                {!v && !raceDay && lift && !strength && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
+                {!v && !lift && !raceDay && <div className="today-sub">Hviledag. Sov, spis, gå en tur.</div>}
                 {plan.coach && <div className="today-ankle">Ankel i dag: {coachPlan.strength.daily_ankle.join(" · ")}</div>}
-                {adjRow && !showOriginal && <div className="today-sub" style={{ color: "var(--amber)" }}>Justeret af trænerråd ({adjRow.adjusted.reason}). Original: {adjRow.adjusted.original[ti] || "hvile"}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
+                {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>Justeret af trænerråd ({adjRow.adjusted.reason}). Original: {adjRow.adjusted.original[ti] || "hvile"}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>Skadesfase: {cur.quality}. Stop ved smerte, der ændrer skridtet.</div>}
                 {v > 0 && lift && <div className="today-sub">+ {liftName(ti)} i dag{strength ? `: ${strength.join(", ")}` : ""}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ Løbet {ran} km{v > 0 ? ` af ${v}` : ""}</div>}
-                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 ? "Log dagens tur" : "Log en tur alligevel"}</button>
+                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 || raceDay ? "Log dagens tur" : "Log en tur alligevel"}</button>
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
 
@@ -621,6 +681,13 @@ export default function App() {
                   ))}
                 </div>
                 <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
+                {topInsight && (
+                  <div className={`insight ${topInsight.level}`}>
+                    <span>{topInsight.text}</span>
+                    {topInsight.action ? <button type="button" className="btn ghost" onClick={() => applyInsight(topInsight)}>{topInsight.action.label}</button>
+                      : <button type="button" className="btn ghost" onClick={() => { setView("more"); setOpenMore("coach"); }}>Se alle</button>}
+                  </div>
+                )}
               </section>
 
               <section className="panel row-between" onClick={() => setView("plan")} role="button" tabIndex={0} style={{ cursor: "pointer" }}>
@@ -652,6 +719,34 @@ export default function App() {
             )}
           </details>
 
+          <details className="panel acc" open={openMore === "coach"}>
+            <summary><h2>Træner</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <h3 className="sub">Det appen har lært om dig</h3>
+            <div className="findings">
+              {insights.findings.map((f) => (
+                <div key={f.id} className={`finding ${f.level}`}>
+                  <span>{f.text}</span>
+                  {f.action && <button type="button" className="btn ghost" onClick={() => applyInsight(f)}>{f.action.label}</button>}
+                </div>
+              ))}
+            </div>
+            <p className="muted">Bygger på {insights.summary.weeksLogged} {insights.summary.weeksLogged === 1 ? "afsluttet uge" : "afsluttede uger"} i loggen og dine ture dag for dag. Alt kan efterregnes; knapperne ændrer kun det, de siger.</p>
+            <h3 className="sub">Spørg træneren</h3>
+            <p className="muted">En AI-træner (Claude), der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
+            {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={coachBusy}>{q}</button>)}</div>}
+            <div className="chat">
+              {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
+              {coachBusy && <div className="msg assistant muted">Tænker…</div>}
+            </div>
+            {coachErr && <div className="advice warn">{coachErr.text}</div>}
+            <form className="chatform" onSubmit={(e) => { e.preventDefault(); ask(); }}>
+              <input value={coachQ} onChange={(e) => setCoachQ(e.target.value)} placeholder="fx Skal jeg løbe, når jeg er forkølet?" maxLength={800} disabled={coachBusy} />
+              <button className="btn" type="submit" disabled={coachBusy || !coachQ.trim()}>Send</button>
+            </form>
+            {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>Ryd samtalen</button>}
+            <p className="muted" style={{ marginTop: 10 }}>Ikke lægefaglig rådgivning. Ved smerte, der ændrer dit skridt: stop, og se en fysioterapeut efter to uger.</p>
+          </details>
+
           <details className="panel acc">
             <summary><h2>Start</h2><span className="chev" aria-hidden="true">›</span></summary>
             <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={p.coachMode !== false} onChange={(e) => setP({ ...p, coachMode: e.target.checked })} /> Trænerplan – brug trænerens uger som de er</label>
@@ -678,7 +773,7 @@ export default function App() {
               <label>Vægt (kg)<input type="number" value={p.weight} onChange={set("weight")} /></label>
               <label>Højde (cm)<input type="number" value={p.height} onChange={set("height")} /></label>
               <label>Hvilepuls<input type="number" value={p.restHR} onChange={set("restHR")} /></label>
-              <label>Makspuls<input type="number" value={p.maxHR} onChange={set("maxHR")} placeholder="tom = estimat" /></label>
+              <label>Makspuls<input type="number" value={p.maxHR || ""} onChange={set("maxHR")} placeholder="tom = estimat" /></label>
               <label>Km/uge nu<input type="number" value={p.currentKm} onChange={set("currentKm")} /></label>
             </div>
             <div className="row2">
@@ -770,7 +865,7 @@ export default function App() {
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>
           <div className="panel">
-            <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload ? " · nedtrapning" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
+            <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload && cur.phase !== "Nedtrapning" ? " · let uge" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
             {adjRow && (
               <div className="adj-badge">
                 <span>{showOriginal ? `Original plan · ${curBase.km} km` : `Justeret af trænerråd (${adjRow.adjusted.reason})`}</span>
@@ -813,7 +908,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />nedtrapning</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />løbet</span></div>
+            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />● let uge</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />løbet</span></div>
           </div>
           </>)}
 
@@ -950,7 +1045,7 @@ export default function App() {
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
                         <span className="cellwrap">
-                          <input type="number" value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : undefined}
+                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : undefined}
                             onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : {}) } })} />
                           {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
                         </span>
