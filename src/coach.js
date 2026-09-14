@@ -19,6 +19,20 @@ export async function askCoach({ question, history, context }) {
   return data.text;
 }
 
+// Ask the coach for plan parameters (top, level, run days, long-run day) from the runner's numbers. Returns { proposal, text }.
+export async function proposePlan({ context }) {
+  let r;
+  try {
+    r = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "plan", question: "Foreslå planparametre", context }) });
+  } catch { throw new CoachError("Kunne ikke kontakte AI-træneren. Tjek din internetforbindelse."); }
+  let data = null;
+  try { data = await r.json(); } catch { /* not json */ }
+  if (r.status === 404) throw new CoachError("AI-træneren findes kun i den udgave, der kører på Vercel.", true);
+  if (!r.ok) throw new CoachError(data?.error || `AI-træneren svarede ikke (${r.status}).`, r.status === 503);
+  if (!data?.proposal) throw new CoachError("Træneren gav ikke et brugbart forslag. Prøv igen.");
+  return data;
+}
+
 export const SUGGESTED = [
   "Hvordan griber jeg denne uge an?",
   "Hvad skal jeg spise før og under den lange tur?",

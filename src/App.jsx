@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, wellnessFromCSV } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
-import { askCoach, loadChat, saveChat, SUGGESTED } from "./coach.js";
+import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -371,17 +371,38 @@ export default function App() {
     if (!files.length) return;
     setImporting(true); setImportMsg(null);
     await new Promise((r) => setTimeout(r, 50)); // let the "Læser…" state paint
-    const errors = []; let parsed = [];
-    for (const f of files) { try { parsed = parsed.concat(await parseFile(f)); } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); } }
+    const errors = []; let parsed = []; const wellness = [];
+    for (const f of files) {
+      try {
+        // Garmin's Sleep.csv or a resting-HR table goes into the weekly log; everything else is activities.
+        if (/\.csv$/i.test(f.name)) { const text = await f.text(); if (isWellnessCSV(text)) { wellness.push(wellnessFromCSV(text, f.name)); continue; } }
+        parsed = parsed.concat(await parseFile(f));
+      } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); }
+    }
+    let logBase = log, nSleep = 0, nHR = 0;
+    if (wellness.length) {
+      const n = { ...log };
+      for (const w of wellness) for (const [k, v] of Object.entries(w.weeks)) {
+        const l = n[k] || {};
+        // imported values win where the user has not typed a number
+        if (v.sleep != null && (l.sleep == null || l.sleep === "" || l.sleepAuto)) { l.sleep = v.sleep; l.sleepAuto = true; }
+        if (v.hr != null && (l.hr == null || l.hr === "" || l.hrAuto)) { l.hr = v.hr; l.hrAuto = true; }
+        n[k] = l;
+      }
+      nSleep = wellness.reduce((a, w) => a + w.nSleep, 0); nHR = wellness.reduce((a, w) => a + w.nHR, 0);
+      logBase = n; if (!parsed.length) saveLog(n);
+    }
     const { next, added } = mergeActivities(acts, parsed);
-    saveActs(next);
-    const weeks = applyActivities(next, p.includeHikes);
+    let weeks = {};
+    if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
+    const wellText = wellness.length ? ` Søvn for ${nSleep} uger${nHR ? ` og hvilepuls for ${nHR} uger` : ""} lagt i loggen.` : "";
     setImportMsg({
-      warn: errors.length > 0 || parsed.length === 0,
-      text: parsed.length === 0 && errors.length ? errors.join(" ")
-        : parsed.length === 0 ? "Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
-        : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${errors.length ? " " + errors.join(" ") : ""}`,
+      warn: errors.length > 0 || (parsed.length === 0 && !wellness.length),
+      text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
+        : parsed.length === 0 && !wellness.length ? "Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
+        : parsed.length === 0 ? wellText.trim() + (errors.length ? " " + errors.join(" ") : "")
+        : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${wellText}${errors.length ? " " + errors.join(" ") : ""}`,
     });
     if (fileRef.current) fileRef.current.value = "";
     setImporting(false);
@@ -554,12 +575,34 @@ export default function App() {
     const next = [...chat, { role: "user", text: question, at: Date.now() }];
     setChat(next);
     try {
-      const context = coachContext({ p, plan, cur, log, acwrFor, insights, todayStr, maxHR, advice });
+      const context = coachContext({ p, plan, cur, log, acts, acwrFor, insights, todayStr, maxHR, advice });
       const text = await askCoach({ question, history, context });
       const done = [...next, { role: "assistant", text, at: Date.now() }];
       setChat(done); saveChat(done);
     } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup }); setChat(chat); }
     setCoachBusy(false);
+  };
+  // Let the coach propose plan parameters from the watch data; the engine builds the plan, the runner applies it.
+  const [proposal, setProposal] = useState(null);
+  const [proposing, setProposing] = useState(false);
+  const PLAN_KEYS = [["peakScale", "Top", (v) => `${Math.round(v * 100)} %`], ["level", "Niveau", (v) => LEVELS.find(([k]) => k === v)?.[1].split(" – ")[0] || v], ["maxRunDays", "Løbedage", (v) => `${v}/uge`], ["longDay", "Lang tur", (v) => DAYS[v]], ["currentKm", "Base", (v) => `${v} km/uge`]];
+  const proposalDiff = (pr) => PLAN_KEYS.filter(([k]) => pr[k] !== (k === "peakScale" ? p.peakScale || 1 : p[k])).map(([k, label, f]) => ({ k, label, from: f(k === "peakScale" ? p.peakScale || 1 : p[k]), to: f(pr[k]) }));
+  const askForPlan = async () => {
+    if (proposing) return;
+    setProposing(true); setCoachErr(null); setProposal(null);
+    try {
+      const context = coachContext({ p, plan, cur, log, acts, acwrFor, insights, todayStr, maxHR, advice });
+      const { proposal: pr, text } = await proposePlan({ context });
+      setProposal({ ...pr, note: text || pr.note, diff: proposalDiff(pr) });
+    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup }); }
+    setProposing(false);
+  };
+  const applyProposal = () => {
+    if (!proposal) return;
+    const { note, diff, ...patch } = proposal;
+    // The long run only lands on the proposed day if that day offers time for it.
+    const A = (p.sched?.A || defaultSched()).map((d, i) => (i === patch.longDay && AV[d.avail] < 3 ? { ...d, avail: "long" } : d));
+    setP({ ...p, ...patch, sched: { ...(p.sched || {}), A }, coachMode: false }); setProposal(null);
   };
 
   const zones = [["Z1 restitution", .5, .6, "Gang, nedjog"], ["Z2 aerob", .6, .7, "80 % af al løb. Hele sætninger."], ["Z3 tempo", .7, .8, "Behageligt hårdt"], ["Z4 tærskel", .8, .9, "Én sætning ad gangen"], ["Z5 VO2", .9, 1, "Kun korte intervaller"]];
@@ -731,6 +774,21 @@ export default function App() {
               ))}
             </div>
             <p className="muted">Bygger på {insights.summary.weeksLogged} {insights.summary.weeksLogged === 1 ? "afsluttet uge" : "afsluttede uger"} i loggen og dine ture dag for dag. Alt kan efterregnes; knapperne ændrer kun det, de siger.</p>
+            <h3 className="sub">Lad træneren forme planen</h3>
+            <p className="muted">Ud fra dine ture fra uret (de sidste 12 uger), loggen og mønstrene foreslår AI-træneren top, niveau, løbedage og lang tur-dag. Appen bygger selv planen af tallene, og intet ændres, før du trykker Anvend.{plan.coach ? " Trænerplanen har faste uger, så et forslag slår den fra." : ""}</p>
+            {!proposal && <button className="btn ghost" type="button" onClick={askForPlan} disabled={proposing || coachBusy}>{proposing ? "Regner…" : "Foreslå plan ud fra mine tal"}</button>}
+            {proposal && (
+              <div className="proposal">
+                {proposal.diff.length ? (
+                  <table><tbody>{proposal.diff.map((d) => <tr key={d.k}><td>{d.label}</td><td className="num"><span className="muted">{d.from}</span> → <b>{d.to}</b></td></tr>)}</tbody></table>
+                ) : <div className="muted">Træneren vil ikke ændre noget: tallene passer til din plan.</div>}
+                {proposal.note && <p style={{ margin: "10px 0 0" }}>{proposal.note}</p>}
+                <div className="import-row" style={{ marginTop: 10 }}>
+                  {proposal.diff.length > 0 && <button className="btn" type="button" onClick={applyProposal}>Anvend</button>}
+                  <button className="btn ghost" type="button" onClick={() => setProposal(null)}>{proposal.diff.length ? "Afvis" : "Luk"}</button>
+                </div>
+              </div>
+            )}
             <h3 className="sub">Spørg træneren</h3>
             <p className="muted">En AI-træner (Claude), der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
             {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={coachBusy}>{q}</button>)}</div>}
@@ -982,7 +1040,7 @@ export default function App() {
                 )}
                 <div className="import">
                   <h3>Hent fra Strava eller Garmin</h3>
-                  <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
+                  <p className="muted">Vælg en eller flere filer. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins Sleep.csv giver søvn pr. uge, og en CSV med hvilepuls giver hvilepuls pr. uge – begge dele bruges af trænerrådet og AI-træneren. Du kan altid rette tallene bagefter. Samme tur importeret to gange tælles kun én gang.</p>
                   <div className="import-row">
                     <input ref={fileRef} type="file" multiple onChange={onFiles} disabled={importing} />
                     {importing && <span className="muted">Læser…</span>}
@@ -1034,6 +1092,8 @@ export default function App() {
                       <li><b>Strava, én tur:</b> åbn turen → ⋯ → Export GPX.</li>
                       <li><b>Garmin Connect, mange ture:</b> connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.</li>
                       <li><b>Garmin Connect, én tur:</b> åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.</li>
+                      <li><b>Garmin Connect, søvn:</b> Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.</li>
+                      <li><b>Hvilepuls:</b> en CSV med en dato-kolonne og en kolonne "Resting" (fx tabellen under Rapporter → Puls, kopieret til et regneark og gemt som CSV). Ugerne får "Hvilepuls" udfyldt.</li>
                     </ul>
                   </details>
                 </div>
@@ -1045,9 +1105,9 @@ export default function App() {
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
                         <span className="cellwrap">
-                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : undefined}
-                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : {}) } })} />
-                          {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
+                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? `Fra dit ur (${l.n} ture)` : k === "rpe" && l.rpeAuto ? "Gættet ud fra puls – ret gerne" : (k === "sleep" && l.sleepAuto) || (k === "hr" && l.hrAuto) ? "Fra dit ur" : undefined}
+                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : {}), ...(k === "sleep" ? { sleepAuto: false } : {}), ...(k === "hr" ? { hrAuto: false } : {}) } })} />
+                          {((k === "km" && l.auto) || (k === "rpe" && l.rpeAuto) || (k === "sleep" && l.sleepAuto) || (k === "hr" && l.hrAuto)) && <i className="tag" aria-label="importeret">⌚</i>}
                         </span>
                       );
                       const open = openWeek === r.key;

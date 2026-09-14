@@ -308,3 +308,6 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
 .chatform { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
 .chatform input { margin: 0; flex: 1; min-width: 0; }
 .chatform .btn { flex: 0 0 auto; }
+.proposal { margin-top: 10px; padding: 12px; border-radius: var(--r-sm); background: var(--panel-2); border-left: 4px solid var(--orange); }
+.proposal table { font-size: 14px; }
+.proposal td { padding: 6px 4px; }
