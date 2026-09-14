@@ -47,19 +47,19 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
-Samme sted kan du spørge en AI-træner (Claude), der får dine tal som kontekst – aldrig navn eller e-mail.
-Den kører som en Vercel-funktion (`api/coach.js`) og kræver én API-nøgle. Vælg én af to udbydere:
+Samme sted kan du spørge en AI-træner, der får dine tal som kontekst – aldrig navn eller e-mail. Den kører som
+en Vercel-funktion (`api/coach.js`) og kræver én API-nøgle. Vælg én af tre udbydere og sæt nøglen under
+Vercel → projektet → Settings → Environment Variables, og redeploy:
 
-**Anthropic direkte**
-1. Opret en API-nøgle på https://console.anthropic.com.
-2. Vercel → projektet → Settings → Environment Variables: `ANTHROPIC_API_KEY` = nøglen.
+| Udbyder | Miljøvariabel | Standardmodel | Noter |
+|---|---|---|---|
+| OpenCode Zen (https://opencode.ai/zen) | `OPENCODE_API_KEY` | `glm-5.3-flash` | AI-gateway, betaling efter forbrug. Claude-modeller (`claude-…`) og GLM/Kimi/MiniMax/Qwen på samme nøgle. |
+| Z.ai direkte (https://z.ai) | `ZAI_API_KEY` | `glm-5.3-flash` | GLM-modellerne fra producenten. |
+| Anthropic (https://console.anthropic.com) | `ANTHROPIC_API_KEY` | `claude-opus-5` | Claude direkte. |
 
-**OpenCode Zen** (https://opencode.ai/zen – AI-gateway med betaling efter forbrug og adgang til Claude-modellerne)
-1. Log ind på OpenCode Zen, tilføj betaling og kopier din API-nøgle.
-2. Vercel → Settings → Environment Variables: `OPENCODE_API_KEY` = nøglen.
-
-Redeploy bagefter. Uden nøgle viser appen en venlig besked i stedet for en chat. Er begge nøgler sat, vælger
-`COACH_PROVIDER=anthropic` eller `opencode`. Modellen kan skiftes med `COACH_MODEL` (standard `claude-opus-5`
-hos Anthropic og `claude-sonnet-4-6` hos OpenCode Zen; Zens modelliste ligger på opencode.ai/docs/zen).
+Modellen skiftes med `COACH_MODEL`, fx `glm-5.1`, `kimi-k2.6` eller `claude-sonnet-4-6`. Er flere nøgler sat,
+vælger `COACH_PROVIDER=opencode|zai|anthropic`. Formatet følger modelnavnet: `claude-…` går via Messages-API'et,
+alt andet via chat completions. Uden nøgle viser appen en venlig besked i stedet for en chat; findes modellen ikke
+hos udbyderen, står det i chatten.
 
 Samtalen gemmes kun på enheden. Ikke lægefaglig rådgivning.
