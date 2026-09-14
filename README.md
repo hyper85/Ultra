@@ -47,6 +47,16 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Under Log → Hent kan du også vælge Garmins `Sleep.csv` (Rapporter → Søvn → 1 år → Eksportér) og en CSV med
+hvilepuls (dato + kolonnen "Resting"). Søvn og hvilepuls lægges i loggen pr. uge og bruges af trænerrådet
+(hvilepuls 7+ over normal) og af træneren. Alle filer er valgfrie: kun aktiviteter giver km, ture, puls og tempo,
+og det er nok til base, ACWR, mønstre og planforslag. Søvn og hvilepuls lægger bare mere til.
+
+Har du hentet dine ture fra Garmin eller Strava (Log → Hent), kan træneren også forme planen: "Foreslå plan ud fra
+mine tal" sender de sidste 12 uger fra uret (km, ture, længste tur, puls, tempo) med, og AI-træneren foreslår top,
+niveau, løbedage, lang tur-dag og base. Appen viser forskellen, bygger selv planen af tallene, og intet ændres,
+før du trykker Anvend.
+
 Samme sted kan du spørge en AI-træner, der får dine tal som kontekst – aldrig navn eller e-mail. Den kører som
 en Vercel-funktion (`api/coach.js`) og kræver én API-nøgle. Vælg én af tre udbydere og sæt nøglen under
 Vercel → projektet → Settings → Environment Variables, og redeploy:

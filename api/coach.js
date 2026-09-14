@@ -57,6 +57,34 @@ Sådan svarer du:
 - Er brugerens spørgsmål ikke om løb, træning, kost eller restitution, så svar venligt at det ligger uden for din rolle.
 - Ingen indledning, ingen afsluttende opsummering. Bare svaret.`;
 
+/* Plan mode: the coach proposes parameters for the deterministic plan engine. The engine builds the plan and the
+   runner applies it with one tap – the model never writes the plan itself. */
+const PLAN_PROMPT = `Opgave: Foreslå parametre til løberens plan ud fra tallene, især "fra_uret_12_uger" (Garmin/Strava) og "seneste_uger".
+Svar KUN med ét JSON-objekt, ingen tekst udenom, på denne form:
+{"peakScale": 1.0, "level": 2, "maxRunDays": 4, "longDay": 5, "currentKm": 35, "note": "2–4 sætninger på dansk om hvorfor"}
+Regler:
+- peakScale skalerer planens top (0.6–1.4). 1.0 = appens standard (ca. 0,95 × løbets km, aldrig under 1,2 × nuværende volumen, loft efter niveau). Sænk den, hvis uret viser lav eller ustabil volumen, skader eller høj puls på rolige ture; hæv kun ved stabil høj volumen og grøn ACWR.
+- level: 1 begynder (< 1 år), 2 motionist, 3 erfaren (maraton/ultra), 4 konkurrence. Bedøm ud fra volumen, længste ture og stabilitet – ikke ud fra ønsker.
+- maxRunDays: det antal dage løberen faktisk løber ifølge uret (2–7), ikke flere.
+- longDay: den ugedag (0 = mandag … 6 = søndag) hvor de længste ture faktisk ligger, hvis hverdagen tillader det.
+- currentKm: gennemsnit af de sidste 4 uger fra uret, afrundet. Mangler urdata, så behold det nuværende tal.
+- Ingen andre felter. Ingen markdown.`;
+const clampNum = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const parseProposal = (text, ctx) => {
+  const m = String(text || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  let o; try { o = JSON.parse(m[0]); } catch { return null; }
+  const cur = ctx?.plan || {};
+  return {
+    peakScale: Math.round(clampNum(o.peakScale, 0.6, 1.4, cur.top_skala ?? 1) * 20) / 20,
+    level: Math.round(clampNum(o.level, 1, 4, cur.niveau ?? 2)),
+    maxRunDays: Math.round(clampNum(o.maxRunDays, 2, 7, cur.løbedage ?? 4)),
+    longDay: Math.round(clampNum(o.longDay, 0, 6, cur.lang_tur_dag ?? 5)),
+    currentKm: Math.round(clampNum(o.currentKm, 0, 300, cur.nuværende_base_km_uge ?? 0)),
+    note: String(o.note || "").slice(0, 600),
+  };
+};
+
 const json = (res, status, body) => { res.status(status).setHeader("Content-Type", "application/json; charset=utf-8"); res.end(JSON.stringify(body)); };
 
 export default async function handler(req, res) {
@@ -66,6 +94,7 @@ export default async function handler(req, res) {
 
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { return json(res, 400, { error: "Ugyldig JSON." }); } }
+  const mode = body?.mode === "plan" ? "plan" : "chat";
   const question = String(body?.question || "").trim().slice(0, 800);
   const history = Array.isArray(body?.history) ? body.history.slice(-8) : [];
   const context = body?.context && typeof body.context === "object" ? body.context : null;
@@ -78,12 +107,20 @@ export default async function handler(req, res) {
     if ((h?.role === "user" || h?.role === "assistant") && typeof h.text === "string" && h.text.trim()) messages.push({ role: h.role, content: h.text.slice(0, 2000) });
   }
   if (messages.length && messages[0].role !== "user") messages.shift();
-  messages.push({ role: "user", content: `Løberens tal fra appen (JSON):\n${ctxText}\n\nSpørgsmål: ${question}` });
+  if (mode === "plan") messages.length = 0; // a proposal is a fresh, single turn
+  messages.push({ role: "user", content: mode === "plan" ? `Løberens tal fra appen (JSON):\n${ctxText}\n\n${PLAN_PROMPT}` : `Løberens tal fra appen (JSON):\n${ctxText}\n\nSpørgsmål: ${question}` });
 
   const badKey = () => json(res, 503, { error: `API-nøglen til AI-træneren (${provider.label}) er ugyldig.` });
   const noModel = () => json(res, 502, { error: `Modellen "${provider.model}" findes ikke hos ${provider.label}. Sæt COACH_MODEL til en model, der findes.` });
   const busy = () => json(res, 429, { error: "AI-træneren har travlt. Prøv igen om lidt." });
-  const ok = (text, model) => json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model, provider: provider.name });
+  const ok = (text, model) => {
+    if (mode === "plan") {
+      const proposal = parseProposal(text, context);
+      if (!proposal) return json(res, 502, { error: "Træneren gav ikke et brugbart forslag. Prøv igen." });
+      return json(res, 200, { proposal, text: proposal.note, model, provider: provider.name });
+    }
+    return json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model, provider: provider.name });
+  };
 
   if (provider.format === "chat") {
     try { const { text, model } = await chatCompletion(provider, messages); return ok(text, model); }

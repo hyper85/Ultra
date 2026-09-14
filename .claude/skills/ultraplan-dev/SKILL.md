@@ -15,11 +15,11 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
 |---|---|
 | `src/App.jsx` | Everything except the questionnaire: constants, `buildPlan()` (plan engine), state, sync, the four screens (I dag, Plan, Log, Mere) and the tab bar |
 | `src/Onboarding.jsx` | First-login questionnaire (8 steps) plus `goalKcal`, `proteinG`, `dietTips`, `INJURY`, `DIETS` |
-| `src/import.js` | Date helpers (`ymd`, `parseLocal`, `addDays`, `mondayOf`), CSV/GPX/TCX/zip parsing, activity classification, de-duplication, weekly totals |
+| `src/import.js` | Date helpers (`ymd`, `parseLocal`, `addDays`, `mondayOf`), CSV/GPX/TCX/zip parsing, activity classification, de-duplication, weekly totals; `isWellnessCSV` / `wellnessFromCSV` turn Garmin's weekly `Sleep.csv` ("Sep 8-14", "Dec 30, 2025 - Jan 5, 2026" – unquoted commas split the label, glued back) or a date + "Resting" table into `{ monday: { sleep, hr } }` |
 | `src/sync.js` | Supabase client, code login (`verifyCode`), `pullRemote` / `pushRemote` |
-| `src/insights.js` | `buildInsights()` – deterministic "what the app has learned" (adherence, skipped/extra weekdays, long-run completion, easy-run HR vs cap, aerobic efficiency, resting-HR drift, streak) with one-tap profile patches; `coachContext()` – anonymous JSON for the AI coach |
+| `src/insights.js` | `buildInsights()` – deterministic "what the app has learned" (adherence, skipped/extra weekdays, long-run completion, easy-run HR vs cap, aerobic efficiency, resting-HR drift, streak) with one-tap profile patches; `watchSummary()` – last N weeks from activities (km, runs, longest, HR, pace); `coachContext()` – anonymous JSON for the AI coach incl. `fra_uret_12_uger` |
 | `src/coach.js` | Client for the AI coach: `askCoach()`, chat persisted in `ultraplan-coach` (device only, never synced), suggested questions |
-| `api/coach.js` | Vercel serverless function: the AI coach. Provider by key: `OPENCODE_API_KEY` → OpenCode Zen (default `glm-5.3-flash`), `ZAI_API_KEY` → Z.ai (`https://api.z.ai/api/paas/v4`, default `glm-5.3-flash`), `ANTHROPIC_API_KEY` → Anthropic (`claude-opus-5`, effort medium, server-side fallbacks). Wire format follows the model id: `claude-…` → Anthropic Messages API (SDK, gateway baseURL), anything else → OpenAI-style `chat/completions` via plain fetch. `COACH_PROVIDER` / `COACH_MODEL` override. 503 with a Danish message without a key, 502 naming the model when the provider does not know it. `vercel.json` excludes `/api/` from the SPA rewrite |
+| `api/coach.js` | Vercel serverless function: the AI coach. Provider by key: `OPENCODE_API_KEY` → OpenCode Zen (default `glm-5.3-flash`), `ZAI_API_KEY` → Z.ai (`https://api.z.ai/api/paas/v4`, default `glm-5.3-flash`), `ANTHROPIC_API_KEY` → Anthropic (`claude-opus-5`, effort medium, server-side fallbacks). Wire format follows the model id: `claude-…` → Anthropic Messages API (SDK, gateway baseURL), anything else → OpenAI-style `chat/completions` via plain fetch. `COACH_PROVIDER` / `COACH_MODEL` override. `mode: "plan"` asks for plan parameters as JSON (`peakScale, level, maxRunDays, longDay, currentKm, note`), clamped server-side; the app shows the diff and applies it with `setP` (also opens the long day as `long`). The model never writes the plan itself. 503 with a Danish message without a key, 502 naming the model when the provider does not know it. `vercel.json` excludes `/api/` from the SPA rewrite |
 | `src/data/coach-plan.json` | The coach's fixed 23-week plan (trænerplan) used as-is when `coachMode` is on |
 | `src/styles.css` | One file; later sections override earlier ones (a "polish layer" sits at the end) |
 | `supabase/schema.sql` | Table `ultraplan_user_data` with row-level security |
@@ -33,8 +33,8 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
   form (`level 1–4`, `currentKm`, `breakWeeks`), life (`family`, `maxRunDays`, `sched.A/B` with
   `avail none|short|normal|long`, `time`, `note`; `altWeeks/altStart` for deleordning), `goal`,
   `injury none|sore|injured`, `diet`, `intol[]`, `peakScale`, `startDate` (always a Monday), `onboarded`.
-- `ultraplan-log` – keyed by the Monday of the week (`YYYY-MM-DD`): `{ km, rpe, hr, wt, sleep, auto, rpeAuto, n }`.
-  `auto` = km came from activities; never re-key by week number.
+- `ultraplan-log` – keyed by the Monday of the week (`YYYY-MM-DD`): `{ km, rpe, hr, wt, sleep, auto, rpeAuto, sleepAuto, hrAuto, n }`.
+  `auto` = km came from activities, `sleepAuto`/`hrAuto` = imported from a wellness CSV (typing clears the flag); never re-key by week number.
 - `ultraplan-activities` – imported or typed runs keyed by id; `kind()` is recomputed at read time.
 - `ultraplan-meta` (`updatedAt`) and `ultraplan-owner` (user id) drive sync and device isolation.
 

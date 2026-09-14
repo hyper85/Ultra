@@ -21,8 +21,34 @@ const runsByDay = (acts, includeHikes) => {
   return m;
 };
 
+/* What the watch says: the last `n` completed weeks from imported/typed activities, one row per week. */
+export function watchSummary(acts = {}, { includeHikes = false, todayKey, weeks = 12 } = {}) {
+  const byDay = runsByDay(acts, includeHikes);
+  const rows = [];
+  for (let k = weeks; k >= 1; k--) {
+    const start = addDays(parseLocal(todayKey), -7 * k);
+    const runs = [0, 1, 2, 3, 4, 5, 6].flatMap((i) => byDay[ymd(addDays(start, i))] || []);
+    if (!runs.length) { rows.push({ uge_start: ymd(start), km: 0, ture: 0 }); continue; }
+    const km = runs.reduce((a, r) => a + r.km, 0);
+    const withHR = runs.filter((r) => r.hr > 0), withMin = runs.filter((r) => r.min > 0);
+    const hr = withHR.length ? Math.round(withHR.reduce((a, r) => a + r.hr * r.km, 0) / withHR.reduce((a, r) => a + r.km, 0)) : null;
+    const pace = withMin.length ? r1(withMin.reduce((a, r) => a + r.min, 0) / withMin.reduce((a, r) => a + r.km, 0)) : null;
+    rows.push({ uge_start: ymd(start), km: r1(km), ture: runs.length, længste_km: r1(Math.max(...runs.map((r) => r.km))), snit_puls: hr, snit_tempo_min_km: pace });
+  }
+  const withData = rows.filter((r) => r.ture > 0);
+  const last4 = rows.slice(-4).filter((r) => r.ture > 0);
+  return {
+    uger: rows,
+    uger_med_data: withData.length,
+    snit_km_sidste_4: last4.length ? Math.round(last4.reduce((a, r) => a + r.km, 0) / last4.length) : null,
+    længste_tur_km: withData.length ? Math.max(...withData.map((r) => r.længste_km)) : null,
+    ture_pr_uge: withData.length ? r1(mean(withData.map((r) => r.ture))) : null,
+  };
+}
+
 export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, maxHR, includeHikes = false }) {
   const byDay = runsByDay(acts, includeHikes);
+  const watch = watchSummary(acts, { includeHikes, todayKey, weeks: 4 });
   const dayKm = (key, i) => (byDay[ymd(addDays(parseLocal(key), i))] || []).reduce((s, a) => s + a.km, 0);
   const done = plan.rows.filter((r) => r.key < todayKey && !r.isRace);           // completed plan weeks
   const logged = done.filter((r) => log[r.key]?.km > 0);
@@ -78,7 +104,10 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const findings = [];
   const add = (id, level, text, action) => findings.push({ id, level, text, ...(action ? { action } : {}) });
 
-  if (n === 0) add("empty", "info", "Appen kender dig ikke endnu. Log dine ture i et par uger, så begynder den at se mønstre: hvilke dage du faktisk løber, om planen passer til dig, og om de rolige ture er rolige nok.");
+  // The watch knows the base better than the questionnaire did: offer to use it.
+  if (watch.uger_med_data >= 3 && watch.snit_km_sidste_4 != null && p.currentKm != null && Math.abs(watch.snit_km_sidste_4 - p.currentKm) >= Math.max(5, 0.15 * p.currentKm))
+    add("watch-base", "info", `Dit ur siger ${watch.snit_km_sidste_4} km/uge de sidste 4 uger, men planen regner med ${p.currentKm} km/uge som base.${coach ? " Det påvirker ACWR-baselinen." : " Planen og ACWR bliver mere præcise med det rigtige tal."}`,
+      { label: `Brug ${watch.snit_km_sidste_4} km/uge som base`, patch: { currentKm: watch.snit_km_sidste_4 } });
   if (n >= 3 && tendency === "on") add("on-plan", "good", `Du rammer planen: ${hit} af ${n} uger inden for 85–120 % af det planlagte. Bliv ved – det er sådan ultraform bygges.`);
   if (tendency === "under") add("under", "warn", `Du løber typisk ${Math.round(med * 100)} % af det planlagte (${n} uger). Enten er planen for stor til din hverdag, eller også mangler der dage. En lavere top holder du bedre end en plan, du springer over.`,
     coach ? null : { label: "Sænk toppen 10 %", patch: { peakScale: r1(Math.max(0.6, (p.peakScale || 1) - 0.1)) } });
@@ -105,25 +134,33 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
     { label: `Sæt normal hvilepuls til ${Math.round(p.restHR + restHRDelta)}`, patch: { restHR: Math.round(p.restHR + restHRDelta) } });
   if (runsPerWeek != null && p.maxRunDays && runsPerWeek <= p.maxRunDays - 1.5 && withActs.length >= 4) add("fewer-days", "info", `Du løber i snit ${runsPerWeek} dage om ugen, men planen regner med ${p.maxRunDays}. Færre, lidt længere ture passer måske bedre til dit liv.`,
     coach ? null : { label: `Sæt løbedage til ${Math.max(2, Math.round(runsPerWeek))}`, patch: { maxRunDays: Math.max(2, Math.round(runsPerWeek)) } });
+  // Sleep: the last 3 logged weeks with hours.
+  const sleeps = weeks.slice(-3).map((w) => log[w.key]?.sleep).filter((x) => x > 0);
+  const sleepAvg = sleeps.length >= 2 ? r1(mean(sleeps)) : null;
+  if (sleepAvg != null && sleepAvg < 6.5) add("sleep-low", "warn", `Du sover ${sleepAvg} timer i snit de sidste uger. Under 7 timer bygger kroppen ikke det, træningen beder om. En time mere søvn slår en time mere løb.`);
+  if (sleepAvg != null && sleepAvg >= 7.5) add("sleep-ok", "good", `${sleepAvg} timers søvn i snit. Det er den bedste restitution, der findes.`);
   if (streak >= 4) add("streak", "good", `${streak} uger i træk med logget træning. Kontinuitet slår alt.`);
 
+  if (findings.length === 0) add("empty", "info", "Appen kender dig ikke endnu. Log dine ture eller hent dem fra Garmin/Strava i et par uger, så begynder den at se mønstre: hvilke dage du faktisk løber, om planen passer til dig, og om de rolige ture er rolige nok.");
   const order = { warn: 0, info: 1, good: 2 };
   findings.sort((a, b) => order[a.level] - order[b.level]);
-  const summary = { weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
+  const summary = { sleepAvg, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
     skippedDay: skipped ? DAYS[skipped.i] : null, extraDay: usedFree ? DAYS[usedFree.i] : null };
   return { summary, findings, weeks };
 }
 
 /* Compact, anonymous context for the AI coach: numbers only, no name or e-mail. */
-export function coachContext({ p, plan, cur, log, acwrFor, insights, todayStr, maxHR, advice }) {
-  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
+export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice }) {
+  const ur = watchSummary(acts, { includeHikes: !!p.includeHikes, todayKey: ymd(mondayOf(parseLocal(todayStr))), weeks: 12 });
+  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
   return {
     dato: todayStr,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
       hverdag: (p.sched?.A || []).map((d, i) => `${DAYS[i]}: ${d.avail}${d.time ? " " + d.time : ""}${d.note ? " (" + d.note + ")" : ""}`) },
     løb: { navn: p.raceName, dato: p.raceDate, km: p.raceKm, højdemeter: p.raceVert },
-    plan: { trænerplan: !!plan.coach, uge: cur.i, af: plan.weeks, fase: cur.phase, top_km_uge: plan.peak, denne_uge: { km: cur.km, dage: cur.days, hård_session: cur.quality, lang_tur_km: cur.lng, fokus: cur.focus, justeret: cur.adjusted ? cur.adjusted.reason : null }, råd_i_appen: advice },
+    plan: { trænerplan: !!plan.coach, uge: cur.i, af: plan.weeks, fase: cur.phase, top_km_uge: plan.peak, niveau: p.level, top_skala: p.peakScale || 1, løbedage: p.maxRunDays, lang_tur_dag: p.longDay, nuværende_base_km_uge: p.currentKm, denne_uge: { km: cur.km, dage: cur.days, hård_session: cur.quality, lang_tur_km: cur.lng, fokus: cur.focus, justeret: cur.adjusted ? cur.adjusted.reason : null }, råd_i_appen: advice },
     seneste_uger: rows,
+    fra_uret_12_uger: ur,
     mønstre: insights.summary,
     fund: insights.findings.map((f) => f.text),
   };
