@@ -4,6 +4,7 @@ import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, 
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
+import { describeSession, describeLong, describeEasy } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 
 /* ================= storage (swappable) ================= */
@@ -652,6 +653,7 @@ export default function App() {
           ["today", "I dag", <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>],
           ["plan", "Plan", <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>],
           ["log", "Log", <svg viewBox="0 0 24 24"><path d="M4 12.5l4 4L20 5" /><path d="M4 19h16" opacity=".4" /></svg>],
+          ["coach", "Træner", <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" opacity=".6" /></svg>],
           ["more", "Mere", <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="17" r="2" fill="currentColor" stroke="none" /></svg>],
         ].map(([k, l, ic]) => (
           <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); setOpenMore(null); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>
@@ -700,10 +702,11 @@ export default function App() {
               <section className={`panel today ${done ? "done" : ""}`}>
                 <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
                 <div className="today-km">{raceDay ? <><b>{p.raceKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
-                {hard && <div className="today-sub">{cur.quality} · 15 min opv./10 min nedjog</div>}
-                {easy && <div className="today-sub">Puls under {hrCap}. Det føles for langsomt. Det er meningen.</div>}
+                {hard && <div className="today-sub"><b>{cur.quality}</b></div>}
+                {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
+                {easy && <div className="today-sub">{describeEasy({ km: v, maxHR, easyPace: insights.summary.easyPace })}</div>}
                 {raceDay && <div className="today-sub">Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.</div>}
-                {long && !raceDay && <div className="today-sub">Gå stigningerne. {carbs} g kulhydrat/t.</div>}
+                {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, maxHR, phase: cur.phase })}</div>}
                 {b2b && <div className="today-sub">Back-to-back på trætte ben. Puls under {hrCap}. {carbs} g kulhydrat/t.</div>}
                 {!v && !raceDay && lift && strength && <ul className="today-list">{strength.map((x) => <li key={x}>{x}</li>)}</ul>}
                 {!v && !raceDay && lift && !strength && <div className="today-sub">Styrkedag. Kort og tungt, ingen løb.</div>}
@@ -733,7 +736,7 @@ export default function App() {
                   <div className={`insight ${topInsight.level}`}>
                     <span>{topInsight.text}</span>
                     {topInsight.action ? <button type="button" className="btn ghost" onClick={() => applyInsight(topInsight)}>{topInsight.action.label}</button>
-                      : <button type="button" className="btn ghost" onClick={() => { setView("more"); setOpenMore("coach"); }}>Se alle</button>}
+                      : <button type="button" className="btn ghost" onClick={() => setView("coach")}>Se alle</button>}
                   </div>
                 )}
               </section>
@@ -746,29 +749,10 @@ export default function App() {
           );
         })()}
 
-        {view === "more" && (
-        <aside className="stack">
-          <h1 className="screen-title">Mere</h1>
-          <details className="panel acc" open>
-            <summary><h2>Konto</h2><span className="chev" aria-hidden="true">›</span></summary>
-            {!syncEnabled ? (
-              <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
-            ) : user ? (
-              <>
-                <div>Logget ind som <b>{user.email}</b></div>
-                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
-                <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
-              </>
-            ) : (
-              <div>
-                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.</div>
-                {loginForm}
-              </div>
-            )}
-          </details>
-
-          <details className="panel acc" open={openMore === "coach"}>
-            <summary><h2>Træner</h2><span className="chev" aria-hidden="true">›</span></summary>
+        {view === "coach" && (
+        <section className="stack">
+          <h1 className="screen-title">Træner</h1>
+          <div className="panel">
             <h3 className="sub">Det appen har lært om dig</h3>
             <div className="findings">
               {insights.findings.map((f) => (
@@ -795,7 +779,7 @@ export default function App() {
               </div>
             )}
             <h3 className="sub">Spørg træneren</h3>
-            <p className="muted">En AI-træner (Claude), der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
+            <p className="muted">En AI-træner, der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
             {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={coachBusy}>{q}</button>)}</div>}
             <div className="chat">
               {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
@@ -808,6 +792,29 @@ export default function App() {
             </form>
             {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>Ryd samtalen</button>}
             <p className="muted" style={{ marginTop: 10 }}>Ikke lægefaglig rådgivning. Ved smerte, der ændrer dit skridt: stop, og se en fysioterapeut efter to uger.</p>
+          </div>
+        </section>
+        )}
+
+        {view === "more" && (
+        <aside className="stack">
+          <h1 className="screen-title">Mere</h1>
+          <details className="panel acc" open>
+            <summary><h2>Konto</h2><span className="chev" aria-hidden="true">›</span></summary>
+            {!syncEnabled ? (
+              <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
+            ) : user ? (
+              <>
+                <div>Logget ind som <b>{user.email}</b></div>
+                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
+                <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
+              </>
+            ) : (
+              <div>
+                <div className="muted" style={{ marginBottom: 6 }}>Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.</div>
+                {loginForm}
+              </div>
+            )}
           </details>
 
           <details className="panel acc">
@@ -954,6 +961,12 @@ export default function App() {
               })}
             </div>
             {dayEdit?.key === cur.key && renderDayForm(cur.days[dayEdit.i])}
+            <div className="guide">
+              {cur.qDay != null && cur.days[cur.qDay] > 0 ? (() => { const g = describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>Hård session {DAYS[cur.qDay].toLowerCase()} · {cur.quality}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
+                : <div><b>Ingen hård session</b><p>{describeSession("Kun roligt", { maxHR, easyPace: insights.summary.easyPace }).text}</p></div>}
+              {cur.longDay != null && cur.lng > 0 && !cur.isRace && <div><b>Lang tur {DAYS[cur.longDay].toLowerCase()} · {cur.lng} km</b><p>{describeLong({ km: cur.lng, carbs: cur.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: cur.phase })}</p></div>}
+              {cur.days.some((v, i) => v > 0 && i !== cur.qDay && i !== cur.longDay) && <div><b>Rolige ture</b><p>{describeEasy({ km: cur.days.filter((v, i) => v > 0 && i !== cur.qDay && i !== cur.longDay).join(" og "), maxHR, easyPace: insights.summary.easyPace })}</p></div>}
+            </div>
             {curLog.auto && curLog.km > 0
               ? <div className="muted" style={{ marginTop: 10 }}>Løbet indtil nu i denne uge: <b style={{ color: "var(--text)" }}>{curLog.km} km</b> på {curLog.n} {curLog.n === 1 ? "tur" : "ture"} af {cur.km} km planlagt. Tryk på en dag for at logge en tur.</div>
               : <div className="muted" style={{ marginTop: 10 }}>Tryk på en dag for at logge en tur – så passer ugens tal, også før ugen er slut.</div>}

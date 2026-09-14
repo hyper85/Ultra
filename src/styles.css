@@ -311,3 +311,9 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
 .proposal { margin-top: 10px; padding: 12px; border-radius: var(--r-sm); background: var(--panel-2); border-left: 4px solid var(--orange); }
 .proposal table { font-size: 14px; }
 .proposal td { padding: 6px 4px; }
+.today-guide { margin: 8px auto 0; max-width: 360px; font-size: 14px; color: #d8d8d8; line-height: 1.45; }
+.guide { display: grid; gap: 8px; margin-top: 12px; }
+.guide > div { padding: 10px 12px; border-radius: var(--r-sm); background: var(--panel-2); font-size: 14px; }
+.guide b { display: inline-block; margin-right: 8px; }
+.guide .zone { font-size: 12px; color: var(--muted); }
+.guide p { margin: 4px 0 0; color: #d8d8d8; }
