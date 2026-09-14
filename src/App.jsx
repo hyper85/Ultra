@@ -80,8 +80,10 @@ export function buildPlan(p) {
   // Never below a small floor: a runner who types 0 km still needs a plan that starts somewhere.
   const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : Math.max(level === 1 ? 12 : 15, Math.round(+p.currentKm * 1.1));
   // Peak volume: enough for the race, never below what the runner already handles, scaled by the chosen model and by injury status.
-  const peakTarget = Math.min(120, Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (p.peakScale || 1) * (injured ? 0.9 : sore ? 0.95 : 1)));
-  const peak = Math.min(peakTarget, Math.round(restart * PEAK_MULT[level]));
+  const peakTarget = Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (injured ? 0.9 : sore ? 0.95 : 1));
+  // The model's scale (Minimum 0.8 / Balanceret 1.0 / Volumen 1.15) applies to the final top, after the experience cap,
+  // so the three models always differ. Never below a small step above the restart volume, never above 120 km.
+  const peak = Math.min(120, Math.max(Math.round(restart * 1.1), Math.round(Math.min(peakTarget, restart * PEAK_MULT[level]) * (p.peakScale || 1))));
   const longCap = Math.min(Math.round(raceKm * LONG_FRAC[level]), 50);
   const taper = 3;
   const rebuild = p.breakWeeks >= 2 || injured ? 4 : 0;
