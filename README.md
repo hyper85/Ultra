@@ -47,10 +47,19 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
-Under Log → Hent kan du også vælge Garmins `Sleep.csv` (Rapporter → Søvn → 1 år → Eksportér) og en CSV med
-hvilepuls (dato + kolonnen "Resting"). Søvn og hvilepuls lægges i loggen pr. uge og bruges af trænerrådet
-(hvilepuls 7+ over normal) og af træneren. Alle filer er valgfrie: kun aktiviteter giver km, ture, puls og tempo,
-og det er nok til base, ACWR, mønstre og planforslag. Søvn og hvilepuls lægger bare mere til.
+Under Log → Hent kan du vælge alle filerne på én gang, også Garmins rapporter (Rapporter → vælg rapport → 1 år →
+Eksportér). Appen forstår daglige, ugentlige og månedlige rækker og lægger tallene i loggen pr. uge:
+
+| Rapport | Bliver til |
+|---|---|
+| Activities.csv (Aktiviteter → Eksportér CSV) | km, ture, puls og tempo pr. uge; base, ACWR, mønstre og planforslag |
+| Sleep.csv (Rapporter → Søvn) | søvn i timer |
+| Average Heart Rate / en tabel med "Resting" | hvilepuls (bruges af trænerrådet) |
+| VO2 Max, HRV Status, vægt, stress, Endurance Score | VO2 max, HRV, vægt, stress, endurance score (bruges af træneren og fundene) |
+| Average Pace, Average Speed, Total Distance, Total Activity Time, Fitness Age, Training Status, FTP | springes over med besked – tempo, distance og tid kommer fra turene, og tekstfelter kan ikke bruges |
+
+Alle filer er valgfrie: kun aktiviteter er nok til base, ACWR, mønstre og planforslag. Resten lægger til.
+Importerede tal er markeret med ⌚ i loggen, og et tal du selv skriver, vinder altid.
 
 Har du hentet dine ture fra Garmin eller Strava (Log → Hent), kan træneren også forme planen: "Foreslå plan ud fra
 mine tal" sender de sidste 12 uger fra uret (km, ture, længste tur, puls, tempo) med, og AI-træneren foreslår top,

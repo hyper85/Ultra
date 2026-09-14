@@ -319,20 +319,45 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
   return weeks;
 };
 
-/* ================= wellness: sleep and resting heart rate per week =================
-   Garmin's Sleep.csv (Reports → Sleep → export) has one row per week: "Sep 8-14,60,Fair,5h 48min,…" (the current
-   year is omitted, older rows end in ", 2025"). A resting-HR export or a pasted table with a date column and a
-   "Resting" column also works, one row per day or per week. Everything is keyed by the Monday of the week. */
-const MONTH_RE = /^(jan|feb|mar|apr|may|maj|jun|jul|aug|sep|oct|okt|nov|dec)/i;
-const hoursOf = (s) => { // "5h 48min" | "6:42" | "6.7"
+/* ================= wellness: Garmin reports → weekly numbers =================
+   Any Garmin export with a date/period column and metric columns: Sleep.csv (weekly rows "Sep 8-14", the current
+   year omitted, older rows ", 2025"; "Dec 30, 2025 - Jan 5, 2026" across the year), Reports (daily, weekly or
+   monthly rows like "Oct 2025"), or a pasted table with "Date" + "Resting". Known metrics are mapped to the weekly
+   log; columns the app has no use for (pace, speed, distance, activity time – those come from the activities)
+   are reported back so the user knows. Everything is keyed by the Monday of the week. */
+const hoursOf = (s) => { // "5h 48min" | "6:42" | "6.7" | "402" (minutes)
   const t = String(s || "").trim().toLowerCase(); if (!t || t === "--") return NaN;
   const hm = t.match(/(\d+)\s*(?:h|t)\s*(\d+)?/); if (hm) return +hm[1] + (+hm[2] || 0) / 60;
   const c = t.match(/^(\d{1,2}):(\d{2})$/); if (c) return +c[1] + +c[2] / 60;
-  const n = parseNum(t); return isNaN(n) ? NaN : n > 24 ? n / 60 : n; // minutes if big
+  const n = parseNum(t); return isNaN(n) ? NaN : n > 24 ? n / 60 : n;
+};
+// Metrics the app understands. `re` is tested against the normalised header; order matters (first match wins).
+export const WELLNESS_METRICS = [
+  { key: "sleep", label: "søvn", re: /avg duration|sleep duration|^duration$|varighed|søvn|sleep time|total sleep|^sleep$/, parse: hoursOf, min: 1, max: 16 },
+  { key: "hr", label: "hvilepuls", re: /resting|hvilepuls|rhr/, parse: parseNum, min: 25, max: 120 },
+  { key: "wt", label: "vægt", re: /^weight|^vægt|body weight|kropsvægt/, parse: parseNum, min: 30, max: 250 },
+  { key: "vo2", label: "VO2 max", re: /vo2|vo max|kondital/, parse: parseNum, min: 20, max: 95 },
+  { key: "hrv", label: "HRV", re: /hrv|heart rate variability|pulsvariation/, parse: parseNum, min: 10, max: 200 },
+  { key: "stress", label: "stress", re: /^avg stress|^stress|stress level|stressniveau/, parse: parseNum, min: 0, max: 100 },
+  { key: "endurance", label: "endurance score", re: /endurance/, parse: parseNum, min: 100, max: 20000 },
+];
+const NOT_WELLNESS = /activity type|aktivitetstype|activity date|activity name|^title$/;
+const SKIPPED_COLS = /pace|tempo|speed|hastighed|distance|distanc|afstand|activity time|aktivitetstid|calories|kalorier|score$|quality|kvalitet|bedtime|wake|need|status|age|alder|^ftp|max heart|makspuls|average heart|avg heart|gns puls/;
+// A Garmin report: a short table whose first column is a date/period. Not an activity list (those have many columns).
+export const isReportCSV = (text) => {
+  const first = text.replace(/^\ufeff/, "").split(/\r?\n/)[0] || "";
+  const heads = parseCSV(first)[0]?.map(norm) || [];
+  return heads.length >= 2 && heads.length <= 6 && /^(date|dato|week|uge|month|måned|period)/.test(heads[0]) && !heads.some((h) => NOT_WELLNESS.test(h));
+};
+export const isWellnessCSV = (text) => {
+  const first = text.replace(/^﻿/, "").split(/\r?\n/)[0] || "";
+  const heads = parseCSV(first)[0]?.map(norm) || [];
+  if (heads.some((h) => NOT_WELLNESS.test(h))) return false;
+  return heads.some((h) => WELLNESS_METRICS.some((m) => m.re.test(h))) || heads.some((h) => /sleep|søvn/.test(h));
 };
 // Start date of a Garmin week label; the year defaults to the current one when the label has none.
 const weekLabelStart = (label, year = new Date().getFullYear()) => {
-  const t = String(label).replace(/^\ufeff/, "").trim();
+  const t = String(label).replace(/^﻿/, "").trim();
   const trailing = (t.match(/,\s*(\d{4})\s*$/) || [])[1];
   const first = t.replace(/,\s*\d{4}\s*$/, "").split(/\s*[-–]\s*/)[0].trim(); // "Sep 8" | "Jul 28" | "Dec 30, 2025"
   const m = first.match(/^([A-Za-z]{3})[A-Za-z.]*\s+(\d{1,2})(?:,\s*(\d{4}))?$/);
@@ -343,36 +368,54 @@ const weekLabelStart = (label, year = new Date().getFullYear()) => {
   if (!y && d > addDays(new Date(), 7)) d = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()); // "Dec 29 - Jan 4" without a year belongs to last year
   return d;
 };
-export const isWellnessCSV = (text) => {
-  const head = norm(text.slice(0, 600).split(/\r?\n/)[0] || "");
-  return /sleep|søvn|resting|hvilepuls|avg score|avg duration|bedtime/.test(head) && !/activity type|aktivitetstype|^activity date/.test(head);
+// A month label ("Oct 2025", "Oct", "oktober 2025") → the Mondays of that month.
+const monthLabelWeeks = (label, year = new Date().getFullYear()) => {
+  const m = String(label).trim().match(/^([A-Za-z]{3})[A-Za-z.]*\.?\s*(\d{4})?$/);
+  if (!m || MONTHS[m[1].toLowerCase()] == null) return null;
+  let y = m[2] ? +m[2] : year; const mo = MONTHS[m[1].toLowerCase()];
+  if (!m[2] && new Date(y, mo, 1) > new Date()) y -= 1;
+  const first = new Date(y, mo, 1); let d = mondayOf(first); if (d < first) d = addDays(d, 7);
+  const out = []; while (d.getMonth() === mo) { out.push(ymd(d)); d = addDays(d, 7); }
+  return out;
+};
+// Which Mondays a row's date/period covers.
+const periodWeeks = (label) => {
+  const w = weekLabelStart(label); if (w) return [ymd(mondayOf(w))];
+  const mo = monthLabelWeeks(label); if (mo) return mo;
+  const d = parseDate(label); return d ? [ymd(mondayOf(d))] : null;
 };
 export const wellnessFromCSV = (text, fileName = "csv") => {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new ImportError(`${fileName}: filen er tom eller har kun en overskriftslinje.`);
   const headers = rows[0].map(norm);
-  const cDate = findCol(headers, [/^date$/, /^dato$/, /^week$/, /^uge$/, /date|dato|week|uge/]);
-  const cSleep = findCol(headers, [/^avg duration$/, /^duration$/, /^sleep duration$/, /^varighed$/, /^søvn/, /duration|søvn|sleep time|total sleep/]);
-  const cHR = findCol(headers, [/^resting$/, /^resting heart rate$/, /^resting hr$/, /^hvilepuls$/, /resting|hvilepuls/]);
-  if (cDate < 0 || (cSleep < 0 && cHR < 0)) throw new ImportError(`${fileName}: fandt ingen kolonne med søvn eller hvilepuls. Kolonnerne begynder med: ${rows[0].slice(0, 6).join(", ")}.`);
-  const acc = {}; // monday -> { sleep: [..], hr: [..] }
+  const cDate = findCol(headers, [/^date$/, /^dato$/, /^week$/, /^uge$/, /^month$/, /^måned$/, /^period/, /date|dato|week|uge|month|måned|period/]);
+  const cols = []; const skipped = [];
+  headers.forEach((h, idx) => {
+    if (idx === cDate) return;
+    const m = WELLNESS_METRICS.find((x) => x.re.test(h) && !(x.key === "hrv" && /status/.test(h) && !/\d/.test(rows[1]?.[idx] || "")));
+    if (m && !cols.some((c) => c.m.key === m.key)) cols.push({ idx, m });
+    else if (h) skipped.push(rows[0][idx]);
+  });
+  if (cDate < 0) throw new ImportError(`${fileName}: fandt ingen dato-kolonne. Kolonnerne begynder med: ${rows[0].slice(0, 6).join(", ")}.`);
+  if (!cols.length) throw new ImportError(`${fileName}: ingen af tallene bruges af appen (${rows[0].filter((_, k) => k !== cDate).slice(0, 4).join(", ")}). Tempo, distance, tid og kalorier kommer fra dine ture i stedet.`);
+  const acc = {}; // monday -> key -> [values]
   for (const row of rows.slice(1)) {
     const r = [...row];
     while (r.length > headers.length && /^\s*\d{4}\b/.test(r[cDate + 1] || "")) r.splice(cDate, 2, `${r[cDate]}, ${r[cDate + 1].trim()}`);
     const label = r[cDate]; if (!label) continue;
-    const d = weekLabelStart(label) || parseDate(label);
-    if (!d) continue;
-    const key = ymd(mondayOf(d));
-    const a = acc[key] || (acc[key] = { sleep: [], hr: [] });
-    if (cSleep >= 0) { const h = hoursOf(r[cSleep]); if (h > 0 && h < 16) a.sleep.push(h); }
-    if (cHR >= 0) { const v = parseNum(r[cHR]); if (v >= 25 && v <= 120) a.hr.push(v); }
+    const weeks = periodWeeks(label); if (!weeks) continue;
+    for (const { idx, m } of cols) {
+      const v = m.parse(r[idx]);
+      if (!(v >= m.min && v <= m.max)) continue;
+      for (const k of weeks) ((acc[k] ||= {})[m.key] ||= []).push(v);
+    }
   }
-  const weeks = {}; let nSleep = 0, nHR = 0;
-  for (const [k, a] of Object.entries(acc)) {
+  const weeks = {}; const counts = {};
+  for (const [k, byKey] of Object.entries(acc)) {
     const w = {};
-    if (a.sleep.length) { w.sleep = Math.round((a.sleep.reduce((x, y) => x + y, 0) / a.sleep.length) * 10) / 10; nSleep++; }
-    if (a.hr.length) { w.hr = Math.round(a.hr.reduce((x, y) => x + y, 0) / a.hr.length); nHR++; }
+    for (const [key, vals] of Object.entries(byKey)) { const avg = vals.reduce((x, y) => x + y, 0) / vals.length; w[key] = key === "hr" || key === "stress" || key === "endurance" ? Math.round(avg) : Math.round(avg * 10) / 10; counts[key] = (counts[key] || 0) + 1; }
     if (Object.keys(w).length) weeks[k] = w;
   }
-  return { weeks, nSleep, nHR, file: fileName };
+  if (!Object.keys(weeks).length) throw new ImportError(`${fileName}: kunne ikke læse datoerne (fx "${rows[1]?.[cDate] || ""}").`);
+  return { weeks, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, m.label])) };
 };
