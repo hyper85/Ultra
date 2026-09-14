@@ -87,6 +87,10 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   }
   const easyAbove = cap && easyRuns.length >= 4 ? easyRuns.filter((a) => a.hr > cap + 3).length / easyRuns.length : null;
   const easyHR = easyRuns.length ? Math.round(mean(easyRuns.map((a) => a.hr))) : null;
+  // The runner's typical easy pace: median min/km of easy runs at or under the cap.
+  const easyPaces = easyRuns.filter((a) => a.min > 0 && (!cap || a.hr <= cap + 3)).map((a) => a.min / a.km);
+  const easyPaceMinKm = easyPaces.length >= 3 ? median(easyPaces) : null;
+  const easyPace = easyPaceMinKm ? `${Math.floor(easyPaceMinKm)}:${String(Math.round((easyPaceMinKm % 1) * 60)).padStart(2, "0")}` : null;
 
   // Aerobic efficiency: speed per heartbeat on easy runs, first half of the window vs the last half.
   const eff = easyRuns.filter((a) => a.min > 0 && a.hr > 0).sort((a, b) => (a.day < b.day ? -1 : 1)).map((a) => (a.km / (a.min / 60)) / a.hr);
@@ -150,7 +154,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (findings.length === 0) add("empty", "info", "Appen kender dig ikke endnu. Log dine ture eller hent dem fra Garmin/Strava i et par uger, så begynder den at se mønstre: hvilke dage du faktisk løber, om planen passer til dig, og om de rolige ture er rolige nok.");
   const order = { warn: 0, info: 1, good: 2 };
   findings.sort((a, b) => order[a.level] - order[b.level]);
-  const summary = { sleepAvg, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
+  const summary = { sleepAvg, easyPace, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
     skippedDay: skipped ? DAYS[skipped.i] : null, extraDay: usedFree ? DAYS[usedFree.i] : null };
   return { summary, findings, weeks };
 }

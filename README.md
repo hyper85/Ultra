@@ -41,7 +41,9 @@ adgangen til data styres af row level security i `schema.sql`, så hver bruger k
 
 ## Træner: det appen lærer om dig, og en AI-træner (valgfrit)
 
-Under "Mere" → "Træner" viser appen, hvad den har lært af din log og dine ture: om du rammer planen, hvilke
+Hver hård session i planen har en forklaring på, hvordan den løbes (puls, fart, pauser, opvarmning), på "I dag" og under ugen på "Plan". Rolige ture viser dit eget typiske rolige tempo, når uret har leveret nok ture.
+
+Under fanen "Træner" viser appen, hvad den har lært af din log og dine ture: om du rammer planen, hvilke
 dage der bliver sprunget over (og hvilke du løber på alligevel), om den lange tur bliver gennemført, om de
 rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet deterministisk i `src/insights.js`, og
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på

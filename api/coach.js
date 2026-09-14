@@ -35,14 +35,18 @@ const chatCompletion = async (provider, messages) => {
   const r = await fetch(provider.chatURL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
-    body: JSON.stringify({ model: provider.model, max_tokens: 1200, temperature: 0.4, messages: [{ role: "system", content: SYSTEM }, ...messages] }),
+    // GLM/Kimi-style models think before they answer; give them room, and ask GLM to skip thinking (ignored elsewhere).
+    body: JSON.stringify({ model: provider.model, max_tokens: 4000, temperature: 0.4, messages: [{ role: "system", content: SYSTEM }, ...messages],
+      ...(/^glm/i.test(provider.model) ? { thinking: { type: "disabled" } } : {}) }),
     signal: AbortSignal.timeout(55_000),
   });
   let data = null; try { data = await r.json(); } catch { /* not json */ }
   if (!r.ok) { const e = new Error(data?.error?.message || data?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
-  const msg = data?.choices?.[0]?.message;
-  const content = typeof msg?.content === "string" ? msg.content : Array.isArray(msg?.content) ? msg.content.map((c) => c?.text || "").join("") : "";
-  return { text: content.trim(), model: data?.model || provider.model };
+  const choice = data?.choices?.[0]; const msg = choice?.message;
+  const asText = (c) => (typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x?.text || "").join("") : "");
+  let content = asText(msg?.content).trim();
+  if (!content) content = asText(msg?.reasoning_content || msg?.reasoning).trim(); // some models put everything in the reasoning field
+  return { text: content, model: data?.model || provider.model, finish: choice?.finish_reason || null };
 };
 const SYSTEM = `Du er træneren i Ultraplan, en dansk app til ultra- og trailløbere med et almindeligt liv (job, familie, begrænset tid).
 Du får løberens tal fra appen som JSON: profil, løbet, planen for denne uge, de seneste uger i loggen, og de mønstre appen har fundet.
@@ -68,12 +72,27 @@ Regler:
 - maxRunDays: det antal dage løberen faktisk løber ifølge uret (2–7), ikke flere.
 - longDay: den ugedag (0 = mandag … 6 = søndag) hvor de længste ture faktisk ligger, hvis hverdagen tillader det.
 - currentKm: gennemsnit af de sidste 4 uger fra uret, afrundet. Mangler urdata, så behold det nuværende tal.
-- Ingen andre felter. Ingen markdown.`;
+- Ingen andre felter. Ingen markdown, ingen kodehegn, ingen forklaring før eller efter. Første tegn i svaret er { og sidste er }.`;
 const clampNum = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+// Find the first balanced {...} in a reply (models wrap JSON in fences or prose) and parse it leniently.
+const extractJSON = (text) => {
+  const t = String(text || "").replace(/```(?:json)?/gi, "");
+  for (let i = t.indexOf("{"); i >= 0; i = t.indexOf("{", i + 1)) {
+    let depth = 0, inStr = false;
+    for (let j = i; j < t.length; j++) {
+      const ch = t[j];
+      if (inStr) { if (ch === "\\") j++; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true; else if (ch === "{") depth++; else if (ch === "}") { depth--; if (depth === 0) {
+        const raw = t.slice(i, j + 1);
+        try { return JSON.parse(raw); } catch { try { return JSON.parse(raw.replace(/,\s*([}\]])/g, "$1").replace(/'/g, '"')); } catch { break; } }
+      } }
+    }
+  }
+  return null;
+};
 const parseProposal = (text, ctx) => {
-  const m = String(text || "").match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  let o; try { o = JSON.parse(m[0]); } catch { return null; }
+  const o = extractJSON(text);
+  if (!o || typeof o !== "object") return null;
   const cur = ctx?.plan || {};
   return {
     peakScale: Math.round(clampNum(o.peakScale, 0.6, 1.4, cur.top_skala ?? 1) * 20) / 20,
@@ -113,17 +132,20 @@ export default async function handler(req, res) {
   const badKey = () => json(res, 503, { error: `API-nøglen til AI-træneren (${provider.label}) er ugyldig.` });
   const noModel = () => json(res, 502, { error: `Modellen "${provider.model}" findes ikke hos ${provider.label}. Sæt COACH_MODEL til en model, der findes.` });
   const busy = () => json(res, 429, { error: "AI-træneren har travlt. Prøv igen om lidt." });
-  const ok = (text, model) => {
+  const ok = (text, model, finish = null) => {
     if (mode === "plan") {
       const proposal = parseProposal(text, context);
-      if (!proposal) return json(res, 502, { error: "Træneren gav ikke et brugbart forslag. Prøv igen." });
+      if (!proposal) {
+        const why = finish === "length" ? "Svaret blev afbrudt, før JSON'en var færdig." : text ? `Modellen svarede: "${text.slice(0, 160)}${text.length > 160 ? "…" : ""}"` : "Modellen svarede tomt.";
+        return json(res, 502, { error: `Træneren (${provider.label}, ${provider.model}) gav ikke et brugbart forslag. ${why} Prøv igen, eller sæt COACH_MODEL til en anden model.` });
+      }
       return json(res, 200, { proposal, text: proposal.note, model, provider: provider.name });
     }
     return json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model, provider: provider.name });
   };
 
   if (provider.format === "chat") {
-    try { const { text, model } = await chatCompletion(provider, messages); return ok(text, model); }
+    try { const { text, model, finish } = await chatCompletion(provider, messages); return ok(text, model, finish); }
     catch (err) {
       if (err.status === 401 || err.status === 403) return badKey();
       if (err.status === 404) return noModel();
@@ -136,14 +158,14 @@ export default async function handler(req, res) {
   // x-api-key like Anthropic; the Bearer header is sent too, as their docs use that form.
   const client = new Anthropic({ apiKey: provider.apiKey, baseURL: provider.anthropicURL, maxRetries: 1, timeout: 55_000,
     ...(provider.name !== "anthropic" ? { defaultHeaders: { Authorization: `Bearer ${provider.apiKey}` } } : {}) });
-  const request = { model: provider.model, max_tokens: 1200, system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }], messages };
+  const request = { model: provider.model, max_tokens: 2000, system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }], messages };
   try {
     // Anthropic directly: server-side refusal fallbacks and an effort level. Through a gateway only the plain Messages API is assumed.
     const response = provider.beta
       ? await client.beta.messages.create({ ...request, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", output_config: { effort: "medium" } })
       : await client.messages.create(request);
     if (response.stop_reason === "refusal") return ok("Det kan jeg ikke hjælpe med her. Spørg om din træning, kost eller restitution.", response.model);
-    return ok(response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim(), response.model);
+    return ok(response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim(), response.model, response.stop_reason === "max_tokens" ? "length" : null);
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return badKey();
     if (err instanceof Anthropic.NotFoundError) return noModel();
