@@ -47,8 +47,9 @@ debounced push runs. Loading and pulling use the raw setters so they never count
 - Restart = current × 1.1 (floor 15 km, 12 for beginners); after a break/injury 65 % (floor 20). Week 1 of the build sits at the restart volume, never a jump.
 - Weeks from `startDate` to `raceDate`, min 8. Phases: Genopbygning (4 weeks if `breakWeeks ≥ 2`
   or injured) → Opbygning → Ultra-prep → Nedtrapning (3). Deload every 4th build week / 3rd ultra week.
-- Peak = min(peakTarget, restart × PEAK_MULT[level]); peakTarget = max(45, 0.95×race, 1.2×current)
-  × peakScale × injury factor. Long run capped by LONG_FRAC[level] × race, max 50.
+- Peak = min(peakTarget, restart × PEAK_MULT[level]) × peakScale, floored at restart × 1.1 and capped at 120;
+  peakTarget = max(45, 0.95×race, 1.2×current) × injury factor. peakScale (Minimum 0.8 / Balanceret 1.0 / Volumen 1.15,
+  and the AI proposal) scales the final top so the models always differ. Long run capped by LONG_FRAC[level] × race, max 50.
 - Sessions are placed only on days with time: short days ≤ 8 km, long run on a `long` day (capped
   if none), quality on the best available day, back-to-back the day after the long run in ultra-prep.
   `unplaced` records what did not fit; the UI says so instead of inventing days.
