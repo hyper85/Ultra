@@ -48,10 +48,18 @@ hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). De
 "I dag".
 
 Samme sted kan du spørge en AI-træner (Claude), der får dine tal som kontekst – aldrig navn eller e-mail.
-Den kører som en Vercel-funktion (`api/coach.js`) og kræver én miljøvariabel:
+Den kører som en Vercel-funktion (`api/coach.js`) og kræver én API-nøgle. Vælg én af to udbydere:
 
+**Anthropic direkte**
 1. Opret en API-nøgle på https://console.anthropic.com.
 2. Vercel → projektet → Settings → Environment Variables: `ANTHROPIC_API_KEY` = nøglen.
-3. Redeploy. Uden nøglen viser appen en venlig besked i stedet for en chat.
+
+**OpenCode Zen** (https://opencode.ai/zen – AI-gateway med betaling efter forbrug og adgang til Claude-modellerne)
+1. Log ind på OpenCode Zen, tilføj betaling og kopier din API-nøgle.
+2. Vercel → Settings → Environment Variables: `OPENCODE_API_KEY` = nøglen.
+
+Redeploy bagefter. Uden nøgle viser appen en venlig besked i stedet for en chat. Er begge nøgler sat, vælger
+`COACH_PROVIDER=anthropic` eller `opencode`. Modellen kan skiftes med `COACH_MODEL` (standard `claude-opus-5`
+hos Anthropic og `claude-sonnet-4-6` hos OpenCode Zen; Zens modelliste ligger på opencode.ai/docs/zen).
 
 Samtalen gemmes kun på enheden. Ikke lægefaglig rådgivning.

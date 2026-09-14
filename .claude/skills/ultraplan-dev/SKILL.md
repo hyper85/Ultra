@@ -19,7 +19,7 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
 | `src/sync.js` | Supabase client, code login (`verifyCode`), `pullRemote` / `pushRemote` |
 | `src/insights.js` | `buildInsights()` – deterministic "what the app has learned" (adherence, skipped/extra weekdays, long-run completion, easy-run HR vs cap, aerobic efficiency, resting-HR drift, streak) with one-tap profile patches; `coachContext()` – anonymous JSON for the AI coach |
 | `src/coach.js` | Client for the AI coach: `askCoach()`, chat persisted in `ultraplan-coach` (device only, never synced), suggested questions |
-| `api/coach.js` | Vercel serverless function: Claude (`claude-opus-5`, effort medium, server-side fallbacks) answers as Ultraplan's coach. Needs `ANTHROPIC_API_KEY`; 503 with a Danish message without it. `vercel.json` excludes `/api/` from the SPA rewrite |
+| `api/coach.js` | Vercel serverless function: Claude answers as Ultraplan's coach. Provider by key: `ANTHROPIC_API_KEY` → Anthropic (`claude-opus-5`, effort medium, server-side fallbacks) or `OPENCODE_API_KEY` → OpenCode Zen (`baseURL https://opencode.ai/zen`, Anthropic-compatible `/v1/messages`, plain Messages API, default `claude-sonnet-4-6`). `COACH_PROVIDER` / `COACH_MODEL` override. 503 with a Danish message without a key. `vercel.json` excludes `/api/` from the SPA rewrite |
 | `src/data/coach-plan.json` | The coach's fixed 23-week plan (trænerplan) used as-is when `coachMode` is on |
 | `src/styles.css` | One file; later sections override earlier ones (a "polish layer" sits at the end) |
 | `supabase/schema.sql` | Table `ultraplan_user_data` with row-level security |
@@ -78,7 +78,7 @@ Push to `main` deploys; the footer shows `version · sha · bygget <time>` so us
 
 ## Supabase (once per project)
 
-Env vars in Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (publishable key); `ANTHROPIC_API_KEY` for the AI coach. Run
+Env vars in Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (publishable key); `ANTHROPIC_API_KEY` or `OPENCODE_API_KEY` for the AI coach. Run
 `supabase/schema.sql`. Custom SMTP is required before email templates can be edited; the
 "Magic link or OTP" template must contain `{{ .Token }}` for code login. URL Configuration needs the
 Vercel URL as Site URL and `…/**` as redirect.

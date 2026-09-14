@@ -1,12 +1,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 /* AI coach – a Vercel serverless function. The browser posts the runner's numbers (no name, no e-mail) and a
-   question; Claude answers as Ultraplan's coach. Needs ANTHROPIC_API_KEY in Vercel → Settings → Environment
-   Variables. Without it the app shows a friendly "not set up" message instead of a broken chat. */
+   question; Claude answers as Ultraplan's coach. Without a key the app shows a friendly "not set up" message.
+
+   Two providers, chosen by which key is set in Vercel → Settings → Environment Variables:
+   - ANTHROPIC_API_KEY  → Anthropic directly (default model claude-opus-5).
+   - OPENCODE_API_KEY   → OpenCode Zen (https://opencode.ai/zen), an AI gateway with an Anthropic-compatible
+                          /v1/messages endpoint and pay-as-you-go billing (default model claude-sonnet-4-6).
+   COACH_PROVIDER=anthropic|opencode forces one when both keys exist; COACH_MODEL overrides the model. */
 
 export const config = { maxDuration: 60 };
 
-const MODEL = "claude-opus-5";
+const PROVIDERS = {
+  anthropic: { key: "ANTHROPIC_API_KEY", model: "claude-opus-5", baseURL: undefined, beta: true },
+  opencode: { key: "OPENCODE_API_KEY", model: "claude-sonnet-4-6", baseURL: "https://opencode.ai/zen", beta: false },
+};
+const pickProvider = () => {
+  const forced = String(process.env.COACH_PROVIDER || "").toLowerCase();
+  const name = PROVIDERS[forced] ? forced : process.env.OPENCODE_API_KEY ? "opencode" : "anthropic";
+  const cfg = PROVIDERS[name];
+  const apiKey = process.env[cfg.key];
+  return apiKey ? { name, apiKey, model: process.env.COACH_MODEL || cfg.model, baseURL: cfg.baseURL, beta: cfg.beta } : null;
+};
 const SYSTEM = `Du er træneren i Ultraplan, en dansk app til ultra- og trailløbere med et almindeligt liv (job, familie, begrænset tid).
 Du får løberens tal fra appen som JSON: profil, løbet, planen for denne uge, de seneste uger i loggen, og de mønstre appen har fundet.
 
@@ -24,7 +39,8 @@ const json = (res, status, body) => { res.status(status).setHeader("Content-Type
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Brug POST." });
-  if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { error: "AI-træneren er ikke sat op endnu. Sæt ANTHROPIC_API_KEY i Vercel → Settings → Environment Variables og redeploy." });
+  const provider = pickProvider();
+  if (!provider) return json(res, 503, { error: "AI-træneren er ikke sat op endnu. Sæt ANTHROPIC_API_KEY (Anthropic) eller OPENCODE_API_KEY (OpenCode Zen) i Vercel → Settings → Environment Variables og redeploy." });
 
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { return json(res, 400, { error: "Ugyldig JSON." }); } }
@@ -42,22 +58,21 @@ export default async function handler(req, res) {
   if (messages.length && messages[0].role !== "user") messages.shift();
   messages.push({ role: "user", content: `Løberens tal fra appen (JSON):\n${ctxText}\n\nSpørgsmål: ${question}` });
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 55_000 });
+  // OpenCode Zen reads the key from x-api-key like Anthropic; the Bearer header is sent too, as its docs use that form.
+  const client = new Anthropic({ apiKey: provider.apiKey, baseURL: provider.baseURL, maxRetries: 1, timeout: 55_000,
+    ...(provider.name === "opencode" ? { defaultHeaders: { Authorization: `Bearer ${provider.apiKey}` } } : {}) });
+  const request = { model: provider.model, max_tokens: 1200, system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }], messages };
   try {
-    const response = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 1200,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium" },
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages,
-    });
+    // Anthropic directly: server-side refusal fallbacks and an effort level. Through a gateway only the plain Messages API is assumed.
+    const response = provider.beta
+      ? await client.beta.messages.create({ ...request, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", output_config: { effort: "medium" } })
+      : await client.messages.create(request);
     if (response.stop_reason === "refusal") return json(res, 200, { text: "Det kan jeg ikke hjælpe med her. Spørg om din træning, kost eller restitution." });
     const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
-    return json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model: response.model });
+    return json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model: response.model, provider: provider.name });
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) return json(res, 503, { error: "API-nøglen til AI-træneren er ugyldig." });
+    if (err instanceof Anthropic.AuthenticationError) return json(res, 503, { error: `API-nøglen til AI-træneren (${provider.name === "opencode" ? "OpenCode Zen" : "Anthropic"}) er ugyldig.` });
+    if (err instanceof Anthropic.NotFoundError) return json(res, 502, { error: `Modellen "${provider.model}" findes ikke hos ${provider.name === "opencode" ? "OpenCode Zen" : "Anthropic"}. Sæt COACH_MODEL til en model, der findes.` });
     if (err instanceof Anthropic.RateLimitError) return json(res, 429, { error: "AI-træneren har travlt. Prøv igen om lidt." });
     if (err instanceof Anthropic.APIError) return json(res, 502, { error: `AI-træneren svarede ikke (${err.status}).` });
     return json(res, 502, { error: "AI-træneren svarede ikke. Prøv igen om lidt." });
