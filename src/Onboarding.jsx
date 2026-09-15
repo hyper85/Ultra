@@ -50,6 +50,14 @@ export const dietTips = (diet = "all", intol = []) => {
   return { protein: protein.filter((x) => !no(x)), fuel: fuel.filter((x) => !no(x)), swaps };
 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+// Everyday-schedule presets: most people only need to correct the exceptions.
+const D = (avail, time = "") => ({ avail, time, note: "" });
+export const PRESETS = [
+  ["most", "Tid de fleste dage", () => [D("normal", "morning"), D("none"), D("normal"), D("normal"), D("none"), D("long"), D("normal")]],
+  ["weekend", "Weekend + to hverdage", () => [D("none"), D("normal", "evening"), D("none"), D("normal", "evening"), D("none"), D("long"), D("normal")]],
+  ["all", "Alle dage", () => [D("normal"), D("normal"), D("normal"), D("normal"), D("normal"), D("long"), D("normal")]],
+];
+const presetKey = (sched) => PRESETS.find(([, , mk]) => mk().every((x, i) => x.avail === sched?.[i]?.avail))?.[0] || null;
 
 export const goalKcal = (bmr, goal) => {
   const adj = goal === "lean" ? -300 : 0;
@@ -198,6 +206,10 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           <div className="row2">
             <label>Familie<select value={d.family} onChange={set("family")}>{FAMILY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <label>Løbedage om ugen<select value={d.maxRunDays} onChange={(e) => setD({ ...d, maxRunDays: +e.target.value })}>{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} dage</option>)}</select></label>
+          </div>
+          <div className="muted" style={{ marginTop: 12 }}>Start med et mønster, og ret kun de dage, der er anderledes.</div>
+          <div className="chips">
+            {PRESETS.map(([k, label, mk]) => <button key={k} type="button" className={presetKey(sched) === k ? "on" : ""} onClick={() => setD({ ...d, sched: { A: mk(), B: mk() }, longDay: mk().findIndex((x) => x.avail === "long") })}>{label}</button>)}
           </div>
           <div className="sched" style={{ marginTop: 10 }}>
             {DAYS.map((n, i) => (

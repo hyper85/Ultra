@@ -340,3 +340,29 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
   .today-km b { font-size: 120px; }
   .thisweek div b { font-size: 30px; }
 }
+/* ===== one visual language: red = act now, green = good, grey = information ===== */
+.advice { border-left-color: var(--muted); background: var(--panel-2); }
+.advice.warn { border-left-color: var(--red); }
+.insight, .finding { border-left-color: var(--muted); }
+.insight.warn, .finding.warn { border-left-color: var(--red); }
+.insight.good, .finding.good { border-left-color: var(--green); }
+.proposal { border-left-color: var(--muted); }
+.adj-badge { background: rgba(255,77,77,.1); border-color: rgba(255,77,77,.4); color: var(--red); }
+.linkbtn { background: none; border: none; padding: 0; color: var(--orange); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.weekfields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.weekfields label { font-size: 12px; }
+.weekfields .cellwrap { display: block; }
+.weekfields td input, .weekfields input { width: 100%; margin-top: 2px; }
+@media (max-width: 599px) { .hide-phone { display: none !important; } .daygrid { min-width: 0; } }
+@media (min-width: 600px) { .phone-only { display: none !important; } }
+/* tables on phone: tighter cells so Uge/Plan/Løbet/ACWR fit without sideways scroll */
+@media (max-width: 599px) {
+  .panel.scroll th, .panel.scroll td { padding: 7px 4px; }
+  .panel.scroll td input { width: 62px; padding: 6px 6px; }
+  .panel.scroll .cellwrap input { padding-right: 16px; }
+  .panel.scroll .cellwrap .tag { right: 2px; font-size: 10px; }
+}
+/* the day form inside a table row must not inherit the narrow table-cell inputs */
+td .dayform input, td .weekfields input { width: 100%; margin: 2px 0 0; padding: 10px 12px; background: var(--panel-2); border-color: var(--line); }
+td .dayform .dayform-row label { flex: 1 1 80px; }
+.panel.scroll td .dayform input, .panel.scroll td .weekfields input { width: 100%; padding: 10px 12px; }
