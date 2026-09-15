@@ -835,7 +835,7 @@ export default function App() {
               <button onClick={() => shiftStart(-1)}>− 1 uge</button>
               <button onClick={() => shiftStart(1)}>+ 1 uge</button>
             </div>
-            <div className="muted">Planen starter mandag {fmt(startD)} (uge {isoWeek(startD)}) og løber {plan.weeks} uger frem til løbet.</div>
+            <div className="muted">Planen starter mandag {fmt(startD)} og løber {plan.weeks} uger frem til løbet.</div>
           </details>
 
           <details className="panel acc">
@@ -937,7 +937,7 @@ export default function App() {
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>
           <div className="panel">
-            <h2>Uge {cur.i} · u{cur.iso} · {cur.phase}{cur.deload && cur.phase !== "Nedtrapning" ? " · let uge" : ""}{cur.schedLabel ? ` · uge ${cur.schedLabel}` : ""}</h2>
+            <h2>Uge {cur.i} af {plan.weeks} · {fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))} · {cur.phase}{cur.deload && cur.phase !== "Nedtrapning" ? " · let uge" : ""}{cur.schedLabel ? ` · skema ${cur.schedLabel}` : ""}</h2>
             {adjRow && (
               <div className="adj-badge">
                 <span>{showOriginal ? `Original plan · ${curBase.km} km` : `Justeret af trænerråd (${adjRow.adjusted.reason})`}</span>
@@ -1002,7 +1002,7 @@ export default function App() {
                       const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
                       return (
                         <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">u{r.iso} · {fmt(r.wkStart)}</span></td>
+                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></td>
                           <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <span className="muted">historik</span> : <><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</>}</td>
                           <td className="num">{r.pre ? "" : <><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</>}</td>
                           <td className={`num ran ${ranCls}`}>{ran > 0 ? ran : ""}</td>
@@ -1093,7 +1093,7 @@ export default function App() {
                                   <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}</span></td>
                                   <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
                                   <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
-                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? `u${isoWeek(parseLocal(wk))} · ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : "nej (ikke løb)"}</td>
+                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? `uge fra ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : "nej (ikke løb)"}</td>
                                   <td className="muted">{x.source}</td>
                                   <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>Slet</button></td>
                                 </tr>
@@ -1137,7 +1137,7 @@ export default function App() {
                         <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
                           <td style={{ whiteSpace: "nowrap" }}>
                             <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title="Vis dagene i ugen" aria-expanded={open}>
-                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">u{r.iso}</span>
+                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
                             </button>
                             {r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}
                           </td>
@@ -1148,7 +1148,7 @@ export default function App() {
                         </tr>
                         {open && (
                           <tr className="dayrow"><td colSpan={9}>
-                            <div className="muted" style={{ marginBottom: 6 }}>Uge {r.pre ? `u${r.iso}` : r.i} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.</div>
+                            <div className="muted" style={{ marginBottom: 6 }}>{r.pre ? "Ugen" : `Uge ${r.i}`} fra {fmt(r.wkStart)} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.</div>
                             {renderDayGrid(r)}
                             {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
                           </td></tr>
