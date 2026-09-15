@@ -423,7 +423,8 @@ export default function App() {
   const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "" });
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
-  const [showPre, setShowPre] = useState(false);   // weeks before the plan in the log (empty ones hidden by default)
+  const [showPre, setShowPre] = useState(false);
+  const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
@@ -726,15 +727,16 @@ export default function App() {
               </section>
 
               <section className="panel">
-                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km</span></div>
+                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km · <button type="button" className="linkbtn" onClick={() => setView("plan")}>Se planen ›</button></span></div>
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
-                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""}`} onClick={() => setView("plan")} role="button" tabIndex={0}>
+                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} role="button" tabIndex={0} title="Tryk for at logge en tur">
                       <small>{DAYS[i]}</small><b>{w || (liftDays.includes(i) ? (plan.coach ? liftName(i).replace("Styrke ", "S") : "S") : "–")}</b>{dayKm[i] > 0 && <small className="ran">{dayKm[i]}</small>}
                     </div>
                   ))}
                 </div>
+                {dayEdit?.key === cur.key && dayEdit.i !== ti && renderDayForm(cur.days[dayEdit.i])}
                 <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
                 {topInsight && (
                   <div className={`insight ${topInsight.level}`}>
@@ -1000,24 +1002,35 @@ export default function App() {
               <div className="panel scroll">
                 <h2>Alle uger</h2>
                 <table>
-                  <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th><th className="num">Løbet</th>{DAYS.map((d) => <th key={d} className="num">{d}</th>)}<th>Hård session</th><th>Fokus</th></tr></thead>
+                  <thead><tr><th>Uge</th><th>Fase</th><th className="num">Km</th><th className="num">Løbet</th>{DAYS.map((d) => <th key={d} className="num hide-phone">{d}</th>)}<th className="hide-phone">Hård session</th><th className="hide-phone">Fokus</th></tr></thead>
                   <tbody>
                     {[...preRows.filter((r) => log[r.key]?.km > 0), ...planRows].map((r) => {
                       const ran = log[r.key]?.km; const km = dayKmFor(r.key);
                       const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
+                      const openP = openPlanWeek === r.key;
                       return (
-                        <tr key={r.key} className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></td>
+                        <Fragment key={r.key}>
+                        <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
+                          <td style={{ whiteSpace: "nowrap" }}><button type="button" className={`wk ${openP ? "on" : ""}`} onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP} title="Vis dagene">
+                            <span className="chev">{openP ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></button></td>
                           <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <span className="muted">historik</span> : <><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</>}</td>
                           <td className="num">{r.pre ? "" : <><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</>}</td>
                           <td className={`num ran ${ranCls}`}>{ran > 0 ? ran : ""}</td>
                           {DAYS.map((_, i) => { const v = r.pre ? 0 : r.days[i]; return (
-                            <td key={i} className="num" style={!r.pre && i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : !r.pre && i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>
+                            <td key={i} className="num hide-phone" style={!r.pre && i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : !r.pre && i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>
                               {v || ""}{km[i] > 0 && <small className={`act ${v && km[i] >= v * 0.9 ? "ok" : ""}`}>{km[i]}</small>}
                             </td>); })}
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? "" : r.quality}</td>
-                          <td className="muted" style={{ minWidth: 220 }}>{r.pre ? "Før planen. Tallene er fra dit ur eller det, du har tastet." : r.focus}</td>
+                          <td className="hide-phone" style={{ whiteSpace: "nowrap" }}>{r.pre ? "" : r.quality}</td>
+                          <td className="muted hide-phone" style={{ minWidth: 220 }}>{r.pre ? "Før planen. Tallene er fra dit ur eller det, du har tastet." : r.focus}</td>
                         </tr>
+                        {openP && (
+                          <tr className="dayrow"><td colSpan={13}>
+                            {!r.pre && <div style={{ marginBottom: 8 }}><b>{r.quality}</b>{r.qDay != null && r.days[r.qDay] > 0 ? <span className="muted"> · {DAYS[r.qDay].toLowerCase()}</span> : ""}<div className="muted">{r.focus}</div></div>}
+                            {renderDayGrid(r)}
+                            {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
+                          </td></tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -1125,7 +1138,7 @@ export default function App() {
                 </details>
                 {preRows.some((r) => !(log[r.key]?.km > 0)) && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? "Skjul ugerne før planen" : `Vis ${preRows.length} uger før planen`}</button>}
                 <table>
-                  <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th>RPE</th><th>Hvilepuls</th><th>Vægt</th><th>Søvn t</th><th className="num">Belastning</th><th className="num">ACWR</th></tr></thead>
+                  <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th className="hide-phone">RPE</th><th className="hide-phone">Hvilepuls</th><th className="hide-phone">Vægt</th><th className="hide-phone">Søvn t</th><th className="num hide-phone">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
                     {[...(showPre ? preRows : preRows.filter((r) => log[r.key]?.km > 0)), ...planRows].map((r) => {
                       const l = log[r.key] || {};
@@ -1148,12 +1161,16 @@ export default function App() {
                             {r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}
                           </td>
                           <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title="Antaget: km/uge nu × RPE 5">~{p.currentKm}</span> : "") : r.km}</td>
-                          <td>{cell("km")}</td><td>{cell("rpe")}</td><td>{cell("hr")}</td><td>{cell("wt")}</td><td>{cell("sleep")}</td>
-                          <td className="num">{ld ?? (r.pre && baseline ? <span className="muted" title="Antaget belastning">~{baseline}</span> : "")}</td>
+                          <td>{cell("km")}</td><td className="hide-phone">{cell("rpe")}</td><td className="hide-phone">{cell("hr")}</td><td className="hide-phone">{cell("wt")}</td><td className="hide-phone">{cell("sleep")}</td>
+                          <td className="num hide-phone">{ld ?? (r.pre && baseline ? <span className="muted" title="Antaget belastning">~{baseline}</span> : "")}</td>
                           <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? "Bygger delvist på estimater (antaget baseline eller RPE fra puls)" : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
                         </tr>
                         {open && (
                           <tr className="dayrow"><td colSpan={9}>
+                            <div className="phone-only weekfields">
+                              <label>RPE{cell("rpe")}</label><label>Hvilepuls{cell("hr")}</label><label>Vægt{cell("wt")}</label><label>Søvn t{cell("sleep")}</label>
+                              <div className="muted" style={{ gridColumn: "1 / -1" }}>Belastning {ld ?? (r.pre && baseline ? `~${baseline}` : "–")} = km × RPE</div>
+                            </div>
                             <div className="muted" style={{ marginBottom: 6 }}>{r.pre ? "Ugen" : `Uge ${r.i}`} fra {fmt(r.wkStart)} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.</div>
                             {renderDayGrid(r)}
                             {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
