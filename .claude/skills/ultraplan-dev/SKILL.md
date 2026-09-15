@@ -24,7 +24,7 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
 | `src/data/coach-plan.json` | The coach's fixed 23-week plan (trænerplan) used as-is when `coachMode` is on |
 | `src/styles.css` | One file; later sections override earlier ones (a "polish layer" sits at the end) |
 | `supabase/schema.sql` | Table `ultraplan_user_data` with row-level security |
-| `supabase/email-magic-link.html` | Branded login email with `{{ .Token }}` |
+| `supabase/email-*.html` | Branded Supabase email templates: magic link (code), confirm sign up (code), invite (link only), reset password (there is no password: it just sends a new code). Each carries `{{ .ConfirmationURL }}`; the code ones carry `{{ .Token }}` |
 | `docs/ux-first-login.md` | UX brief the questionnaire was built from |
 
 ## Data model (localStorage keys, mirrored to Supabase when logged in)

@@ -32,8 +32,13 @@ log og importerede ture med på tværs af enheder, kobles den på et gratis Supa
 5. Vercel → projektet → Settings → Environment Variables:
    - `VITE_SUPABASE_URL` = Project URL
    - `VITE_SUPABASE_ANON_KEY` = anon public key
-6. Authentication → Email Templates → *Magic Link*: indsæt indholdet af `supabase/email-magic-link.html`
-   som body og sæt Subject til `Din Ultraplan-kode: {{ .Token }}`. Skabelonen viser logoet, koden og et link.
+6. Authentication → Email Templates: indsæt skabelonerne fra `supabase/` som body og sæt emnet:
+   - *Magic link or OTP*: `email-magic-link.html`, emne `Din Ultraplan-kode: {{ .Token }}`
+   - *Confirm sign up*: `email-confirm-signup.html`, emne `Velkommen til Ultraplan – din kode: {{ .Token }}`
+   - *Invite user*: `email-invite.html`, emne `Du er inviteret til Ultraplan` (inviter fra Authentication → Users → Invite)
+   - *Reset password*: `email-reset-password.html`, emne `Log ind i Ultraplan igen: {{ .Token }}`
+   Alle skabeloner viser logoet, koden (hvor der er en) og en knap. Appen bruger ingen adgangskode, så "Reset password"
+   forklarer bare, at man logger ind med en kode, og giver en ny.
 7. Redeploy (Deployments → ⋯ → Redeploy). Appen viser nu en landingsside med login.
 
 Login sker med en 6-cifret kode på mail (ingen adgangskode); linket i mailen virker også. Anon-nøglen er beregnet til at ligge i klienten;

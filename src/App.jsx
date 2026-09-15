@@ -634,7 +634,7 @@ export default function App() {
       </div>
       <div className="panel landing-login">
         <h2>Log ind</h2>
-        <p className="muted">Skriv din e-mail, så sender vi en kode eller et link. Ingen adgangskode at huske. Har du ikke en konto, oprettes den automatisk.</p>
+        <p className="muted">Skriv din e-mail, så sender vi en kode eller et link. Der er ingen adgangskode, og derfor heller ingen at glemme: bed bare om en ny kode. Har du ikke en konto, oprettes den automatisk.</p>
         {loginForm}
         <p className="foot">Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.</p>
       </div>
