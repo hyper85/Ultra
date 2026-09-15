@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode } from "./sync.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
@@ -242,6 +242,17 @@ export default function App() {
   const [cooldown, setCooldown] = useState(0);
   useEffect(() => { if (cooldown <= 0) return; const tmr = setTimeout(() => setCooldown((c) => c - 1), 1000); return () => clearTimeout(tmr); }, [cooldown]);
   const [syncMsg, setSyncMsg] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteMsg, setInviteMsg] = useState(null);
+  const [inviting, setInviting] = useState(false);
+  const invite = async (e) => {
+    e.preventDefault();
+    if (inviting || !inviteEmail.trim()) return;
+    setInviting(true); setInviteMsg(null);
+    try { await inviteFriend(inviteEmail.trim()); setInviteMsg({ text: `Invitation sendt til ${inviteEmail.trim()}. Linket i mailen virker i 24 timer.` }); setInviteEmail(""); }
+    catch (err) { setInviteMsg({ warn: true, text: err.message }); }
+    setInviting(false);
+  };
   const pulledRef = useRef(false);
   const [pulled, setPulled] = useState(false);
   useEffect(() => {
@@ -817,6 +828,13 @@ export default function App() {
                 <div>Logget ind som <b>{user.email}</b></div>
                 <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || "Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder."}</div>
                 <button className="btn ghost" type="button" onClick={logout}>Log ud</button>
+                <h3 className="sub">Inviter en ven</h3>
+                <p className="muted">Din ven får en mail med et link, der opretter kontoen. Ingen adgangskode, bare et tryk.</p>
+                <form className="chatform" onSubmit={invite}>
+                  <input type="email" required autoComplete="off" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="ven@eksempel.dk" disabled={inviting} />
+                  <button className="btn" type="submit" disabled={inviting || !inviteEmail.trim()}>{inviting ? "Sender…" : "Inviter"}</button>
+                </form>
+                {inviteMsg && <div className={`advice ${inviteMsg.warn ? "warn" : ""}`}>{inviteMsg.text}</div>}
               </>
             ) : (
               <div>

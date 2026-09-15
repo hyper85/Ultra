@@ -33,3 +33,17 @@ export const verifyCode = async (email, token) => {
   if (error) throw error;
   return data;
 };
+
+// Invite a friend: the signed-in user's token proves who is asking; api/invite.js sends the branded invitation mail.
+export const inviteFriend = async (email) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Log ind for at invitere.");
+  let r;
+  try { r = await fetch("/api/invite", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ email }) }); }
+  catch { throw new Error("Kunne ikke kontakte serveren. Tjek din internetforbindelse."); }
+  let body = null; try { body = await r.json(); } catch { /* not json */ }
+  if (r.status === 404) throw new Error("Invitationer findes kun i den udgave, der kører på Vercel.");
+  if (!r.ok) throw new Error(body?.error || `Invitationen kunne ikke sendes (${r.status}).`);
+  return body;
+};
