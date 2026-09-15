@@ -703,7 +703,7 @@ export default function App() {
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
               <section className={`panel today ${done ? "done" : ""}`}>
                 <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
-                <div className="today-km">{raceDay ? <><b>{p.raceKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
+                <div className="today-km">{raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{cur.quality}</b></div>}
                 {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
                 {easy && <div className="today-sub">{describeEasy({ km: v, maxHR, easyPace: insights.summary.easyPace })}</div>}
@@ -718,7 +718,7 @@ export default function App() {
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>Skadesfase: {cur.quality}. Stop ved smerte, der ændrer skridtet.</div>}
                 {v > 0 && lift && <div className="today-sub">+ {liftName(ti)} i dag{strength ? `: ${strength.join(", ")}` : ""}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
-                {ran > 0 && <div className="today-ran">✓ Løbet {ran} km{v > 0 ? ` af ${v}` : ""}</div>}
+                {ran > 0 && <div className="today-ran">✓ Logget{v > 0 ? ` · planen sagde ${v} km` : " · planen havde hvile"}{v > 0 && ran > v * 1.4 ? ". Planens tal er et loft, ikke et gulv." : ""}</div>}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 || raceDay ? "Log dagens tur" : "Log en tur alligevel"}</button>
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
