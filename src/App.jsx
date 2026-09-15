@@ -423,6 +423,7 @@ export default function App() {
   const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "" });
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
+  const [showPre, setShowPre] = useState(false);   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
@@ -445,6 +446,10 @@ export default function App() {
     return (
       <form className="dayform" onSubmit={saveDay}>
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? `· plan ${planKm || 0} km` : "· før planen"}</span></div>
+        {(actsByDay[day] || []).map((x) => (
+          <div key={x.id} className="dayform-item"><span>✓ {x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
+        ))}
+        {(actsByDay[day] || []).length > 0 && <div className="muted" style={{ margin: "8px 0 2px" }}>Tilføj en tur mere:</div>}
         <div className="dayform-row">
           <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>
           <label>Minutter<input type="number" min="1" inputMode="numeric" value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} /></label>
@@ -455,9 +460,6 @@ export default function App() {
           <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>Luk</button>
         </div>
         {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
-        {(actsByDay[day] || []).map((x) => (
-          <div key={x.id} className="dayform-item"><span>{x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
-        ))}
       </form>
     );
   };
@@ -662,7 +664,7 @@ export default function App() {
         ))}
       </nav>
 
-      <main key={view} className="wrap stack view-in">
+      <main key={view} className="wrap stack view-in" data-view={view}>
         {view === "today" && (() => {
           const ti = (new Date().getDay() + 6) % 7;
           const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = liftDays.includes(ti);
@@ -718,7 +720,7 @@ export default function App() {
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>Skadesfase: {cur.quality}. Stop ved smerte, der ændrer skridtet.</div>}
                 {v > 0 && lift && <div className="today-sub">+ {liftName(ti)} i dag{strength ? `: ${strength.join(", ")}` : ""}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
-                {ran > 0 && <div className="today-ran">✓ Logget{v > 0 ? ` · planen sagde ${v} km` : lift ? ` · planen havde ${liftName(ti).toLowerCase()}` : " · planen havde hvile"}{v > 0 && ran > v * 1.4 ? ". Planens tal er et loft, ikke et gulv." : ""}</div>}
+                {ran > 0 && <div className="today-ran">✓ Logget{v > 0 ? ` · planen sagde ${v} km` : lift ? ` · planen havde ${liftName(ti)}` : " · planen havde hvile"}{v > 0 && ran > v * 1.4 ? ". Planens tal er et loft, ikke et gulv." : ""}</div>}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 || raceDay ? "Log dagens tur" : "Log en tur alligevel"}</button>
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
@@ -754,7 +756,8 @@ export default function App() {
         {view === "coach" && (
         <section className="stack">
           <h1 className="screen-title">Træner</h1>
-          <div className="panel">
+          <div className="panel coach-grid">
+            <div>
             <h3 className="sub">Det appen har lært om dig</h3>
             <div className="findings">
               {insights.findings.map((f) => (
@@ -780,6 +783,8 @@ export default function App() {
                 </div>
               </div>
             )}
+            </div>
+            <div>
             <h3 className="sub">Spørg træneren</h3>
             <p className="muted">En AI-træner, der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
             {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={coachBusy}>{q}</button>)}</div>}
@@ -793,7 +798,7 @@ export default function App() {
               <button className="btn" type="submit" disabled={coachBusy || !coachQ.trim()}>Send</button>
             </form>
             {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>Ryd samtalen</button>}
-            <p className="muted" style={{ marginTop: 10 }}>Ikke lægefaglig rådgivning. Ved smerte, der ændrer dit skridt: stop, og se en fysioterapeut efter to uger.</p>
+            </div>
           </div>
         </section>
         )}
@@ -801,7 +806,7 @@ export default function App() {
         {view === "more" && (
         <aside className="stack">
           <h1 className="screen-title">Mere</h1>
-          <details className="panel acc" open>
+          <details className="panel acc" open={syncEnabled}>
             <summary><h2>Konto</h2><span className="chev" aria-hidden="true">›</span></summary>
             {!syncEnabled ? (
               <div className="muted">Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.</div>
@@ -1058,8 +1063,8 @@ export default function App() {
                     <button className="btn" type="button" onClick={() => setView("today")}>Gå til i dag</button>
                   </div>
                 )}
-                <div className="import">
-                  <h3>Hent fra Strava eller Garmin</h3>
+                <details className="import" open={nActs === 0 || !!importMsg}>
+                  <summary><h3>Hent fra Strava eller Garmin{nActs > 0 ? ` · ${nActs} ture hentet` : ""}</h3></summary>
                   <p className="muted">Vælg en eller flere filer på én gang. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>
                   <div className="import-row">
                     <input ref={fileRef} type="file" multiple onChange={onFiles} disabled={importing} />
@@ -1117,11 +1122,12 @@ export default function App() {
                       <li><b>Hvilepuls fra en tabel:</b> en CSV med en dato-kolonne og en kolonne "Resting" virker også.</li>
                     </ul>
                   </details>
-                </div>
+                </details>
+                {preRows.some((r) => !(log[r.key]?.km > 0)) && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? "Skjul ugerne før planen" : `Vis ${preRows.length} uger før planen`}</button>}
                 <table>
                   <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th>RPE</th><th>Hvilepuls</th><th>Vægt</th><th>Søvn t</th><th className="num">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
-                    {[...preRows, ...planRows].map((r) => {
+                    {[...(showPre ? preRows : preRows.filter((r) => log[r.key]?.km > 0)), ...planRows].map((r) => {
                       const l = log[r.key] || {};
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
