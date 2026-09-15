@@ -31,17 +31,22 @@ const pickProvider = () => {
 };
 
 // OpenAI-compatible chat completions (GLM, Kimi, MiniMax, Qwen … on OpenCode Zen and Z.ai). Plain fetch: no extra SDK.
-const chatCompletion = async (provider, messages) => {
+const chatCompletion = async (provider, messages, { extras = true } = {}) => {
+  // Z.ai's own API accepts a `thinking` switch for GLM; gateways like OpenCode Zen reject unknown fields with 400,
+  // so extras are only sent to Z.ai, and any 400 is retried once with the plain, minimal body.
+  const body = { model: provider.model, max_tokens: 4000, messages: [{ role: "system", content: SYSTEM }, ...messages] };
+  if (extras) { body.temperature = 0.4; if (provider.name === "zai" && /^glm/i.test(provider.model)) body.thinking = { type: "disabled" }; }
   const r = await fetch(provider.chatURL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
-    // GLM/Kimi-style models think before they answer; give them room, and ask GLM to skip thinking (ignored elsewhere).
-    body: JSON.stringify({ model: provider.model, max_tokens: 4000, temperature: 0.4, messages: [{ role: "system", content: SYSTEM }, ...messages],
-      ...(/^glm/i.test(provider.model) ? { thinking: { type: "disabled" } } : {}) }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(55_000),
   });
   let data = null; try { data = await r.json(); } catch { /* not json */ }
-  if (!r.ok) { const e = new Error(data?.error?.message || data?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
+  if (!r.ok) {
+    if (r.status === 400 && extras) return chatCompletion(provider, messages, { extras: false });
+    const e = new Error(data?.error?.message || data?.message || data?.error || `HTTP ${r.status}`); e.status = r.status; throw e;
+  }
   const choice = data?.choices?.[0]; const msg = choice?.message;
   const asText = (c) => (typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x?.text || "").join("") : "");
   let content = asText(msg?.content).trim();
@@ -150,7 +155,8 @@ export default async function handler(req, res) {
       if (err.status === 401 || err.status === 403) return badKey();
       if (err.status === 404) return noModel();
       if (err.status === 429) return busy();
-      return json(res, 502, { error: `AI-træneren (${provider.label}) svarede ikke${err.status ? ` (${err.status})` : ""}. ${/abort|timeout/i.test(err.name || "") ? "Den brugte for lang tid." : ""}`.trim() });
+      const detail = /abort|timeout/i.test(err.name || "") ? "Den brugte for lang tid." : err.message && !/^HTTP \d+$/.test(err.message) ? `Svar fra ${provider.label}: ${String(err.message).slice(0, 200)}` : "";
+      return json(res, 502, { error: `AI-træneren (${provider.label}, ${provider.model}) svarede ikke${err.status ? ` (${err.status})` : ""}. ${detail}`.trim() });
     }
   }
 
