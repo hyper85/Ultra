@@ -89,6 +89,7 @@ Vercel URL as Site URL and `…/**` as redirect.
 
 - Danish UI copy, du-form, sentence case, no marketing. Numbers in Barlow Condensed, body in Inter.
 - One primary action per screen; settings live under "Mere"; nothing scrolls sideways on a phone.
+- Desktop (≥ 1000 px): `main.wrap` is a two-column grid keyed by `data-view` (today: card | week + race; plan: week + guide | chart, table full width; coach: `.coach-grid` findings | chat; more: settings | zones + food). Phone stays one column, max 720 px.
 - Keep the engine deterministic and explainable: every number the user sees should be traceable to
   an input, and estimates are labelled.
 - Commit messages describe the user-visible change; the footer version is the release note.
