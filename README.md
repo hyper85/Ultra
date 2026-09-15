@@ -41,7 +41,13 @@ log og importerede ture med på tværs af enheder, kobles den på et gratis Supa
    forklarer bare, at man logger ind med en kode, og giver en ny.
 7. Redeploy (Deployments → ⋯ → Redeploy). Appen viser nu en landingsside med login.
 
-Login sker med en 6-cifret kode på mail (ingen adgangskode); linket i mailen virker også. Anon-nøglen er beregnet til at ligge i klienten;
+Login sker med en 6-cifret kode på mail (ingen adgangskode); linket i mailen virker også. Glemt adgangskode findes
+derfor ikke: man beder bare om en ny kode.
+
+**Inviter en ven** (Mere → Konto, når du er logget ind) sender Supabase-mailen *Invite user* via `api/invite.js`.
+Det kræver én hemmelig miljøvariabel i Vercel: `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API →
+service_role). Nøglen må aldrig ligge i klienten; funktionen tjekker, at afsenderen er logget ind, før den
+inviterer. Du kan også invitere fra Supabase → Authentication → Users → Invite user. Anon-nøglen er beregnet til at ligge i klienten;
 adgangen til data styres af row level security i `schema.sql`, så hver bruger kun kan se sin egen række.
 
 ## Træner: det appen lærer om dig, og en AI-træner (valgfrit)
