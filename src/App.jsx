@@ -255,6 +255,7 @@ export default function App() {
   };
   const pulledRef = useRef(false);
   const [pulled, setPulled] = useState(false);
+  const prevUserRef = useRef(null); // the account this tab last synced for
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
@@ -274,11 +275,18 @@ export default function App() {
     if (!user || !ready) { pulledRef.current = false; setPulled(false); return; }
     (async () => {
       try {
+        // Another account than the one this device's data belongs to (a friend's invitation link opened on a phone
+        // that is already logged in, or a shared phone): wipe the device first, so nothing is shown to or uploaded
+        // for the wrong person. The owner mark on disk catches it across restarts; the previous user in this tab
+        // catches it when the session is swapped while the app is open.
         const owner = await store.get("ultraplan-owner");
-        if (owner && owner !== user.id) clearLocal(); // someone else used this device before
+        const switched = (owner && owner !== user.id) || (prevUserRef.current && prevUserRef.current !== user.id);
+        if (switched) { clearLocal(); setSyncMsg(`Skiftet til ${user.email || "en anden konto"}. Data fra den tidligere konto er fjernet fra denne enhed.`); }
+        prevUserRef.current = user.id;
         store.set("ultraplan-owner", user.id);
-        const remote = await pullRemote(user.id);
-        const localAt = owner && owner !== user.id ? 0 : metaRef.current.updatedAt || 0;
+        // A pull that never answers (captive portal, flaky network) must not leave the app on the splash screen forever.
+        const remote = await Promise.race([pullRemote(user.id), new Promise((_, rej) => setTimeout(() => rej(new Error("skyen svarede ikke – viser det, der ligger på enheden")), 12000))]);
+        const localAt = switched ? 0 : metaRef.current.updatedAt || 0;
         if (remote && remote.updatedAt >= localAt) {
           setPRaw(migrateProfile(remote.profile || {})); setLog(remote.log || {}); setActs(remote.activities || {});
           store.set("ultraplan-profile", remote.profile || {}); store.set("ultraplan-log", remote.log || {}); store.set("ultraplan-activities", remote.activities || {});
