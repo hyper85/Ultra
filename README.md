@@ -74,6 +74,10 @@ Eksportér). Appen forstår daglige, ugentlige og månedlige rækker og lægger 
 Alle filer er valgfrie: kun aktiviteter er nok til base, ACWR, mønstre og planforslag. Resten lægger til.
 Importerede tal er markeret med ⌚ i loggen, og et tal du selv skriver, vinder altid.
 
+Excel virker også (.xlsx): en Garmin-fil du har åbnet og gemt i Excel, eller din egen log med kolonnerne Dato, Km og
+gerne Tid og RPE. Hvert ark i arbejdsbogen læses for sig og behandles som en CSV-fil; ark med noter springes over.
+Datoer og tider læses som Excel viser dem. Gamle .xls-filer skal først gemmes som .xlsx.
+
 Har du hentet dine ture fra Garmin eller Strava (Log → Hent), kan træneren også forme planen: "Foreslå plan ud fra
 mine tal" sender de sidste 12 uger fra uret (km, ture, længste tur, puls, tempo) med, og AI-træneren foreslår top,
 niveau, løbedage, lang tur-dag og base. Appen viser forskellen, bygger selv planen af tallene, og intet ændres,

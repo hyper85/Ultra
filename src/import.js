@@ -107,9 +107,11 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
   const cDate = findCol(headers, [/^activity date$/, /^start time$/, /^starttid/, /^date$/, /^dato$/, /^tidspunkt/, /date|dato/]);
   const cType = findCol(headers, [/^activity type$/, /^aktivitetstype$/, /^sport$/, /type/]);
   const cName = findCol(headers, [/^activity name$/, /^title$/, /^titel$/, /^name$/, /^navn$/]);
-  const cTime = findCol(headers, [/^moving time$/, /^bevægelsestid$/, /^elapsed time$/, /^time$/, /^tid$/, /^duration$/, /^varighed$/, /time|tid/]);
+  const cTime = findCol(headers, [/^moving time$/, /^bevægelsestid$/, /^elapsed time$/, /^time$/, /^tid$/, /^duration$/, /^varighed$/, /^min$|^minutter$|^minutes$/, /time|tid|minut/]);
+  const timeInMinutes = cTime >= 0 && /^min|minut/.test(headers[cTime]); // a "Min" column holds minutes, not seconds
+  const cRPE = findCol(headers, [/^rpe$/, /anstrengelse|effort/]);
   const cHR = findCol(headers, [/^average heart rate$/, /^avg hr$/, /^gns puls$/, /gennemsnitlig puls/, /^average hr$/, /avg.*(hr|heart)|gns.*puls|puls.*gns/]);
-  let distCols = headers.map((h, i) => (/^distance$|^afstand$|^distance km$|^distance m$/.test(h) ? i : -1)).filter((i) => i >= 0);
+  let distCols = headers.map((h, i) => (/^distance$|^afstand$|^distance km$|^distance m$|^km$|^kilometer$/.test(h) ? i : -1)).filter((i) => i >= 0);
   if (!distCols.length) distCols = headers.map((h, i) => (/dist|afstand/.test(h) ? i : -1)).filter((i) => i >= 0);
   if (cDate < 0 || !distCols.length) {
     const found = rows[0].slice(0, 8).join(", ");
@@ -127,9 +129,12 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
     else km = first > 1500 ? first / 1000 : first;
     if (!(km > 0)) continue;
     if (km > 400) continue; // metres in a "km" column or a garbage row
-    const min = cTime >= 0 ? parseMinutes(r[cTime]) : NaN;
+    const min = cTime < 0 ? NaN : timeInMinutes && !String(r[cTime] || "").includes(":") ? parseNum(r[cTime]) : parseMinutes(r[cTime]);
     const hr = cHR >= 0 ? parseNum(r[cHR]) : NaN;
-    out.push(mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: cType >= 0 ? r[cType] : "Run", name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : "CSV", file: fileName }));
+    const a = mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: cType >= 0 ? r[cType] : "Run", name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : /\.xls/i.test(fileName) ? "Excel" : "CSV", file: fileName });
+    const rpe = cRPE >= 0 ? parseNum(r[cRPE]) : NaN;
+    if (rpe >= 1 && rpe <= 10) a.rpe = Math.round(rpe);
+    out.push(a);
   }
   return out;
 };
@@ -201,8 +206,8 @@ const mk = (a) => {
   return { id: `${ymd(a.date)}-${slot}-${km.toFixed(1)}`, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
 };
 
-// Minimal zip reader: finds *.csv / *.gpx / *.tcx entries and inflates them with the browser's DecompressionStream.
-const readZip = async (file) => {
+// Minimal zip reader (no library): the central directory lists the entries; DecompressionStream inflates them.
+const zipOpen = async (file) => {
   const buf = new Uint8Array(await file.arrayBuffer());
   const dv = new DataView(buf.buffer);
   let eocd = -1;
@@ -217,25 +222,106 @@ const readZip = async (file) => {
     entries.push({ name: dec.decode(buf.subarray(o + 46, o + 46 + nlen)), method, csize, loff });
     o += 46 + nlen + elen + clen;
   }
-  const wanted = entries.filter((e) => /\.(csv|gpx|tcx)$/i.test(e.name) && !/\/\./.test(e.name));
+  return { buf, dv, entries, fileName: file.name };
+};
+const zipBytes = async ({ buf, dv, fileName }, e) => {
+  const nlen = dv.getUint16(e.loff + 26, true), elen = dv.getUint16(e.loff + 28, true);
+  const start = e.loff + 30 + nlen + elen;
+  const raw = buf.subarray(start, start + e.csize);
+  if (e.method === 0) return raw;
+  if (e.method !== 8) return null;
+  if (typeof DecompressionStream === "undefined") throw new ImportError(`${fileName}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg filen inde i den.`);
+  return new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+};
+// A Strava/Garmin archive: every *.csv / *.gpx / *.tcx inside it, as text.
+const readZip = async (file) => {
+  const z = await zipOpen(file);
+  const wanted = z.entries.filter((e) => /\.(csv|gpx|tcx)$/i.test(e.name) && !/\/\./.test(e.name));
   if (!wanted.length) throw new ImportError(`${file.name}: zip-filen indeholder ingen CSV-, GPX- eller TCX-filer.`);
   const out = [];
   for (const e of wanted.slice(0, 500)) {
-    const nlen = dv.getUint16(e.loff + 26, true), elen = dv.getUint16(e.loff + 28, true);
-    const start = e.loff + 30 + nlen + elen;
-    const raw = buf.subarray(start, start + e.csize);
-    let bytes = raw;
-    if (e.method === 8) {
-      if (typeof DecompressionStream === "undefined") throw new ImportError(`${file.name}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg activities.csv.`);
-      bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
-    } else if (e.method !== 0) continue;
-    out.push({ name: e.name.split("/").pop(), text: decodeText(bytes) });
+    const bytes = await zipBytes(z, e);
+    if (bytes) out.push({ name: e.name.split("/").pop(), text: decodeText(bytes) });
   }
   return out;
 };
 
+/* ================= Excel (.xlsx) ================= */
+// An .xlsx is a zip of XML files. This reads the shared strings, the cell styles (to tell dates from plain numbers) and
+// every sheet, and returns each sheet as CSV text, so an Excel file goes through exactly the same parsers as a CSV
+// export – whether it is Garmin's Activities.csv saved as Excel, a Garmin report, or a hand-kept log with Dato/Km/Tid.
+const unxml = (t) => String(t).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&amp;/g, "&");
+const attr = (attrs, name) => { const m = attrs.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`)); return m ? unxml(m[1]) : null; };
+const tTexts = (inner) => Array.from(inner.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g), (m) => unxml(m[1])).join("");
+const colIndex = (ref) => { let n = 0; for (const ch of ref.replace(/\d+$/, "")) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; };
+// Excel's built-in date formats, plus custom formats that spell out day/month/year/hour (with quoted text and [colours] removed).
+const DATE_FMT_IDS = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58]);
+const fmtKind = (code) => { const c = String(code || "").replace(/"[^"]*"|\[[^\]]*\]|\\./g, ""); return /[dy]/i.test(c) ? "date" : /[hs]/i.test(c) || /m/.test(c) ? "time" : null; };
+const pad2 = (n) => String(n).padStart(2, "0");
+const serialToText = (v, kind) => {
+  if (kind === "time" && v < 1) { const s = Math.round(v * 86400); return `${Math.floor(s / 3600)}:${pad2(Math.floor((s % 3600) / 60))}:${pad2(s % 60)}`; }
+  if (kind === "time") { const s = Math.round(v * 86400); return `${Math.floor(s / 3600)}:${pad2(Math.floor((s % 3600) / 60))}:${pad2(s % 60)}`; } // durations over 24 h: [h]:mm:ss
+  const d = new Date(Math.round((v - 25569) * 86400) * 1000); // Excel serial day 25569 = 1970-01-01 (1900 date system)
+  const day = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  return v % 1 ? `${day} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}` : day;
+};
+const csvCell = (v) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+export const readExcel = async (file) => {
+  const z = await zipOpen(file);
+  const dec = new TextDecoder();
+  const get = async (name) => { const e = z.entries.find((x) => x.name === name || x.name === name.replace(/^\//, "")); if (!e) return null; const b = await zipBytes(z, e); return b ? dec.decode(b) : null; };
+  const wb = await get("xl/workbook.xml");
+  if (!wb) throw new ImportError(`${file.name}: kunne ikke læse regnearket. Gem det som .xlsx i Excel og prøv igen.`);
+  // Shared strings: every <si> is one string, possibly split into rich-text runs.
+  const sst = Array.from(((await get("xl/sharedStrings.xml")) || "").matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g), (m) => tTexts(m[1]));
+  // Styles: cellXfs index -> "date" | "time" | null, so date cells become readable text instead of serial numbers.
+  const styles = (await get("xl/styles.xml")) || "";
+  const custom = {}; for (const m of styles.matchAll(/<numFmt\b([^>]*)\/?>/g)) { const id = attr(m[1], "numFmtId"), code = attr(m[1], "formatCode"); if (id != null) custom[+id] = fmtKind(code); }
+  const xfs = (styles.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] || "");
+  const kinds = Array.from(xfs.matchAll(/<xf\b([^>]*)\/?>/g), (m) => { const id = +(attr(m[1], "numFmtId") || 0); return DATE_FMT_IDS.has(id) ? (id >= 18 && id <= 21 || id >= 45 && id <= 47 ? "time" : "date") : custom[id] || null; });
+  // Sheets, in workbook order, resolved through the relationships file.
+  const rels = {}; for (const m of ((await get("xl/_rels/workbook.xml.rels")) || "").matchAll(/<Relationship\b([^>]*)\/?>/g)) { const id = attr(m[1], "Id"), t = attr(m[1], "Target"); if (id && t) rels[id] = t.startsWith("/") ? t.slice(1) : t.startsWith("xl/") ? t : `xl/${t}`; }
+  const sheets = Array.from(wb.matchAll(/<sheet\b([^>]*)\/?>/g), (m) => ({ name: attr(m[1], "name") || "Ark", path: rels[attr(m[1], "r:id") || attr(m[1], "id") || ""] }));
+  const out = [];
+  for (const [i, sh] of sheets.entries()) {
+    const xmlText = sh.path ? await get(sh.path) : await get(`xl/worksheets/sheet${i + 1}.xml`);
+    if (!xmlText) continue;
+    const rows = [];
+    for (const rm of xmlText.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+      const cells = [];
+      for (const cm of rm[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const a = cm[1], inner = cm[2] || "";
+        const ref = attr(a, "r"); const col = ref ? colIndex(ref) : cells.length;
+        const t = attr(a, "t"); const v = inner.match(/<v>([\s\S]*?)<\/v>/)?.[1];
+        let text = "";
+        if (t === "s") text = sst[+v] ?? "";
+        else if (t === "inlineStr") text = tTexts(inner);
+        else if (t === "b") text = v === "1" ? "true" : "false";
+        else if (t === "e") text = "";
+        else if (v != null) {
+          text = unxml(v);
+          const kind = t == null || t === "n" ? kinds[+(attr(a, "s") || 0)] : null;
+          const num = Number(v);
+          if (kind && Number.isFinite(num)) text = serialToText(num, kind);
+        }
+        while (cells.length < col) cells.push("");
+        cells[col] = text;
+      }
+      rows.push(cells);
+    }
+    while (rows.length && rows[rows.length - 1].every((c) => c === "")) rows.pop();
+    if (!rows.some((r) => r.some((c) => c !== ""))) continue; // empty sheet
+    const width = Math.max(...rows.map((r) => r.length));
+    const text = rows.map((r) => { const rr = r.slice(); while (rr.length < width) rr.push(""); return rr.map(csvCell).join(","); }).join("\n");
+    out.push({ name: sheets.length > 1 ? `${file.name} (${sh.name})` : file.name, text });
+  }
+  if (!out.length) throw new ImportError(`${file.name}: regnearket er tomt.`);
+  return out;
+};
+
 // Garmin's Danish export is sometimes Windows-1252 rather than UTF-8; a strict UTF-8 decode tells us which.
-const decodeText = (buf) => {
+export const decodeText = (buf) => {
   try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
   catch { return new TextDecoder("windows-1252").decode(buf); }
 };
@@ -264,6 +350,8 @@ export const parseFile = async (file) => {
     const use = csvs.length ? csvs : parts;
     return use.flatMap((x) => parseText(x.text, x.name));
   }
+  if (n.endsWith(".xlsx") || n.endsWith(".xlsm")) return (await readExcel(file)).flatMap((x) => activitiesFromCSV(x.text, x.name));
+  if (n.endsWith(".xls") || n.endsWith(".ods") || n.endsWith(".numbers")) throw new ImportError(`${file.name}: gem regnearket som .xlsx (Filer → Gem som) eller som CSV, og vælg den fil.`);
   if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(`${file.name}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.`);
   const text = decodeText(await file.arrayBuffer());
   if (!text.trim()) throw new ImportError(`${file.name}: filen er tom.`);
@@ -341,7 +429,7 @@ export const WELLNESS_METRICS = [
   { key: "stress", label: "stress", re: /^avg stress|^stress|stress level|stressniveau/, parse: parseNum, min: 0, max: 100 },
   { key: "endurance", label: "endurance score", re: /endurance/, parse: parseNum, min: 100, max: 20000 },
 ];
-const NOT_WELLNESS = /activity type|aktivitetstype|activity date|activity name|^title$/;
+const NOT_WELLNESS = /activity type|aktivitetstype|activity date|activity name|^title$|^km$|^kilometer$|^rpe$|^tid$|^min$|^minutter$/; // an activity list, not a report
 const SKIPPED_COLS = /pace|tempo|speed|hastighed|distance|distanc|afstand|activity time|aktivitetstid|calories|kalorier|score$|quality|kvalitet|bedtime|wake|need|status|age|alder|^ftp|max heart|makspuls|average heart|avg heart|gns puls/;
 // A Garmin report: a short table whose first column is a date/period. Not an activity list (those have many columns).
 export const isReportCSV = (text) => {
