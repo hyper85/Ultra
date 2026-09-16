@@ -160,7 +160,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
 }
 
 /* Compact, anonymous context for the AI coach: numbers only, no name or e-mail. */
-export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice }) {
+export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice, extra = {} }) {
   const ur = watchSummary(acts, { includeHikes: !!p.includeHikes, todayKey: ymd(mondayOf(parseLocal(todayStr))), weeks: 12 });
   const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
   return {
@@ -173,5 +173,6 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
     fra_uret_12_uger: ur,
     mønstre: insights.summary,
     fund: insights.findings.map((f) => f.text),
+    ...extra,
   };
 }

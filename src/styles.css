@@ -330,7 +330,9 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
   main.wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 24px; }
   main.wrap > * { min-width: 0; }
   main[data-view="today"] > .today-date { grid-column: 1 / -1; }
+  main[data-view="today"] { grid-auto-flow: dense; }
   main[data-view="today"] > .today { grid-row: span 2; }
+  main[data-view="today"] > .kost { grid-column: 1; }
   main[data-view="plan"] > section.stack, main[data-view="log"] > section.stack, main[data-view="coach"] > section.stack { grid-column: 1 / -1; }
   main[data-view="plan"] > section.stack { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   main[data-view="plan"] > section.stack > h1 { grid-column: 1 / -1; }
@@ -371,3 +373,33 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
 td .dayform input, td .weekfields input { width: 100%; margin: 2px 0 0; padding: 10px 12px; background: var(--panel-2); border-color: var(--line); }
 td .dayform .dayform-row label { flex: 1 1 80px; }
 .panel.scroll td .dayform input, .panel.scroll td .weekfields input { width: 100%; padding: 10px 12px; }
+
+/* strength sessions with figures, and the nutrition card */
+.ex-session { margin: 10px 0 14px; }
+.ex-head { margin-bottom: 6px; }
+.ex-list { display: grid; gap: 6px; }
+.ex { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: var(--r-sm); text-align: left; font-size: 14px; }
+.ex .figure { color: var(--muted); justify-self: center; }
+.ex b { font-weight: 600; }
+.ex-dose { color: var(--muted); }
+.ex-how { margin-top: 2px; font-size: 13px; }
+.ex-how summary { cursor: pointer; color: var(--orange); font-weight: 600; list-style: none; }
+.ex-how summary::-webkit-details-marker { display: none; }
+.ex-how p { margin: 4px 0 0; color: var(--muted); }
+.ex-session.compact { margin: 8px auto 0; max-width: 360px; }
+.ex-session.compact .ex { grid-template-columns: 40px 1fr; padding: 6px 8px; }
+.today .ex-session.compact .ex b { font-size: 14px; }
+.kost .macros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+.kost .macros div { display: grid; gap: 2px; text-align: center; padding: 10px 4px; background: var(--panel-2); border-radius: var(--r-sm); }
+.kost .macros b { font-family: var(--display, inherit); font-size: 20px; line-height: 1; }
+.kost .macros small { color: var(--muted); font-size: 12px; }
+.kost .meals { margin-top: 10px; }
+.kost .meals summary { cursor: pointer; color: var(--orange); font-weight: 600; }
+.kost .meals ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.kost .meals li { display: grid; gap: 2px; padding: 8px 10px; background: var(--panel-2); border-radius: var(--r-sm); font-size: 14px; }
+.kost .meals li b { font-size: 13px; color: var(--muted); }
+.macro-table { font-size: 14px; }
+.macro-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: 13px; }
+.macro-table th.num, .macro-table td.num { text-align: right; }
+.ob-cards.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 420px) { .ob-cards.two { grid-template-columns: 1fr; } }
