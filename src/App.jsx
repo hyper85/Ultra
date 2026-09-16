@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend } from "./sync.js";
 import Onboarding, { goalKcal, proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import coachPlan from "./data/coach-plan.json";
@@ -391,8 +391,19 @@ export default function App() {
         // Garmin's Sleep.csv or a resting-HR table goes into the weekly log; everything else is activities.
         // Reports (Sleep.csv, VO2 max, HRV, resting HR, weight …) go into the weekly log; a report the app has no numbers
         // from (pace, distance, fitness age …) throws a clear message instead of falling into the activity parser.
-        if (/\.csv$/i.test(f.name)) { const text = await f.text(); if (isWellnessCSV(text) || isReportCSV(text)) { wellness.push(wellnessFromCSV(text, f.name)); continue; } }
-        parsed = parsed.concat(await parseFile(f));
+        // An Excel file is read sheet by sheet; each sheet is routed like a CSV file would be.
+        const sheets = /\.xlsx$|\.xlsm$/i.test(f.name) ? await readExcel(f) : /\.csv$/i.test(f.name) ? [{ name: f.name, text: decodeText(await f.arrayBuffer()) }] : null;
+        if (!sheets) { parsed = parsed.concat(await parseFile(f)); continue; }
+        // A workbook may carry side sheets (notes, goals); their errors are only shown when no sheet gave anything.
+        const sheetErrors = []; let gotSheet = false;
+        for (const sh of sheets) {
+          try {
+            if (isWellnessCSV(sh.text) || isReportCSV(sh.text)) wellness.push(wellnessFromCSV(sh.text, sh.name));
+            else parsed = parsed.concat(activitiesFromCSV(sh.text, sh.name));
+            gotSheet = true;
+          } catch (err) { sheetErrors.push(err?.message || `${sh.name}: kunne ikke læses.`); }
+        }
+        if (!gotSheet) errors.push(...sheetErrors);
       } catch (err) { errors.push(err?.message || `${f.name}: kunne ikke læses.`); console.error("import", f.name, err); }
     }
     let logBase = log; const got = {}; const skippedCols = [];
@@ -1096,9 +1107,9 @@ export default function App() {
                 )}
                 <details className="import" open={nActs === 0 || !!importMsg}>
                   <summary><h3>Hent fra Strava eller Garmin{nActs > 0 ? ` · ${nActs} ture hentet` : ""}</h3></summary>
-                  <p className="muted">Vælg en eller flere filer på én gang. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>
+                  <p className="muted">Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>
                   <div className="import-row">
-                    <input ref={fileRef} type="file" multiple onChange={onFiles} disabled={importing} />
+                    <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
                     {importing && <span className="muted">Læser…</span>}
                     <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> Tæl vandring og gang med</label>
                   </div>
