@@ -361,6 +361,17 @@ export default function App() {
   const curBase = plan.rows.find((r) => r.key === todayKey) || (todayKey > lastPlanRow.key ? lastPlanRow : plan.rows[0]);
   const todayStr = ymd(new Date());
   const beforePlan = todayKey < plan.rows[0].key;   // the plan has not started yet
+  // The coach's plan covers this race but is switched off (the questionnaire and an applied AI proposal switch it off):
+  // say so on "I dag" and "Plan", with the week the coach's plan is at, and one tap to switch back.
+  const coachNow = coachPlan.weeks.filter((w) => w.start <= todayKey).length;
+  const coachOffer = !plan.coach && p.raceDate === coachPlan.race.date && todayKey <= coachPlan.race.date ? { now: coachNow, weeks: coachPlan.weeks.length, start: parseLocal(coachPlan.weeks[0].start) } : null;
+  const useCoachPlan = () => setP({ ...p, coachMode: true });
+  const coachOfferBox = coachOffer && (
+    <div className="advice warn coach-offer">
+      <b>Du ser en plan, appen har beregnet</b> ({plan.weeks} uger fra {fmt(plan.rows[0].wkStart)}). Din træners plan har {coachOffer.weeks} uger fra {fmt(coachOffer.start)}{coachOffer.now >= 1 && coachOffer.now <= coachOffer.weeks ? ` og er i dag på uge ${coachOffer.now} af ${coachOffer.weeks}` : ""}. Skift, hvis du følger træneren.
+      <div style={{ marginTop: 8 }}><button type="button" className="btn" onClick={useCoachPlan}>Brug trænerplanen</button></div>
+    </div>
+  );
   const afterRace = todayStr > p.raceDate;            // the race is behind us
   const startD = parseLocal(p.startDate);
   const curSchedLabel = curBase.schedLabel;
@@ -725,7 +736,8 @@ export default function App() {
           ); }
           return (
             <>
-              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}</div>
+              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}{plan.coach ? " · trænerplan" : ""}</div>
+              {coachOfferBox}
               <section className={`panel today ${done ? "done" : ""}`}>
                 <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
                 <div className="today-km">{raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{kind}</b>}</div>
@@ -973,7 +985,8 @@ export default function App() {
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>
           <div className="panel">
-            <h2>Uge {cur.i} af {plan.weeks} · {fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))} · {cur.phase}{cur.deload && cur.phase !== "Nedtrapning" ? " · let uge" : ""}{cur.schedLabel ? ` · skema ${cur.schedLabel}` : ""}</h2>
+            <h2>Uge {cur.i} af {plan.weeks} · {fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))} · {cur.phase}{cur.deload && cur.phase !== "Nedtrapning" ? " · let uge" : ""}{plan.coach ? " · trænerplan" : ""}{cur.schedLabel ? ` · skema ${cur.schedLabel}` : ""}</h2>
+            {coachOfferBox}
             {adjRow && (
               <div className="adj-badge">
                 <span>{showOriginal ? `Original plan · ${curBase.km} km` : `Justeret af trænerråd (${adjRow.adjusted.reason})`}</span>

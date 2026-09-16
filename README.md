@@ -60,6 +60,11 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Trænerplan eller beregnet plan: er trænerens uger slået til (Mere → Start), viser appen dem som de er med faste datoer,
+og "I dag" og "Plan" skriver "· trænerplan". Spørgeskemaet og et anvendt AI-forslag slår trænerplanen fra og bygger i
+stedet en plan fra din startdato. Sker det for trænerens løb, siger appen det med rødt på "I dag" og "Plan", og ét tryk
+på "Brug trænerplanen" skifter tilbage; i spørgeskemaets sidste trin ligger trænerplanen som første kort.
+
 Under Log → Hent kan du vælge alle filerne på én gang, også Garmins rapporter (Rapporter → vælg rapport → 1 år →
 Eksportér). Appen forstår daglige, ugentlige og månedlige rækker og lægger tallene i loggen pr. uge:
 
