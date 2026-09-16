@@ -611,6 +611,9 @@ export default function App() {
   const [coachQ, setCoachQ] = useState("");
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachErr, setCoachErr] = useState(null);
+  // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.
+  const chatRef = useRef(null);
+  useEffect(() => { const el = chatRef.current; if (el) el.scrollTop = el.scrollHeight; }, [chat, coachBusy, view]);
   const ask = async (q) => {
     const question = (q ?? coachQ).trim();
     if (!question || coachBusy) return;
@@ -824,7 +827,8 @@ export default function App() {
             <h3 className="sub">Spørg træneren</h3>
             <p className="muted">En AI-træner, der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.</p>
             {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={coachBusy}>{q}</button>)}</div>}
-            <div className="chat">
+            <div className="chat" ref={chatRef} aria-live="polite">
+              {chat.length === 0 && !coachBusy && <div className="muted chat-empty">Stil et spørgsmål, eller vælg et af forslagene. Svaret kommer her.</div>}
               {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
               {coachBusy && <div className="msg assistant muted">Tænker…</div>}
             </div>

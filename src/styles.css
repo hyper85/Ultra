@@ -301,7 +301,12 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
 .finding { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--panel-2); border-left: 4px solid var(--blue); font-size: 14px; }
 .finding.warn { border-left-color: var(--amber); }
 .finding.good { border-left-color: var(--green); }
-.chat { display: grid; gap: 8px; margin-top: 10px; }
+.chat { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; height: min(52vh, 460px); min-height: 220px; overflow-y: auto; overscroll-behavior: contain; padding: 10px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px solid var(--line, rgba(255,255,255,.08)); }
+.chat .msg { flex: 0 0 auto; }
+.chat .msg.user { align-self: flex-end; }
+.chat .msg.assistant { align-self: flex-start; }
+.chat .msg.assistant { background: var(--panel); }
+.chat-empty { margin: auto; text-align: center; font-size: 14px; }
 .msg { padding: 10px 12px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; max-width: 92%; }
 .msg.user { background: #2a1a10; border: 1px solid rgba(252,76,2,.4); justify-self: end; border-bottom-right-radius: 4px; }
 .msg.assistant { background: var(--panel-2); justify-self: start; border-bottom-left-radius: 4px; }
