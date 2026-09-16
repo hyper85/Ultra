@@ -39,6 +39,7 @@ syncs profile, log and activities. Deployed on Vercel from `main` (https://ultra
   `injury none|sore|injured`, `diet`, `intol[]`, `peakScale`, `startDate` (always a Monday), `onboarded`.
 - `ultraplan-log` – keyed by the Monday of the week (`YYYY-MM-DD`): `{ km, rpe, hr, wt, sleep, vo2, hrv, stress, endurance, auto, rpeAuto, <field>Auto, n }`.
   `auto` = km came from activities, `<field>Auto` = imported from a Garmin report (typing clears the flag); vo2/hrv/stress/endurance are not shown in the table but feed insights and the coach context; never re-key by week number.
+- Account switch: `ultraplan-owner` holds the user id the device's data belongs to; the login effect wipes the device (`clearLocal`) when the session's user differs from that mark or from the previous user in the tab (`prevUserRef`), shows "Skiftet til <e-mail>…" as sync message, and never pushes the old data to the new account. The pull races a 12 s timeout so the splash never hangs.
 - `ultraplan-activities` – imported or typed runs keyed by id; `kind()` is recomputed at read time.
 - `ultraplan-meta` (`updatedAt`) and `ultraplan-owner` (user id) drive sync and device isolation.
 
@@ -73,6 +74,9 @@ the last completed week, never the week in progress.
 npm ci && npm run build            # Vite; version stamp comes from git sha via vite.config.js
 npx vite preview --port 4174       # serve dist for tests
 node scratch/test.mjs              # Playwright: import chromium from /opt/node22/lib/node_modules/playwright/index.mjs
+# Auth/sync tests: build with a SAME-ORIGIN dummy Supabase URL (VITE_SUPABASE_URL=http://localhost:4175/sb) so Playwright page.route
+# can fulfill /sb/auth/v1/user, /sb/auth/v1/token and /sb/rest/v1/** without CORS preflights (a cross-origin dummy host hangs the pull);
+# the session key is then sb-localhost-auth-token. An invite link is http://localhost:4175/#access_token=…&refresh_token=…&type=invite.
 # insights.js and api/coach.js are plain modules: unit-test them in node (mock the Anthropic endpoint with ANTHROPIC_BASE_URL).
 ```
 
