@@ -60,6 +60,18 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Kroppen ud over løbet: i spørgeskemaet vælger du, hvad du vil med kroppen (holde vægten, tabe dig, bygge muskler
+eller være fit), hvor mange styrkepas du vil have om ugen (0–3), og hvilket udstyr du har (ingen, håndvægte/elastik
+eller fitnesscenter). Appen lægger styrkedagene på dage uden lang tur og bygger pas af syv bevægelser (squat, hoftebøj,
+ét ben, pres, træk, core, læg) med tegninger og én sætning teknik pr. øvelse. Dosis følger planens fase: let i
+genopbygning, tungt og kort i opbygning, vedligehold i ultra-prep, let i nedtrapning, intet i løbsugen. Vil du bygge
+muskler, får du et sæt mere og 8–12 gentagelser; vil du tabe dig, får du flere gentagelser og kortere pauser.
+
+Kosten følger dagen: "I dag" viser kcal, protein, kulhydrat og fedt for dagens type (lang tur, hård session, rolig
+tur, styrke, hvile) og fire måltidsforslag, der passer til din kost og dine intolerancer. Vægttab er max 0,5 kg/uge og
+aldrig under 1,15 × hvilestofskiftet. Hele ugens tal står under Mere → Kost, programmet under Mere → Styrke, og
+AI-træneren kender både kropsmål, styrkepas og dagens kosttal.
+
 Trænerplan eller beregnet plan: er trænerens uger slået til (Mere → Start), viser appen dem som de er med faste datoer,
 og "I dag" og "Plan" skriver "· trænerplan". Spørgeskemaet og et anvendt AI-forslag slår trænerplanen fra og bygger i
 stedet en plan fra din startdato. Sker det for trænerens løb, siger appen det med rødt på "I dag" og "Plan", og ét tryk

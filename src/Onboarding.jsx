@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { ymd, parseLocal, mondayOf, addDays } from "./import.js";
 import coachPlan from "./data/coach-plan.json";
+import { BODY, GEAR, pickLiftDays, buildStrength, gearLabel } from "./strength.js";
+import { weekTargets, bmrOf } from "./nutrition.js";
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
 const coachCard = () => {
@@ -14,10 +16,10 @@ const coachCard = () => {
    plan models computed from the answers. See docs/ux-first-login.md for the brief. */
 
 const GOALS = [
-  ["finish", "Gennemføre", "Kom i mål hel og glad. Kosten holder vægten stabil."],
+  ["finish", "Gennemføre", "Kom i mål hel og glad. Kvaliteten holdes moderat."],
   ["perform", "Gennemføre på tid", "Lidt mere kvalitet, lidt mere mad på de hårde dage."],
-  ["lean", "Gennemføre og blive lettere", "Roligt underskud på ca. 300 kcal/dag, max 0,5 kg/uge."],
 ];
+const LIFTS = [[0, "Ingen"], [1, "1 pas"], [2, "2 pas"], [3, "3 pas"]];
 const MODELS = [
   { key: "min", name: "Minimum", dLevel: 0, dDays: 0, peakScale: 0.8, who: "Samme dage, lavere top (80 %). Til dig med lidt tid eller skavanker." },
   { key: "bal", name: "Balanceret", dLevel: 0, dDays: 0, peakScale: 1, who: "Den vi anbefaler ud fra dine svar. Stiger roligt fra din base." },
@@ -74,11 +76,11 @@ export const goalKcal = (bmr, goal) => {
   const rows = [["Lang tur / løbsdag", bmr * 1.95 + adj], ["Kvalitet / styrke", bmr * 1.7 + adj + q], ["Rolig løbedag", bmr * 1.45 - 400 + adj], ["Hviledag", bmr * 1.3 - 450 + adj]];
   return rows.map(([n, c]) => [n, Math.max(Math.round(bmr * 1.15 / 10) * 10, Math.round(c / 10) * 10)]);
 };
-export const proteinG = (weight, goal) => Math.round(weight * (goal === "lean" ? 2.2 : 2));
+export const proteinG = (weight, body) => Math.round(weight * (body === "lean" ? 2.2 : 2));
 
 export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, buildPlan, onDone, rerun }) {
   const [step, setStep] = useState(0);
-  const [d, setD] = useState(() => ({ ...initial, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
+  const [d, setD] = useState(() => ({ ...initial, body: initial.body || "keep", gear: initial.gear || "home", liftCount: initial.liftDays ? initial.liftDays.length : 2, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
   const set = (k) => (e) => setD({ ...d, [k]: e.target.type === "number" ? (e.target.value === "" ? "" : +e.target.value) : e.target.value });
   const setDay = (i, patch) => { const A = (d.sched?.A || []).map((x, j) => (j === i ? { ...x, ...patch } : x)); setD({ ...d, sched: { ...(d.sched || {}), A, B: d.sched?.B || A.map((x) => ({ ...x })) } }); };
   const STEPS = ["Velkommen", "Løbet", "Dig", "Din form", "Din krop", "Din hverdag", "Kost", "Din plan"];
@@ -104,10 +106,14 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const tips = dietTips(d.diet || "all", d.intol || []);
   const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
-  const choose = (m) => onDone({ ...m.v, onboarded: true, coachMode: false });
+  const liftDaysFor = (x) => pickLiftDays(x.sched?.A || [], { longDay: x.longDay, qualityDay: x.qualityDay ?? 2, count: x.liftCount ?? 2 });
+  const finish = (x) => { const { liftCount, ...rest } = x; return { ...rest, liftDays: liftDaysFor(x), onboarded: true }; };
+  const choose = (m) => onDone({ ...finish(m.v), coachMode: false });
   // Same race as the coach's plan (or already on it): offer the coach's fixed weeks as the first choice.
   const coach = d.raceDate === coachPlan.race.date || initial.coachMode !== false ? coachCard() : null;
-  const chooseCoach = () => onDone({ ...d, raceName: coachPlan.race.name, raceDate: coachPlan.race.date, raceKm: coachPlan.race.km, raceVert: coachPlan.race.vert, startDate: coachPlan.weeks[0].start, onboarded: true, coachMode: true });
+  const chooseCoach = () => onDone({ ...finish(d), raceName: coachPlan.race.name, raceDate: coachPlan.race.date, raceKm: coachPlan.race.km, raceVert: coachPlan.race.vert, startDate: coachPlan.weeks[0].start, coachMode: true });
+  const strengthPreview = useMemo(() => buildStrength({ body: d.body, gear: d.gear, phase: "Opbygning", count: d.liftCount ?? 2 }), [d.body, d.gear, d.liftCount]);
+  const macroRows = useMemo(() => weekTargets({ bmr: bmrOf({ weight: d.weight || 80, height: d.height || 178, age: d.age || 40, sex: d.sex }), weight: d.weight || 80, body: d.body, goal: d.goal, diet: d.diet || "all" }), [d.weight, d.height, d.age, d.sex, d.body, d.goal, d.diet]);
   const sched = d.sched?.A || [];
   const longDays = DAYS.map((n, i) => [n, i]).filter(([, i]) => sched[i]?.avail === "long");
 
@@ -195,7 +201,11 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
       {step === 4 && (
         <section className="panel ob-panel">
           <h2>Din krop</h2>
-          <p className="muted">Ærligt svar giver en plan, du kan holde til. Alt kan ændres senere under "Mere".</p>
+          <p className="muted">Hvad vil du med kroppen, ud over løbet? Det styrer kosten og styrketræningen.</p>
+          <div className="ob-cards two">
+            {BODY.map(([k, n, t]) => <button key={k} type="button" className={(d.body || "keep") === k ? "on" : ""} onClick={() => setD({ ...d, body: k, liftCount: k === "muscle" ? Math.max(3, d.liftCount ?? 2) : k === "keep" || k === "fit" ? Math.max(1, Math.min(2, d.liftCount ?? 2)) : (d.liftCount ?? 2) })}><b>{n}</b><span>{t}</span></button>)}
+          </div>
+          <div className="muted" style={{ marginTop: 14 }}>Og hvordan har den det lige nu? Ærligt svar giver en plan, du kan holde til.</div>
           <div className="ob-cards">
             {INJURY.map(([k, n, t]) => <button key={k} type="button" className={(d.injury || "none") === k ? "on" : ""} onClick={() => setD({ ...d, injury: k })}><b>{n}</b><span>{t}</span></button>)}
           </div>
@@ -237,7 +247,15 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
               {longDays.length ? longDays.map(([n, i]) => <option key={i} value={i}>{n}</option>) : <option value={d.longDay}>Sæt en dag til "Lang" ovenfor</option>}
             </select>
           </label>
-          <div className="muted" style={{ marginTop: 8 }}>Deleordning med uge A/B, tidspunkt på dagen og styrkedage kan sættes bagefter under "Din hverdag".</div>
+          <div className="muted" style={{ marginTop: 14 }}>Styrke om ugen. Korte pas på 30–45 min, lagt på dage uden lang tur.</div>
+          <div className="chips">{LIFTS.map(([n, l]) => <button key={n} type="button" className={(d.liftCount ?? 2) === n ? "on" : ""} onClick={() => setD({ ...d, liftCount: n })}>{l}</button>)}</div>
+          {(d.liftCount ?? 2) > 0 && (
+            <div className="ob-cards" style={{ marginTop: 8 }}>
+              {GEAR.map(([k, n, t]) => <button key={k} type="button" className={(d.gear || "home") === k ? "on" : ""} onClick={() => setD({ ...d, gear: k })}><b>{n}</b><span>{t}</span></button>)}
+            </div>
+          )}
+          {(d.liftCount ?? 2) > 0 && <div className="muted" style={{ marginTop: 8 }}>Styrkedage: {liftDaysFor(d).map((i) => DAYS[i]).join(", ") || "ingen ledige"}. Kan flyttes bagefter under "Din hverdag".</div>}
+          <div className="muted" style={{ marginTop: 8 }}>Deleordning med uge A/B og tidspunkt på dagen kan sættes bagefter under "Din hverdag".</div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next}>Næste</button></div>
         </section>
       )}
@@ -251,7 +269,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           </div>
           <div className="muted" style={{ marginTop: 12 }}>Noget du ikke tåler?</div>
           <div className="chips">{INTOL.map((x) => <button key={x} type="button" className={(d.intol || []).includes(x) ? "on" : ""} onClick={() => toggleIntol(x)}>{x}</button>)}</div>
-          <div className="advice">Protein ca. <b>{proteinG(d.weight || 80, d.goal)} g</b> om dagen, fx fra {tips.protein.slice(0, 3).join(", ").toLowerCase()}. På lange ture: {tips.fuel[0]?.toLowerCase()}.</div>
+          <div className="advice">Protein ca. <b>{proteinG(d.weight || 80, d.body)} g</b> om dagen, fx fra {tips.protein.slice(0, 3).join(", ").toLowerCase()}. På lange ture: {tips.fuel[0]?.toLowerCase()}.</div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button><button className="btn" onClick={next}>Vis min plan</button></div>
         </section>
       )}
@@ -301,14 +319,24 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           </div>
           <div className="panel ob-panel">
             <h2>Kost</h2>
-            <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(d.weight || 80, d.goal)} g</b> hver dag. {GOALS.find(([k]) => k === d.goal)?.[2]}</p>
-            <table><tbody>{goalKcal(bmr, d.goal).map(([n, c]) => <tr key={n}><td>{n}</td><td className="num"><b>{c} kcal</b></td></tr>)}</tbody></table>
+            <p>Hvilestofskifte ≈ <b>{bmr} kcal</b>. Protein <b>{proteinG(d.weight || 80, d.body)} g</b> hver dag. {BODY.find(([k]) => k === (d.body || "keep"))?.[2]}</p>
+            <div className="scroll"><table className="macro-table"><thead><tr><th>Dag</th><th className="num">kcal</th><th className="num">Protein</th><th className="num">Kulhydrat</th><th className="num">Fedt</th></tr></thead><tbody>{macroRows.map((r) => <tr key={r.key}><td>{r.label}</td><td className="num"><b>{r.kcal}</b></td><td className="num">{r.protein} g</td><td className="num">{r.carbs} g</td><td className="num">{r.fat} g</td></tr>)}</tbody></table></div>
             <div className="tips">
               <div><b>Protein fra</b><span>{tips.protein.join(" · ")}</span></div>
               <div><b>På lange ture</b><span>{tips.fuel.join(" · ")}</span></div>
               {tips.swaps.length > 0 && <div><b>Bytte-tips</b><span>{tips.swaps.join(" ")}</span></div>}
             </div>
-            <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Kosttallene og forslagene findes bagefter under "Mere", Kost.</p>
+            <p className="muted">Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Dagens tal og måltidsforslag står på "I dag", alt sammen under "Mere", Kost.</p>
+          </div>
+          <div className="panel ob-panel">
+            <h2>Styrke</h2>
+            {strengthPreview.sessions.length ? (
+              <>
+                <p>{d.liftCount} pas om ugen ({liftDaysFor(d).map((i) => DAYS[i]).join(", ")}) med {gearLabel(d.gear).toLowerCase()}. {strengthPreview.note}</p>
+                <div className="tips">{strengthPreview.sessions.map((x) => <div key={x.key}><b>{x.name} · {x.focus} · ca. {x.minutes} min</b><span>{x.exercises.map((e) => e.label).join(" · ")}</span></div>)}</div>
+                <p className="muted">Øvelserne med tegninger og teknik står på "I dag" på styrkedage og under "Mere", Styrke. Ankelrutinen hver dag: {strengthPreview.daily.join(", ").toLowerCase()}.</p>
+              </>
+            ) : <p className="muted">{strengthPreview.note}</p>}
           </div>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>Tilbage</button></div>
         </section>
