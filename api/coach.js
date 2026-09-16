@@ -31,10 +31,11 @@ const pickProvider = () => {
 };
 
 // OpenAI-compatible chat completions (GLM, Kimi, MiniMax, Qwen … on OpenCode Zen and Z.ai). Plain fetch: no extra SDK.
-const chatCompletion = async (provider, messages, { extras = true } = {}) => {
+const chatCompletion = async (provider, messages, { extras = true, nudged = false } = {}) => {
   // Z.ai's own API accepts a `thinking` switch for GLM; gateways like OpenCode Zen reject unknown fields with 400,
   // so extras are only sent to Z.ai, and any 400 is retried once with the plain, minimal body.
-  const body = { model: provider.model, max_tokens: 4000, messages: [{ role: "system", content: SYSTEM }, ...messages] };
+  // Thinking models (GLM, Kimi …) reason before they answer; the budget must hold both, or the answer never comes.
+  const body = { model: provider.model, max_tokens: 8000, messages: [{ role: "system", content: SYSTEM }, ...messages] };
   if (extras) { body.temperature = 0.4; if (provider.name === "zai" && /^glm/i.test(provider.model)) body.thinking = { type: "disabled" }; }
   const r = await fetch(provider.chatURL, {
     method: "POST",
@@ -50,7 +51,17 @@ const chatCompletion = async (provider, messages, { extras = true } = {}) => {
   const choice = data?.choices?.[0]; const msg = choice?.message;
   const asText = (c) => (typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => x?.text || "").join("") : "");
   let content = asText(msg?.content).trim();
-  if (!content) content = asText(msg?.reasoning_content || msg?.reasoning).trim(); // some models put everything in the reasoning field
+  const reasoning = asText(msg?.reasoning_content || msg?.reasoning).trim();
+  // Only reasoning, no answer: the model spent its budget thinking. Its thinking is English scratch work and must never
+  // be shown as the reply. Ask once more, telling it to answer directly; then give up with a clear message.
+  if (!content && reasoning) {
+    if (!nudged) {
+      const last = messages[messages.length - 1];
+      const nudge = { ...last, content: `${asText(last.content) || last.content}\n\n(Svar direkte og kort på dansk til løberen. Ingen lange overvejelser først.)` };
+      return chatCompletion(provider, [...messages.slice(0, -1), nudge], { extras, nudged: true });
+    }
+    const e = new Error("Modellen brugte hele sit budget på at tænke og skrev intet svar. Prøv igen med et kortere spørgsmål, eller vælg en anden model i COACH_MODEL."); e.status = 502; throw e;
+  }
   return { text: content, model: data?.model || provider.model, finish: choice?.finish_reason || null };
 };
 const SYSTEM = `Du er træneren i Ultraplan, en dansk app til ultra- og trailløbere med et almindeligt liv (job, familie, begrænset tid).

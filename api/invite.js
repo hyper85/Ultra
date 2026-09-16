@@ -33,7 +33,11 @@ export default async function handler(req, res) {
   const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { invited_by: me.user.id } });
   if (error) {
     if (/already|exists|registered/i.test(error.message)) return json(res, 409, { error: `${email} har allerede en konto. Bed dem logge ind med en kode.` });
-    if (/rate|too many/i.test(error.message)) return json(res, 429, { error: "For mange invitationer lige nu. Prøv igen om lidt." });
+    if (/rate|too many/i.test(error.message)) return json(res, 429, { error: "For mange invitationer lige nu. Supabases indbyggede afsender sender højst 2 mails i timen; egen SMTP (Authentication → SMTP Settings) fjerner grænsen." });
+    // Supabase's built-in mail sender only delivers to the project's own team members.
+    if (/not authorized|authorized/i.test(error.message)) return json(res, 403, { error: `${email} kan ikke inviteres: Supabases indbyggede afsender må kun sende til projektets egne medlemmer. Sæt egen SMTP op i Supabase (Authentication → SMTP Settings, fx Brevo), så kan du invitere alle.` });
+    if (/signups? not allowed|disabled/i.test(error.message)) return json(res, 403, { error: "Nye brugere er slået fra i Supabase. Slå \"Allow new users to sign up\" til under Authentication → Providers → Email." });
+    if (/smtp|mail|send/i.test(error.message)) return json(res, 502, { error: `Mailen kunne ikke sendes (${error.message}). Tjek SMTP-indstillingerne i Supabase under Authentication → SMTP Settings.` });
     return json(res, 502, { error: `Invitationen kunne ikke sendes: ${error.message}` });
   }
   return json(res, 200, { ok: true, email });
