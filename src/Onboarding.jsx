@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
 import { ymd, parseLocal, mondayOf, addDays } from "./import.js";
+import coachPlan from "./data/coach-plan.json";
+
+// The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
+const coachCard = () => {
+  const W = coachPlan.week, rows = coachPlan.weeks, today = ymd(mondayOf(new Date()));
+  const now = rows.filter((w) => w.start <= today).length;
+  return { key: "coach", name: "Trænerplan", topKm: Math.max(...rows.filter((w) => !w.race).map((w) => w.km)), longest: Math.max(...rows.filter((w) => !w.race).map((w) => w.days[W.longDay])),
+    runDays: W.runDays.length, weeks: rows.length, start: parseLocal(rows[0].start), now: now >= 1 && now <= rows.length ? now : null, first: rows[0].km, race: coachPlan.race.name };
+};
 
 /* First-login questionnaire. Six short screens, one topic each, ending in a choice between three
    plan models computed from the answers. See docs/ux-first-login.md for the brief. */
@@ -96,6 +105,9 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
   const choose = (m) => onDone({ ...m.v, onboarded: true, coachMode: false });
+  // Same race as the coach's plan (or already on it): offer the coach's fixed weeks as the first choice.
+  const coach = d.raceDate === coachPlan.race.date || initial.coachMode !== false ? coachCard() : null;
+  const chooseCoach = () => onDone({ ...d, raceName: coachPlan.race.name, raceDate: coachPlan.race.date, raceKm: coachPlan.race.km, raceVert: coachPlan.race.vert, startDate: coachPlan.weeks[0].start, onboarded: true, coachMode: true });
   const sched = d.sched?.A || [];
   const longDays = DAYS.map((n, i) => [n, i]).filter(([, i]) => sched[i]?.avail === "long");
 
@@ -248,13 +260,29 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
         <section className="ob-result">
           <div className="panel ob-panel">
             <h2>Din plan</h2>
-            <p className="muted">Tre bud ud fra dine svar. Tallene er ugens km på toppen, længste tur og cirka-timer om ugen, når det er hårdest. Vælg den, du kan holde i {weeksToRace || "alle"} uger.</p>
+            <p className="muted">{coach ? "Din træners plan, eller tre bud beregnet ud fra dine svar." : "Tre bud ud fra dine svar."} Tallene er ugens km på toppen, længste tur og cirka-timer om ugen, når det er hårdest. Vælg den, du kan holde i {weeksToRace || "alle"} uger.</p>
             {d.injury === "injured" && <div className="advice warn">Alle tre starter med 4 ugers genopbygning og én løbedag mindre, fordi du er skadet. Toppen er sænket 10 %.</div>}
             {d.injury === "sore" && <div className="advice">De første 3 uger er uden bakker og hårde intervaller på grund af ømheden.</div>}
             <div className="model-grid">
+              {coach && (
+                <div className="model rec">
+                  <div className="model-tag">Din træner</div>
+                  <h3>Trænerplan</h3>
+                  <div className="model-num"><b>{coach.topKm}</b><span>km/uge på toppen</span></div>
+                  <dl>
+                    <div><dt>Uger</dt><dd>{coach.weeks} fra {coach.start.toLocaleDateString("da-DK", { day: "numeric", month: "short" })}</dd></div>
+                    <div><dt>Nu</dt><dd>{coach.now ? `uge ${coach.now} af ${coach.weeks}` : "ikke startet"}</dd></div>
+                    <div><dt>Løbedage</dt><dd>{coach.runDays} om ugen</dd></div>
+                    <div><dt>Start</dt><dd>{coach.first} km/uge</dd></div>
+                    <div><dt>Længste tur</dt><dd>{coach.longest} km</dd></div>
+                  </dl>
+                  <p className="muted">Trænerens uger som de er, med faste datoer og dage. Tallene er et loft, ikke et gulv. Trænerrådet justerer stadig ugen efter dine tal.</p>
+                  <button className="btn" onClick={chooseCoach}>Brug trænerplanen</button>
+                </div>
+              )}
               {models.map((m) => (
-                <div key={m.key} className={`model ${m.key === "bal" ? "rec" : ""}`}>
-                  {m.key === "bal" && <div className="model-tag">Anbefalet</div>}
+                <div key={m.key} className={`model ${m.key === "bal" && !coach ? "rec" : ""}`}>
+                  {m.key === "bal" && !coach && <div className="model-tag">Anbefalet</div>}
                   <h3>{m.name}</h3>
                   <div className="model-num"><b>{m.topKm}</b><span>km/uge på toppen</span></div>
                   <dl>
