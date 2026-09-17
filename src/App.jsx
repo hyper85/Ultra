@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend } from "./sync.js";
 import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
 import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
+const actKind = kind; // the today screen shadows `kind` with the day's label
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
 import { describeSession, describeLong, describeEasy } from "./sessions.js";
@@ -395,11 +396,14 @@ export default function App() {
   const applyActivities = (nextActs, includeHikes, base = log) => {
     const weeks = weeklyTotals(nextActs, { includeHikes, maxHR });
     const n = { ...base };
-    for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
+    for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, xmin, xn, xload, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
     for (const [k, w] of Object.entries(weeks)) {
       const l = n[k] || {};
       const rpe = l.rpe != null && l.rpe !== "" && !l.rpeAuto ? l.rpe : w.rpe ?? l.rpe;
-      n[k] = { ...l, km: w.km, n: w.n, auto: true, ...(rpe != null ? { rpe, rpeAuto: !(l.rpe != null && l.rpe !== "" && !l.rpeAuto) } : {}) };
+      const { xmin, xn, xload, ...keep } = l;
+      // km and RPE only when the week has runs; a week with only strength keeps a typed km untouched.
+      const runPart = w.n ? { km: w.km, n: w.n, auto: true, ...(rpe != null ? { rpe, rpeAuto: !(l.rpe != null && l.rpe !== "" && !l.rpeAuto) } : {}) } : (l.auto ? (() => { const { km, auto, rpeAuto, rpe: r0, n: _n, ...rest } = l; return { ...rest, ...(!rpeAuto && r0 != null ? { rpe: r0 } : {}) }; })() : {});
+      n[k] = { ...keep, ...runPart, ...(w.xn ? { xmin: w.xmin, xn: w.xn, xload: w.xload } : {}) };
     }
     saveLog(n);
     return weeks;
@@ -466,25 +470,29 @@ export default function App() {
 
   /* ---- day-by-day logging for the current week ---- */
   const [dayEdit, setDayEdit] = useState(null); // { key: Monday of the week, i: weekday index }
-  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "" });
+  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "", type: "Run" });
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
   const [showPre, setShowPre] = useState(false);
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Sessions without km (strength, HIIT, cycling …) by day, so a day with one is not shown as skipped.
+  const otherByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (counted(x) || kind(x.type) === "hike" || !(x.min > 0)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const otherText = (list) => (list || []).map((x) => `${xLabel(x.type)}${x.km > 0 ? ` ${x.km} km` : ""}${x.min ? ` ${x.min} min` : ""}`).join(", ");
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
   const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
-  const openDay = (key, i) => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); };
+  const openDay = (key, i, type = "Run") => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type }); setDayMsg(null); };
   const saveDay = (e) => {
     e.preventDefault();
-    if (!dayEdit || !(+dayForm.km > 0)) return;
-    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: dayForm.km, min: dayForm.min, rpe: dayForm.rpe });
+    const isRun = dayForm.type === "Run";
+    if (!dayEdit || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
+    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type });
     const { next, added } = mergeActivities(acts, [act]);
-    if (!added) { setDayMsg({ warn: true, text: "Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert." }); return; }
+    if (!added) { setDayMsg({ warn: true, text: isRun ? "Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert." : "Der er allerede et pas af den slags den dag med omtrent samme varighed. Slet det først, hvis det er forkert." }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
-    setDayForm({ km: "", min: "", rpe: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
+    setDayForm({ km: "", min: "", rpe: "", type: "Run" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
   };
   // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
   const renderDayForm = (planKm) => {
@@ -493,17 +501,19 @@ export default function App() {
     return (
       <form className="dayform" onSubmit={saveDay}>
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? `· plan ${planKm || 0} km` : "· før planen"}</span></div>
-        {(actsByDay[day] || []).map((x) => (
-          <div key={x.id} className="dayform-item"><span>✓ {x.km} km{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
+        {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
+          <div key={x.id} className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · puls ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {x.source}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>Slet</button></div>
         ))}
-        {(actsByDay[day] || []).length > 0 && <div className="muted" style={{ margin: "8px 0 2px" }}>Tilføj en tur mere:</div>}
+        {((actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0) && <div className="muted" style={{ margin: "8px 0 2px" }}>Tilføj et pas mere:</div>}
+        <div className="chips dayform-types">{[["Run", "Løb"], ...XTYPES].map(([k, l]) => <button key={k} type="button" className={dayForm.type === k ? "on" : ""} onClick={() => setDayForm({ ...dayForm, type: k })}>{l}</button>)}</div>
         <div className="dayform-row">
-          <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>
-          <label>Minutter<input type="number" min="1" inputMode="numeric" value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} /></label>
-          <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder="valgfri" /></label>
+          {dayForm.type === "Run" && <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>}
+          <label>Minutter<input type="number" min="1" inputMode="numeric" required={dayForm.type !== "Run"} value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} autoFocus={dayForm.type !== "Run"} /></label>
+          <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder={dayForm.type === "Run" ? "valgfri" : "fx 7"} /></label>
         </div>
+        {dayForm.type !== "Run" && <div className="muted" style={{ marginBottom: 8 }}>Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.</div>}
         <div className="dayform-row">
-          <button className="btn" type="submit">Gem tur</button>
+          <button className="btn" type="submit">{dayForm.type === "Run" ? "Gem tur" : `Gem ${xLabel(dayForm.type).toLowerCase()}`}</button>
           <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>Luk</button>
         </div>
         {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
@@ -518,12 +528,13 @@ export default function App() {
         {DAYS.map((n, i) => {
           const planKm = r.pre ? null : r.days[i];
           const ok = planKm != null && planKm > 0 && km[i] >= planKm * 0.9;
+          const other = otherByDay[ymd(addDays(parseLocal(r.key), i))] || [];
           return (
-            <div key={n} role="button" tabIndex={0} className={`${km[i] > 0 ? (ok || planKm === null || !planKm ? "done" : "part") : ""} ${isEditing(r.key, i) ? "edit" : ""}`}
-              onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title="Tryk for at logge eller rette">
+            <div key={n} role="button" tabIndex={0} className={`${km[i] > 0 ? (ok || planKm === null || !planKm ? "done" : "part") : other.length ? "done" : ""} ${isEditing(r.key, i) ? "edit" : ""}`}
+              onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : "Tryk for at logge eller rette"}>
               <small>{n}</small>
-              <b>{km[i] > 0 ? km[i] : "–"}</b>
-              <small className="muted">{planKm != null ? (planKm ? `plan ${planKm}` : "hvile") : "\u00a0"}</small>
+              <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}</b>
+              <small className="muted">{other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? `plan ${planKm}` : "hvile") : "\u00a0"}</small>
             </div>
           );
         })}
@@ -543,7 +554,9 @@ export default function App() {
   /* ---- load & ACWR ----
      Chronic load is the mean of the 4 previous calendar weeks. Weeks before the plan start count too (typed in or
      imported from Strava/Garmin); a missing pre-plan week falls back to "Km/uge nu" × RPE 5 so week 1 gets a real ratio. */
-  const loadOf = (l) => (l && l.km && l.rpe ? Math.round(l.km * l.rpe) : null);
+  // Week load = km × RPE for the runs, plus other sessions at half weight: minutes × RPE ÷ 12 (an hour of HIIT at
+  // RPE 8 counts like an 8 km run at RPE 5). Strength and HIIT tire the body, but not the running tissues as much.
+  const loadOf = (l) => { if (!l) return null; const run = l.km && l.rpe ? l.km * l.rpe : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
   const baseline = (+p.currentKm || 0) * 5;
   const acwrFor = (key) => {
     const own = loadOf(log[key]);
@@ -734,7 +747,8 @@ export default function App() {
           const carbs = cur.phase === "Ultra-prep" ? "60–90" : "40–60";
           const session = lift ? sessionFor(ti) : null;
           const todayNut = nutritionFor(dayTypeOf({ km: v, isLong: long, isHard: hard, isRace: raceDay, lift }));
-          const ran = dayKm[ti]; const done = v > 0 && ran >= v * 0.9;
+          const ran = dayKm[ti]; const didOther = otherByDay[todayStr] || []; const didStrength = didOther.some((x) => actKind(x.type) === "strength");
+          const done = v > 0 ? ran >= v * 0.9 : lift ? didStrength : didOther.length > 0;
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long" });
           if (afterRace) return (
@@ -782,7 +796,10 @@ export default function App() {
                 {v > 0 && lift && session && <div className="today-sub">+ {session.name} i dag efter løbet: {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ Logget{v > 0 ? ` · planen sagde ${v} km` : lift ? ` · planen havde ${liftName(ti)}` : " · planen havde hvile"}{v > 0 && ran > v * 1.4 ? ". Planens tal er et loft, ikke et gulv." : ""}</div>}
-                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti)}>{ran > 0 ? "Ret dagens tur" : v > 0 || raceDay ? "Log dagens tur" : "Log en tur alligevel"}</button>
+                {didOther.length > 0 && <div className="today-ran">✓ {otherText(didOther)}{lift && !didStrength ? " · styrken mangler stadig" : !lift && v > 0 && !(ran > 0) ? " · i stedet for løbeturen" : ""}</div>}
+                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, v > 0 || raceDay || ran > 0 ? "Run" : lift ? "Strength" : "Run")}>{ran > 0 && !(lift && !didStrength) ? "Ret dagens tur" : lift && !(v > 0) ? (didStrength ? "Ret dagens styrke" : "Log styrke") : v > 0 || raceDay ? "Log dagens tur" : "Log et pas alligevel"}</button>
+                {v > 0 && lift && !(ran > 0 && didStrength) && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Strength")}>{didStrength ? "Ret styrken" : "Log styrken"}</button>}
+                {!lift && !(v > 0) && !raceDay && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Workout")}>Log styrke, HIIT eller andet</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
@@ -793,7 +810,7 @@ export default function App() {
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
                     <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} role="button" tabIndex={0} title="Tryk for at logge en tur">
-                      <small>{DAYS[i]}</small><b>{w || (liftDays.includes(i) ? (plan.coach ? liftName(i).replace("Styrke ", "S") : "S") : "–")}</b>{dayKm[i] > 0 && <small className="ran">{dayKm[i]}</small>}
+                      <small>{DAYS[i]}</small><b>{w || (liftDays.includes(i) ? (plan.coach ? liftName(i).replace("Styrke ", "S") : "S") : "–")}</b>{dayKm[i] > 0 ? <small className="ran">{dayKm[i]}</small> : (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).length > 0 ? <small className="ran">✓</small> : null}
                     </div>
                   ))}
                 </div>
@@ -1033,14 +1050,16 @@ export default function App() {
                 const hard = i === cur.qDay && v > 0; const long = i === cur.longDay && v > 0; const lift = liftDays.includes(i);
                 const b2b = cur.sun > 0 && i === (cur.longDay + 1) % 7 && v > 0;
                 const d = cur.sched[i] || {};
+                const other = otherByDay[ymd(addDays(parseLocal(cur.key), i))] || [];
                 return (
-                  <div key={i} role="button" tabIndex={0} title="Tryk for at logge en tur" onClick={() => openDay(cur.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
-                    className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
+                  <div key={i} role="button" tabIndex={0} title="Tryk for at logge en tur eller et pas" onClick={() => openDay(cur.key, i, v > 0 ? "Run" : lift ? "Strength" : "Run")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
+                    className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] || other.length ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
                     <small>{v ? (long ? "lang" : hard ? "hård" : b2b ? "B2B" : "rolig") : lift ? liftName(i) : "Hvile"}</small>
                     {v > 0 && lift && <small style={{ display: "block", color: "var(--violet)" }}>+ styrke</small>}
                     {dayKm[i] > 0 && <small className="ran">✓ {dayKm[i]} km</small>}
+                    {other.length > 0 && <small className="ran">✓ {otherText(other)}</small>}
                     {d.note && <small className="note">{d.note}</small>}
                   </div>
                 );
@@ -1190,7 +1209,7 @@ export default function App() {
                                   <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}</span></td>
                                   <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
                                   <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
-                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? `uge fra ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : "nej (ikke løb)"}</td>
+                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? `uge fra ${fmt(parseLocal(wk))}` : k === "hike" ? "nej (vandring slået fra)" : x.min > 0 ? `som ${xLabel(x.type).toLowerCase()} · min × RPE` : "nej (ingen minutter)"}</td>
                                   <td className="muted">{x.source}</td>
                                   <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>Slet</button></td>
                                 </tr>
@@ -1252,6 +1271,7 @@ export default function App() {
                             </div>
                             <div className="muted" style={{ marginBottom: 6 }}>{r.pre ? "Ugen" : `Uge ${r.i}`} fra {fmt(r.wkStart)} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.</div>
                             {renderDayGrid(r)}
+                            {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>Andre pas: {log[r.key].xn} · {log[r.key].xmin} min · tæller {Math.round(log[r.key].xload / 12)} i belastningen (min × RPE ÷ 12).</div>}
                             {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
                           </td></tr>
                         )}

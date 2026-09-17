@@ -403,3 +403,6 @@ td .dayform .dayform-row label { flex: 1 1 80px; }
 .macro-table th.num, .macro-table td.num { text-align: right; }
 .ob-cards.two { grid-template-columns: 1fr 1fr; }
 @media (max-width: 420px) { .ob-cards.two { grid-template-columns: 1fr; } }
+
+.dayform-types { margin: 4px 0 8px; }
+.dayform-types button { padding: 6px 12px; min-height: 34px; font-size: 13px; }

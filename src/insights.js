@@ -162,7 +162,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
 /* Compact, anonymous context for the AI coach: numbers only, no name or e-mail. */
 export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice, extra = {} }) {
   const ur = watchSummary(acts, { includeHikes: !!p.includeHikes, todayKey: ymd(mondayOf(parseLocal(todayStr))), weeks: 12 });
-  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
+  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, rpe: l.rpe ?? null, andre_pas_min: l.xmin ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
   return {
     dato: todayStr,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
