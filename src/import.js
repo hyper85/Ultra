@@ -11,12 +11,17 @@ const HIKE = /hike|hiking|walk|vandr|gang|gåtur|trek/i;
 // Strava GPX exports carry a numeric <type>: 9 = run, 4 = hike, 10 = walk.
 const STRAVA_TYPES = { 9: "Run", 4: "Hike", 10: "Walk", 1: "Ride", 5: "Swim" };
 
+const STRENGTH = /strength|styrke|hiit|crossfit|workout|circuit|kettlebell|weight|vægt|gym|bodyweight|cardio/i;
 export const kind = (type) => {
   const t = STRAVA_TYPES[String(type).trim()] || String(type || "");
   if (HIKE.test(t) && !RUN.test(t)) return "hike";
   if (RUN.test(t) && !NOT_RUN.test(t)) return "run";
+  if (STRENGTH.test(t)) return "strength";
   return "other";
 };
+// Sessions without kilometres (strength, HIIT, cycling, swimming) count by minutes × RPE (session-RPE).
+export const XTYPES = [["Strength", "Styrke"], ["HIIT", "HIIT"], ["Ride", "Cykling"], ["Workout", "Andet"]];
+export const xLabel = (type) => XTYPES.find(([k]) => k === type)?.[1] || String(type || "Andet");
 
 /* ================= number / date parsing ================= */
 const parseNum = (s) => {
@@ -127,11 +132,13 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
     let km;
     if (distCols.length > 1 && last > 0 && (last > 1500 || (first > 0 && last / first > 100))) km = last / 1000;
     else km = first > 1500 ? first / 1000 : first;
-    if (!(km > 0)) continue;
-    if (km > 400) continue; // metres in a "km" column or a garbage row
     const min = cTime < 0 ? NaN : timeInMinutes && !String(r[cTime] || "").includes(":") ? parseNum(r[cTime]) : parseMinutes(r[cTime]);
+    const rowType = cType >= 0 ? r[cType] : "Run"; const rowKind = kind(rowType);
+    // A session without distance (strength, HIIT, indoor cardio) still counts, by its minutes.
+    if (!(km > 0)) { if ((rowKind === "strength" || rowKind === "other") && min > 0) km = 0; else continue; }
+    if (km > 400) continue; // metres in a "km" column or a garbage row
     const hr = cHR >= 0 ? parseNum(r[cHR]) : NaN;
-    const a = mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: cType >= 0 ? r[cType] : "Run", name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : /\.xls/i.test(fileName) ? "Excel" : "CSV", file: fileName });
+    const a = mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: rowType, name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : /\.xls/i.test(fileName) ? "Excel" : "CSV", file: fileName });
     const rpe = cRPE >= 0 ? parseNum(r[cRPE]) : NaN;
     if (rpe >= 1 && rpe <= 10) a.rpe = Math.round(rpe);
     out.push(a);
@@ -203,7 +210,8 @@ export const activitiesFromTCX = (text, fileName = "tcx") => {
 const mk = (a) => {
   const km = Math.round(a.km * 100) / 100;
   const slot = Math.round((a.date.getHours() * 60 + a.date.getMinutes()) / 5); // 5-minute start slot for dedupe
-  return { id: `${ymd(a.date)}-${slot}-${km.toFixed(1)}`, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
+  const id = km > 0 ? `${ymd(a.date)}-${slot}-${km.toFixed(1)}` : `${ymd(a.date)}-${slot}-x-${String(a.type || "x").toLowerCase().replace(/[^a-z0-9]+/g, "")}-${Math.round(a.min || 0)}`;
+  return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
 };
 
 // Minimal zip reader (no library): the central directory lists the entries; DecompressionStream inflates them.
@@ -334,9 +342,9 @@ const parseText = (text, name) => {
 };
 
 // A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity.
-export const manualActivity = ({ day, km, min, rpe }) => {
+export const manualActivity = ({ day, km, min, rpe, type = "Run" }) => {
   const d = parseLocal(day); d.setHours(12, 0, 0, 0);
-  const a = mk({ date: d, km: +km, min: min ? +min : null, hr: null, type: "Run", name: "Indtastet", source: "Manuel", file: "" });
+  const a = mk({ date: d, km: +km || 0, min: min ? +min : null, hr: null, type, name: type === "Run" ? "Indtastet" : xLabel(type), source: "Manuel", file: "" });
   if (rpe) a.rpe = Math.min(10, Math.max(1, Math.round(+rpe)));
   return a;
 };
@@ -368,6 +376,8 @@ export const findDuplicate = (a, existing) => {
     if (b.day !== a.day) continue;
     // A manual entry carries no exact start time: same day + similar distance is the same run.
     if (!manual && b.source !== "Manuel" && Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
+    // Sessions without km: same day, same kind of session, and minutes within 20 %.
+    if (!(a.km > 0) || !(b.km > 0)) { if (!(a.km > 0) && !(b.km > 0) && String(a.type).toLowerCase() === String(b.type).toLowerCase() && Math.abs((a.min || 0) - (b.min || 0)) <= Math.max(5, 0.2 * Math.max(a.min || 0, b.min || 0))) return b.id; continue; }
     if (Math.abs(b.km - a.km) <= Math.max(0.5, 0.03 * Math.max(a.km, b.km))) return b.id;
   }
   return null;
@@ -396,14 +406,18 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
   const weeks = {};
   for (const a of Object.values(acts)) {
     const k = kind(a.type); // recomputed so improved classification also applies to activities imported earlier
-    if (!(k === "run" || (includeHikes && k === "hike"))) continue;
     const key = ymd(mondayOf(parseLocal(a.day)));
-    const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0 });
-    w.km += a.km; w.n++; w.min += a.min || 0;
-    const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
-    if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
+    const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0, xmin: 0, xn: 0, xload: 0 });
+    if (k === "run" || (includeHikes && k === "hike")) {
+      w.km += a.km; w.n++; w.min += a.min || 0;
+      const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
+      if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
+    } else if (k !== "hike" && a.min > 0) {
+      // Strength, HIIT, cycling and other sessions: minutes × RPE (RPE 6 when none is given). Their km are not run km.
+      w.xmin += a.min; w.xn++; w.xload += a.min * (a.rpe || rpeFromHR(a.hr, maxHR) || 6);
+    }
   }
-  for (const w of Object.values(weeks)) { w.km = Math.round(w.km * 10) / 10; w.rpe = w.rpeT ? Math.round(w.rpeW / w.rpeT) : null; }
+  for (const [key, w] of Object.entries(weeks)) { w.km = Math.round(w.km * 10) / 10; w.rpe = w.rpeT ? Math.round(w.rpeW / w.rpeT) : null; w.xload = Math.round(w.xload); if (!w.n && !w.xn) delete weeks[key]; }
   return weeks;
 };
 

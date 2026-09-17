@@ -60,6 +60,11 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Log andet end løb: tryk på en dag og vælg Løb, Styrke, HIIT, Cykling eller Andet. Pas uden km gemmes med minutter og
+RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb (en time HIIT ved RPE 8 vejer som
+8 km rolig tur), så ACWR ser hele ugen. Dagen får et ✓ på "I dag", i planen og i loggen, og en styrkedag er først
+"gjort", når styrken er logget. Garmins "Strength Training"- og HIIT-rækker importeres nu også fra Activities.csv.
+
 Kroppen ud over løbet: i spørgeskemaet vælger du, hvad du vil med kroppen (holde vægten, tabe dig, bygge muskler
 eller være fit), hvor mange styrkepas du vil have om ugen (0–3), og hvilket udstyr du har (ingen, håndvægte/elastik
 eller fitnesscenter). Appen lægger styrkedagene på dage uden lang tur og bygger pas af syv bevægelser (squat, hoftebøj,
