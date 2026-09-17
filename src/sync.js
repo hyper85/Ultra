@@ -47,3 +47,31 @@ export const inviteFriend = async (email) => {
   if (!r.ok) throw new Error(body?.error || `Invitationen kunne ikke sendes (${r.status}).`);
   return body;
 };
+
+/* Strava (api/strava.js). The app builds the authorize URL itself; the code Strava sends back is exchanged on the
+   server, where the tokens stay. Every call carries the Supabase session, so the server knows whose Strava it is. */
+const stravaCall = async (op, extra = {}) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token && op !== "config") throw new Error("Log ind under Mere → Konto for at forbinde Strava.");
+  let r;
+  try { r = await fetch("/api/strava", { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ op, ...extra }) }); }
+  catch { throw new Error("Kunne ikke kontakte serveren. Tjek din internetforbindelse."); }
+  let body = null; try { body = await r.json(); } catch { /* not json */ }
+  if (r.status === 404 && !body) throw new Error("Strava findes kun i den udgave, der kører på Vercel.");
+  if (!r.ok) { const e = new Error(body?.error || `Strava-forbindelsen fejlede (${r.status}).`); e.status = r.status; e.connected = body?.connected; throw e; }
+  return body;
+};
+export const STRAVA_STATE_KEY = "ultraplan-strava-state";
+export const stravaConnectURL = async () => {
+  const cfg = await stravaCall("config");
+  if (!cfg?.clientId) throw new Error("Strava er ikke sat op endnu. Sæt STRAVA_CLIENT_ID og STRAVA_CLIENT_SECRET i Vercel.");
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try { localStorage.setItem(STRAVA_STATE_KEY, state); } catch { /* ignore */ }
+  const redirect = window.location.origin + window.location.pathname;
+  return `https://www.strava.com/oauth/authorize?client_id=${encodeURIComponent(cfg.clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&approval_prompt=auto&scope=read,activity:read_all&state=${state}`;
+};
+export const stravaExchange = (code, scope) => stravaCall("exchange", { code, scope });
+export const stravaStatus = () => stravaCall("status");
+export const stravaSync = (since) => stravaCall("sync", since ? { since } : {});
+export const stravaDisconnect = () => stravaCall("disconnect");
