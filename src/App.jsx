@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend } from "./sync.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava } from "./import.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
 import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
 import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
@@ -262,6 +262,57 @@ export default function App() {
   const pulledRef = useRef(false);
   const [pulled, setPulled] = useState(false);
   const prevUserRef = useRef(null); // the account this tab last synced for
+  /* ---- Strava ---- */
+  const [strava, setStrava] = useState({ connected: null, athlete: null, lastSync: null, busy: false, msg: null });
+  const stravaRef = useRef({ synced: false, exchanging: false });
+  // Pull new activities from Strava and merge them like a file import (same dedupe, same weekly totals).
+  const runStravaSync = async (silent = false) => {
+    setStrava((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
+    try {
+      const r = await stravaSync();
+      const parsed = (r.activities || []).map(activityFromStrava).filter(Boolean);
+      const { next, added } = mergeActivities(actsRef.current, parsed);
+      if (added) { saveActs(next); applyActivities(next, p.includeHikes); }
+      const runs = parsed.filter((a) => a.kind === "run").length, others = parsed.length - runs;
+      setStrava((x) => ({ ...x, connected: true, athlete: r.athlete || x.athlete, lastSync: r.lastSync, busy: false, msg: { text: added ? `Hentede ${added} nye fra Strava (${runs} løb${others ? `, ${others} andet` : ""}).` : "Strava: ingen nye aktiviteter." } }));
+    } catch (e) { setStrava((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
+  };
+  const actsRef = useRef(acts); actsRef.current = acts;
+  const connectStrava = async () => {
+    setStrava((x) => ({ ...x, busy: true, msg: null }));
+    try { window.location.assign(await stravaConnectURL()); } catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
+  };
+  const disconnectStrava = async () => {
+    if (!confirm("Afbryd forbindelsen til Strava? Hentede ture bliver stående.")) return;
+    setStrava((x) => ({ ...x, busy: true }));
+    try { await stravaDisconnect(); setStrava({ connected: false, athlete: null, lastSync: null, busy: false, msg: { text: "Strava er afbrudt." } }); }
+    catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
+  };
+  // Back from Strava (?code=…&state=…): exchange the code once the session is known, then sync.
+  useEffect(() => {
+    if (!user || !ready || !pulled) return;
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get("code"), state = q.get("state"), scope = q.get("scope") || "";
+    if (code && !stravaRef.current.exchanging) {
+      stravaRef.current.exchanging = true;
+      let expected = null; try { expected = localStorage.getItem(STRAVA_STATE_KEY); localStorage.removeItem(STRAVA_STATE_KEY); } catch { /* ignore */ }
+      window.history.replaceState(null, "", window.location.pathname);
+      setView("log");
+      if (expected && state && expected !== state) { setStrava((x) => ({ ...x, msg: { warn: true, text: "Strava-svaret passede ikke til denne enhed. Prøv igen." } })); return; }
+      (async () => {
+        setStrava((x) => ({ ...x, busy: true }));
+        try { const r = await stravaExchange(code, scope); setStrava((x) => ({ ...x, connected: true, athlete: r.athlete, busy: false })); await runStravaSync(); }
+        catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
+      })();
+      return;
+    }
+    if (stravaRef.current.synced) return;
+    stravaRef.current.synced = true;
+    (async () => {
+      try { const st = await stravaStatus(); setStrava((x) => ({ ...x, connected: st.connected, athlete: st.athlete, lastSync: st.lastSync })); if (st.connected) await runStravaSync(true); }
+      catch { setStrava((x) => ({ ...x, connected: false })); }
+    })();
+  }, [user?.id, ready, pulled]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
@@ -1174,8 +1225,28 @@ export default function App() {
                     <button className="btn" type="button" onClick={() => setView("today")}>Gå til i dag</button>
                   </div>
                 )}
+                <section className="panel strava">
+                  <div className="row-between"><h3 style={{ margin: 0 }}>Strava</h3>{strava.connected && <span className="muted">{strava.athlete || "forbundet"}{strava.lastSync ? ` · synk ${new Date(strava.lastSync).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span>}</div>
+                  {!syncEnabled ? <p className="muted">Strava kræver login, og login er ikke sat op i denne udgave.</p>
+                    : !user ? <p className="muted">Forbind Strava, så henter appen dine ture selv, hver gang du åbner den. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect. Log ind under Mere → Konto først.</p>
+                    : strava.connected ? (
+                      <>
+                        <p className="muted">Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du som rapporter herunder.</p>
+                        <div className="import-row">
+                          <button className="btn" type="button" disabled={strava.busy} onClick={() => runStravaSync()}>{strava.busy ? "Henter…" : "Hent nu"}</button>
+                          <button className="btn ghost" type="button" disabled={strava.busy} onClick={disconnectStrava}>Afbryd Strava</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="muted">Forbind Strava, så henter appen dine ture selv, hver gang du åbner den: løb, styrke, HIIT og cykling fra de sidste 120 dage og alt nyt fremover. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect (Indstillinger → Tilsluttede apps).</p>
+                        <button className="btn strava-btn" type="button" disabled={strava.busy || strava.connected === null} onClick={connectStrava}>{strava.busy ? "Et øjeblik…" : "Forbind Strava"}</button>
+                      </>
+                    )}
+                  {strava.msg && <div className={`advice ${strava.msg.warn ? "warn" : ""}`}>{strava.msg.text}</div>}
+                </section>
                 <details className="import" open={nActs === 0 || !!importMsg}>
-                  <summary><h3>Hent fra Strava eller Garmin{nActs > 0 ? ` · ${nActs} ture hentet` : ""}</h3></summary>
+                  <summary><h3>Hent fra filer (Garmin, Strava, Excel){nActs > 0 ? ` · ${nActs} aktiviteter` : ""}</h3></summary>
                   <p className="muted">Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>
                   <div className="import-row">
                     <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />

@@ -60,6 +60,17 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Strava-forbindelse: under Log → Strava trykker du "Forbind Strava" (kræver login). Derefter henter appen dine ture
+selv, hver gang du åbner den: de sidste 120 dage første gang, og alt nyt siden sidst bagefter, gennem den samme
+dublet-tjek som filimport. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect
+(Indstillinger → Tilsluttede apps → Strava). Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du stadig
+som Garmin-rapporter.
+
+Opsætning (én gang): opret en API-app på strava.com/settings/api med "Authorization Callback Domain" =
+`ultra-lime-nu.vercel.app`; læg Client ID og Client Secret i Vercel som `STRAVA_CLIENT_ID` og `STRAVA_CLIENT_SECRET`
+(Secret); kør `supabase/strava.sql` i Supabase → SQL Editor (tabellen `strava_tokens`, kun serveren kan læse den);
+redeploy. `SUPABASE_SERVICE_ROLE_KEY` skal være sat. Tokens og Client Secret når aldrig browseren.
+
 Log andet end løb: tryk på en dag og vælg Løb, Styrke, HIIT, Cykling eller Andet. Pas uden km gemmes med minutter og
 RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb (en time HIIT ved RPE 8 vejer som
 8 km rolig tur), så ACWR ser hele ugen. Dagen får et ✓ på "I dag", i planen og i loggen, og en styrkedag er først
