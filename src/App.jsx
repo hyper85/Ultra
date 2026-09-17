@@ -76,10 +76,12 @@ export function buildCoachPlan(p) {
 /* ================= plan engine ================= */
 export function buildPlan(p) {
   const level = p.level || 2;
-  const start = parseLocal(p.startDate);
-  const race = parseLocal(p.raceDate);
+  const start = parseLocal(p.startDate || PLAN_START);
+  // A profile without a race yet (the questionnaire is not done): plan 16 weeks for 50 km, so nothing divides by NaN.
+  const raceD = p.raceDate ? parseLocal(p.raceDate) : null;
+  const race = raceD && !isNaN(raceD) && raceD > start ? raceD : addDays(start, 16 * 7);
   const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
-  const raceKm = +p.raceKm;
+  const raceKm = +p.raceKm > 0 ? +p.raceKm : 50;
   const injured = p.injury === "injured", sore = p.injury === "sore";
   // Never below a small floor: a runner who types 0 km still needs a plan that starts somewhere.
   const restart = p.breakWeeks >= 2 || injured ? Math.max(20, Math.round(+p.currentKm * 0.65)) : Math.max(level === 1 ? 12 : 15, Math.round(+p.currentKm * 1.1));
@@ -178,12 +180,13 @@ const PLAN_START = "2026-08-24"; // mandag i uge 35
 const PROFILE_VERSION = 5;
 const DEFAULT = {
   v: PROFILE_VERSION,
-  name: "", age: 41, height: 181, weight: 89, restHR: 49, maxHR: 186,
-  currentKm: 35, breakWeeks: 0, startDate: PLAN_START, includeHikes: false,
-  raceName: "Hammer Trail Winter 50 miles", raceDate: "2027-01-30", raceKm: 83, raceVert: 3400,
+  // Blank for a new user: the questionnaire asks for everything. Nothing here belongs to any one runner.
+  name: "", age: "", height: "", weight: "", restHR: "", maxHR: 0,
+  currentKm: 0, breakWeeks: 0, startDate: PLAN_START, includeHikes: false,
+  raceName: "", raceDate: "", raceKm: "", raceVert: "",
   qualityDay: 2, longDay: 5, liftDays: [1, 3],
   sex: "m", level: 2, maxRunDays: 4, family: "single", altWeeks: false, altStart: PLAN_START,
-  goal: "finish", body: "keep", gear: "home", onboarded: false, injury: "none", injuryArea: "", injuryNote: "", diet: "all", intol: [], coachMode: true,
+  goal: "finish", body: "keep", gear: "home", onboarded: false, injury: "none", injuryArea: "", injuryNote: "", diet: "all", intol: [], coachMode: false,
   sched: { A: defaultSched(), B: defaultSched() },
 };
 

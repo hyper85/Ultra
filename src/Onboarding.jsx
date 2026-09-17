@@ -146,9 +146,9 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           <label>Navn på løbet<input value={d.raceName} onChange={set("raceName")} placeholder="fx Hammer Trail Winter 50 miles" /></label>
           <div className="row2">
             <label>Løbsdato<input type="date" value={d.raceDate} onChange={set("raceDate")} min={ymd(addDays(new Date(), 1))} required /></label>
-            <label>Distance (km)<input type="number" inputMode="decimal" value={d.raceKm} onChange={set("raceKm")} /></label>
+            <label>Distance (km)<input type="number" inputMode="decimal" value={d.raceKm} onChange={set("raceKm")} placeholder="fx 50" /></label>
           </div>
-          <label>Højdemeter (m+)<input type="number" inputMode="numeric" value={d.raceVert} onChange={set("raceVert")} /></label>
+          <label>Højdemeter (m+)<input type="number" inputMode="numeric" value={d.raceVert} onChange={set("raceVert")} placeholder="fx 1200" /></label>
           {d.raceDate && !raceOk && <div className="advice warn">Datoen skal ligge efter i dag.</div>}
           {raceOk && weeksToRace < 8 && <div className="advice warn">Kun {weeksToRace} uger til løbet. Planen bliver komprimeret til minimum 8 uger, så hold igen med ambitionerne.</div>}
           {raceOk && weeksToRace >= 8 && <div className="muted" style={{ marginTop: 8 }}>{weeksToRace} uger fra mandag {parseLocal(d.startDate).toLocaleDateString("da-DK", { day: "numeric", month: "short" })} til løbet.</div>}
@@ -166,10 +166,10 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           <p className="muted">Bruges til pulszoner og kalorier. Intet af det deles.</p>
           <div className="row2">
             <label>Køn<select value={d.sex} onChange={set("sex")}><option value="m">Mand</option><option value="f">Kvinde</option><option value="x">Andet</option></select></label>
-            <label>Alder<input type="number" inputMode="numeric" value={d.age} onChange={set("age")} /></label>
-            <label>Højde (cm)<input type="number" inputMode="numeric" value={d.height} onChange={set("height")} /></label>
-            <label>Vægt (kg)<input type="number" inputMode="decimal" value={d.weight} onChange={set("weight")} /></label>
-            <label>Hvilepuls<input type="number" inputMode="numeric" value={d.restHR} onChange={set("restHR")} /></label>
+            <label>Alder<input type="number" inputMode="numeric" value={d.age} onChange={set("age")} placeholder="fx 40" /></label>
+            <label>Højde (cm)<input type="number" inputMode="numeric" value={d.height} onChange={set("height")} placeholder="fx 178" /></label>
+            <label>Vægt (kg)<input type="number" inputMode="decimal" value={d.weight} onChange={set("weight")} placeholder="fx 75" /></label>
+            <label>Hvilepuls<input type="number" inputMode="numeric" value={d.restHR} onChange={set("restHR")} placeholder="fx 55" /></label>
             <label>Makspuls (valgfri)<input type="number" inputMode="numeric" value={d.maxHR || ""} onChange={(e) => setD({ ...d, maxHR: e.target.value === "" ? 0 : +e.target.value })} placeholder={`estimat ${maxHR}`} /></label>
           </div>
           <div className="muted" style={{ marginTop: 8 }}>Uden målt makspuls bruger vi {maxHR}. Hvilestofskifte ≈ {bmr} kcal.</div>
