@@ -903,7 +903,7 @@ export default function App() {
             </div>
             <p className="muted">Bygger på {insights.summary.weeksLogged} {insights.summary.weeksLogged === 1 ? "afsluttet uge" : "afsluttede uger"} i loggen og dine ture dag for dag. Alt kan efterregnes; knapperne ændrer kun det, de siger.</p>
             <h3 className="sub">Lad træneren forme planen</h3>
-            <p className="muted">Ud fra dine ture fra uret (de sidste 12 uger), loggen og mønstrene foreslår AI-træneren top, niveau, løbedage og lang tur-dag. Appen bygger selv planen af tallene, og intet ændres, før du trykker Anvend.{plan.coach ? " Trænerplanen har faste uger, så et forslag slår den fra." : ""}</p>
+            <p className="muted">Ud fra hele din historik fra uret (måned for måned), de sidste 12 uger i detaljer, loggen og mønstrene foreslår AI-træneren top, niveau, løbedage og lang tur-dag. Appen bygger selv planen af tallene, og intet ændres, før du trykker Anvend.{plan.coach ? " Trænerplanen har faste uger, så et forslag slår den fra." : ""}</p>
             {!proposal && <button className="btn ghost" type="button" onClick={askForPlan} disabled={proposing || coachBusy}>{proposing ? "Regner…" : "Foreslå plan ud fra mine tal"}</button>}
             {proposal && (
               <div className="proposal">
@@ -1228,8 +1228,8 @@ export default function App() {
                     <button className="btn" type="button" onClick={() => setView("today")}>Gå til i dag</button>
                   </div>
                 )}
-                <section className="panel strava">
-                  <div className="row-between"><h3 style={{ margin: 0 }}>Strava</h3>{strava.connected && <span className="muted">{strava.athlete || "forbundet"}{strava.lastSync ? ` · synk ${new Date(strava.lastSync).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span>}</div>
+                <details className="import strava" open={!strava.connected || !!strava.msg}>
+                  <summary><h3>Strava{strava.connected ? ` · ${strava.athlete || "forbundet"}${strava.lastSync ? ` · synk ${new Date(strava.lastSync).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : ""}</h3></summary>
                   {!syncEnabled ? <p className="muted">Strava kræver login, og login er ikke sat op i denne udgave.</p>
                     : !user ? <p className="muted">Forbind Strava, så henter appen dine ture selv, hver gang du åbner den. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect. Log ind under Mere → Konto først.</p>
                     : strava.connected ? (
@@ -1247,7 +1247,7 @@ export default function App() {
                       </>
                     )}
                   {strava.msg && <div className={`advice ${strava.msg.warn ? "warn" : ""}`}>{strava.msg.text}</div>}
-                </section>
+                </details>
                 <details className="import" open={nActs === 0 || !!importMsg}>
                   <summary><h3>Hent fra filer (Garmin, Strava, Excel){nActs > 0 ? ` · ${nActs} aktiviteter` : ""}</h3></summary>
                   <p className="muted">Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.</p>

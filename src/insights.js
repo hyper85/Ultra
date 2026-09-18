@@ -22,6 +22,38 @@ const runsByDay = (acts, includeHikes) => {
 };
 
 /* What the watch says: the last `n` completed weeks from imported/typed activities, one row per week. */
+/* The whole history from the watch, month by month, so the coach sees years, not weeks: km, runs, longest run,
+   heart rate, pace and minutes of other sessions per month, plus a few totals. Compact enough for the model. */
+export function watchHistory(acts = {}, { includeHikes = false, months = 36 } = {}) {
+  const runs = {}, other = {};
+  for (const a of Object.values(acts)) {
+    const k = kind(a.type); const m = String(a.day).slice(0, 7);
+    if (k === "run" || (includeHikes && k === "hike")) (runs[m] ||= []).push(a);
+    else if (k !== "hike" && a.min > 0) other[m] = (other[m] || 0) + a.min;
+  }
+  const keys = [...new Set([...Object.keys(runs), ...Object.keys(other)])].sort().slice(-months);
+  const rows = keys.map((m) => {
+    const rs = runs[m] || [];
+    const km = rs.reduce((a, r) => a + r.km, 0);
+    const withHR = rs.filter((r) => r.hr > 0), withMin = rs.filter((r) => r.min > 0);
+    return { måned: m, km: r1(km), ture: rs.length, længste_km: rs.length ? r1(Math.max(...rs.map((r) => r.km))) : 0,
+      snit_puls: withHR.length ? Math.round(withHR.reduce((a, r) => a + r.hr * r.km, 0) / withHR.reduce((a, r) => a + r.km, 0)) : null,
+      snit_tempo_min_km: withMin.length ? r1(withMin.reduce((a, r) => a + r.min, 0) / withMin.reduce((a, r) => a + r.km, 0)) : null,
+      andre_pas_min: other[m] ? Math.round(other[m]) : 0 };
+  });
+  const all = Object.values(acts).filter((a) => kind(a.type) === "run" || (includeHikes && kind(a.type) === "hike"));
+  const best = rows.reduce((b, r) => (r.km > (b?.km || 0) ? r : b), null);
+  return {
+    måneder: rows,
+    første_aktivitet: all.length ? all.map((a) => a.day).sort()[0] : null,
+    måneder_med_data: rows.filter((r) => r.ture > 0).length,
+    km_i_alt: r1(all.reduce((a, r) => a + r.km, 0)),
+    ture_i_alt: all.length,
+    længste_tur_nogensinde_km: all.length ? r1(Math.max(...all.map((a) => a.km))) : null,
+    bedste_måned: best ? { måned: best.måned, km: best.km } : null,
+  };
+}
+
 export function watchSummary(acts = {}, { includeHikes = false, todayKey, weeks = 12 } = {}) {
   const byDay = runsByDay(acts, includeHikes);
   const rows = [];
@@ -171,6 +203,7 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
     plan: { trænerplan: !!plan.coach, kilde: plan.coach ? `trænerens egen plan (${plan.weeks} uger med faste datoer fra ${plan.rows[0].key}); tallene er et loft` : `beregnet af appen ud fra spørgeskemaet (${plan.weeks} uger fra ${plan.rows[0].key})`, uge: cur.i, af: plan.weeks, fase: cur.phase, top_km_uge: plan.peak, niveau: p.level, top_skala: p.peakScale || 1, løbedage: p.maxRunDays, lang_tur_dag: p.longDay, nuværende_base_km_uge: p.currentKm, denne_uge: { km: cur.km, dage: cur.days, hård_session: cur.quality, lang_tur_km: cur.lng, fokus: cur.focus, justeret: cur.adjusted ? cur.adjusted.reason : null }, råd_i_appen: advice },
     seneste_uger: rows,
     fra_uret_12_uger: ur,
+    historik_fra_uret: watchHistory(acts, { includeHikes: !!p.includeHikes }),
     mønstre: insights.summary,
     fund: insights.findings.map((f) => f.text),
     ...extra,

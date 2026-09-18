@@ -65,7 +65,7 @@ const chatCompletion = async (provider, messages, { extras = true, nudged = fals
   return { text: content, model: data?.model || provider.model, finish: choice?.finish_reason || null };
 };
 const SYSTEM = `Du er træneren i Ultraplan, en dansk app til ultra- og trailløbere med et almindeligt liv (job, familie, begrænset tid).
-Du får løberens tal fra appen som JSON: profil, løbet, planen for denne uge, de seneste uger i loggen, og de mønstre appen har fundet.
+Du får løberens tal fra appen som JSON: profil, løbet, planen for denne uge, de seneste uger i loggen, hele historikken fra uret måned for måned ("historik_fra_uret"), de sidste 12 uger i detaljer, og de mønstre appen har fundet. Brug historikken, når du vurderer, hvad løberen kan tåle, og de seneste uger, når du vurderer, hvor løberen er nu.
 
 Sådan svarer du:
 - Kort og konkret. Giv tallet, reglen bag og hvad løberen skal gøre i denne uge. Typisk 60–120 ord; mere kun hvis der bedes om en hel plan.
@@ -80,7 +80,7 @@ Sådan svarer du:
 
 /* Plan mode: the coach proposes parameters for the deterministic plan engine. The engine builds the plan and the
    runner applies it with one tap – the model never writes the plan itself. */
-const PLAN_PROMPT = `Opgave: Foreslå parametre til løberens plan ud fra tallene, især "fra_uret_12_uger" (Garmin/Strava) og "seneste_uger".
+const PLAN_PROMPT = `Opgave: Foreslå parametre til løberens plan ud fra tallene: hele historikken i "historik_fra_uret" (måned for måned, længste tur nogensinde, bedste måned), de sidste 12 uger i "fra_uret_12_uger" (Garmin/Strava) og "seneste_uger". Basen er det, løberen holder nu; toppen må gerne læne sig op ad, hvad historikken viser, løberen har tålt før.
 Svar KUN med ét JSON-objekt, ingen tekst udenom, på denne form:
 {"peakScale": 1.0, "level": 2, "maxRunDays": 4, "longDay": 5, "currentKm": 35, "note": "2–4 sætninger på dansk om hvorfor"}
 Regler:
