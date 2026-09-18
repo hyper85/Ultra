@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
 import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
@@ -274,10 +274,13 @@ export default function App() {
     try {
       const r = await stravaSync();
       const parsed = (r.activities || []).map(activityFromStrava).filter(Boolean);
-      const { next, added } = mergeActivities(actsRef.current, parsed);
-      if (added) { saveActs(next); applyActivities(next, p.includeHikes); }
+      const merged = mergeActivities(actsRef.current, parsed);
+      const { next, removed } = dedupeStore(merged.next);
+      const { added, replaced } = merged;
+      if (added || replaced || removed) { saveActs(next); applyActivities(next, p.includeHikes); }
       const runs = parsed.filter((a) => a.kind === "run").length, others = parsed.length - runs;
-      setStrava((x) => ({ ...x, connected: true, athlete: r.athlete || x.athlete, lastSync: r.lastSync, busy: false, msg: { text: added ? `Hentede ${added} nye fra Strava (${runs} løb${others ? `, ${others} andet` : ""}).` : "Strava: ingen nye aktiviteter." } }));
+      const swapped = replaced + removed;
+      setStrava((x) => ({ ...x, connected: true, athlete: r.athlete || x.athlete, lastSync: r.lastSync, busy: false, msg: { text: added ? `Hentede ${added} nye fra Strava (${runs} løb${others ? `, ${others} andet` : ""}).${swapped ? ` ${swapped} indtastede pas erstattet af urets udgave.` : ""}` : swapped ? `Strava: ingen nye, men ${swapped} indtastede pas erstattet af urets udgave.` : "Strava: ingen nye aktiviteter." } }));
     } catch (e) { setStrava((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
   };
   const actsRef = useRef(acts); actsRef.current = acts;
@@ -503,7 +506,9 @@ export default function App() {
       }
       logBase = n; if (!parsed.length) saveLog(n);
     }
-    const { next, added } = mergeActivities(acts, parsed);
+    const merged = mergeActivities(acts, parsed);
+    const { next, removed } = dedupeStore(merged.next);
+    const added = merged.added, swapped = merged.replaced + removed;
     let weeks = {};
     if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
@@ -514,7 +519,7 @@ export default function App() {
       text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
         : parsed.length === 0 && !wellness.length ? "Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil."
         : parsed.length === 0 ? wellText.trim() + (errors.length ? " " + errors.join(" ") : "")
-        : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${wellText}${errors.length ? " " + errors.join(" ") : ""}`,
+        : `Læste ${parsed.length} aktiviteter (${runs} løb${hikes ? `, ${hikes} vandring` : ""}${other ? `, ${other} andet` : ""}), ${added} nye${swapped ? `, ${swapped} indtastede erstattet af urets udgave` : ""}. ${Object.keys(weeks).length} uger i loggen har nu km fra dit ur.${wellText}${errors.length ? " " + errors.join(" ") : ""}`,
     });
     if (fileRef.current) fileRef.current.value = "";
     setImporting(false);

@@ -385,24 +385,47 @@ export const findDuplicate = (a, existing) => {
   const manual = a.source === "Manuel";
   for (const b of existing) {
     if (b.day !== a.day) continue;
+    const eitherManual = manual || b.source === "Manuel";
     // A manual entry carries no exact start time: same day + similar distance is the same run.
-    if (!manual && b.source !== "Manuel" && Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
-    // Sessions without km: same day, same kind of session, and minutes within 20 %.
-    if (!(a.km > 0) || !(b.km > 0)) { if (!(a.km > 0) && !(b.km > 0) && String(a.type).toLowerCase() === String(b.type).toLowerCase() && Math.abs((a.min || 0) - (b.min || 0)) <= Math.max(5, 0.2 * Math.max(a.min || 0, b.min || 0))) return b.id; continue; }
-    if (Math.abs(b.km - a.km) <= Math.max(0.5, 0.03 * Math.max(a.km, b.km))) return b.id;
+    if (!eitherManual && Math.abs(new Date(b.date).getTime() - t) > 10 * 60000) continue;
+    // Sessions without km: same day, same kind of session (Styrke = Strength = WeightTraining), minutes within 20 %
+    // (a typed session may be rounder: within 30 % or 15 min when one side is manual).
+    if (!(a.km > 0) || !(b.km > 0)) {
+      if (!(a.km > 0) && !(b.km > 0) && xLabel(a.type) === xLabel(b.type) && Math.abs((a.min || 0) - (b.min || 0)) <= (eitherManual ? Math.max(15, 0.3 * Math.max(a.min || 0, b.min || 0)) : Math.max(5, 0.2 * Math.max(a.min || 0, b.min || 0)))) return b.id;
+      continue;
+    }
+    // Typed distances are rounded ("5 km" for 5.4): a wider band when one side is manual.
+    if (Math.abs(b.km - a.km) <= (eitherManual ? Math.max(1, 0.12 * Math.max(a.km, b.km)) : Math.max(0.5, 0.03 * Math.max(a.km, b.km)))) return b.id;
   }
   return null;
 };
-// Merge parsed activities into the store; duplicates keep the stored copy. Returns { next, added }.
+// Merge parsed activities into the store. A duplicate keeps the stored copy, except that a copy from the watch
+// replaces a typed one (more exact, has heart rate); the typed RPE is carried over. Returns { next, added, replaced }.
 export const mergeActivities = (acts, parsed) => {
-  const next = { ...acts }; let added = 0;
+  const next = { ...acts }; let added = 0, replaced = 0;
   for (const a of parsed) {
     if (next[a.id]) continue;
     const dup = findDuplicate(a, Object.values(next).filter((b) => b.day === a.day));
-    if (dup) continue;
+    if (dup) {
+      const old = next[dup];
+      if (old.source === "Manuel" && a.source !== "Manuel") { delete next[dup]; next[a.id] = { ...a, ...(old.rpe && !a.rpe ? { rpe: old.rpe } : {}) }; replaced++; }
+      continue;
+    }
     next[a.id] = a; added++;
   }
-  return { next, added };
+  return { next, added, replaced };
+};
+// One pass over a store that may already hold a typed copy and a watch copy of the same session (from before the
+// rule above): the typed one goes, its RPE stays. Returns { next, removed }.
+export const dedupeStore = (acts) => {
+  const next = { ...acts }; let removed = 0;
+  const manual = Object.values(next).filter((a) => a.source === "Manuel");
+  for (const m of manual) {
+    const others = Object.values(next).filter((b) => b.id !== m.id && b.source !== "Manuel" && b.day === m.day);
+    const dup = findDuplicate(m, others);
+    if (dup) { if (m.rpe && !next[dup].rpe) next[dup] = { ...next[dup], rpe: m.rpe }; delete next[m.id]; removed++; }
+  }
+  return { next, removed };
 };
 
 // RPE estimate (Foster scale) from average heart rate as a share of max.
