@@ -783,7 +783,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <button type="button" className="brand" onClick={() => { setView("today"); window.scrollTo(0, 0); }} aria-label="Til forsiden">Ultraplan</button>
-          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); window.scrollTo(0, 0); }} title="Se dit overblik"><b>{daysToRace}</b> dage til {p.raceName || "løbet"} <span className="muted">· overblik ›</span></button>
+          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); window.scrollTo(0, 0); }} title="Se dit overblik"><b>{daysToRace}</b> dage til {p.raceName || "løbet"}</button>
         </div>
       </header>
       <nav className="tabbar" aria-label="Hovedmenu">
@@ -791,6 +791,7 @@ export default function App() {
           ["today", "I dag", <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>],
           ["plan", "Plan", <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>],
           ["log", "Log", <svg viewBox="0 0 24 24"><path d="M4 12.5l4 4L20 5" /><path d="M4 19h16" opacity=".4" /></svg>],
+          ["overblik", "Overblik", <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>],
           ["coach", "Træner", <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" opacity=".6" /></svg>],
           ["more", "Mere", <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="17" r="2" fill="currentColor" stroke="none" /></svg>],
         ].map(([k, l, ic]) => (
