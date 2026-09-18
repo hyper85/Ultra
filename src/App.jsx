@@ -833,7 +833,7 @@ export default function App() {
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}{plan.coach ? " · trænerplan" : ""}</div>
               {coachOfferBox}
               <section className={`panel today ${done ? "done" : ""}`}>
-                <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>
+                {(v > 0 || raceDay || (lift && session)) && <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{cur.quality}</b></div>}
                 {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
