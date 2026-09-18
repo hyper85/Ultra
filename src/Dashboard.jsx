@@ -74,7 +74,13 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
   const longest = recent.length ? r1(Math.max(...recent.map((a) => a.km))) : null;
   const acwr = acwrFor(cur.key);
   const planKmToDate = done.reduce((s, r) => s + r.km, 0), ranToDate = done.reduce((s, r) => s + (log[r.key]?.km || 0), 0);
-  const hit = done.filter((r) => r.km > 0 && (log[r.key]?.km || 0) >= r.km * 0.85 && (log[r.key]?.km || 0) <= r.km * 1.2).length;
+  const rated = done.filter((r) => r.km > 0);
+  const hit = rated.filter((r) => (log[r.key]?.km || 0) >= r.km * 0.85 && (log[r.key]?.km || 0) <= r.km * 1.2).length;
+  const over = rated.filter((r) => (log[r.key]?.km || 0) > r.km * 1.2).length, under = rated.length - hit - over;
+  // ACWR is judged on completed weeks; the week in progress is provisional until most of it is run.
+  const lastDone = done[done.length - 1];
+  const acwrLast = lastDone ? acwrFor(lastDone.key) : null;
+  const weekYoung = (curLog.km || 0) < (cur.km || 1) * 0.6;
   const series = (field, weeks = 12) => plan.rows.filter((r) => r.key <= cur.key).slice(-weeks).map((r) => ({ key: r.key, label: `U${r.i}`, v: log[r.key]?.[field] != null && log[r.key]?.[field] !== "" ? +log[r.key][field] : null }));
   const sleep = series("sleep"), hr = series("hr"), wt = series("wt"), vo2 = series("vo2");
   const latest = (rows) => [...rows].reverse().find((r) => r.v != null)?.v ?? null;
@@ -91,14 +97,15 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
         <Tile label="Streak" value={streak} unit={streak === 1 ? " uge" : " uger"} sub={streak >= 4 ? "i træk med træning. Kontinuitet slår alt." : streak > 0 ? "i træk med logget træning" : "log noget i denne uge for at starte"} cls={streak >= 4 ? "good" : ""} />
         <Tile label="Denne uge" value={curLog.km || 0} unit={` / ${cur.km} km`} sub={pct != null ? `${pct} % af planen · uge ${cur.i} af ${plan.weeks}` : `uge ${cur.i} af ${plan.weeks}`} />
         <Tile label="Snit sidste 4 uger" value={last4.length ? Math.round(mean(last4)) : "–"} unit=" km/uge" sub={last4.length ? `${last4.length} uger med data` : "log en uge først"} />
-        <Tile label="ACWR nu" value={acwr ? r1(acwr.v).toFixed(2) : "–"} sub={acwr ? (acwr.v > 1.5 ? "Rødt: skær ned, ingen hårde pas" : acwr.v > 1.3 ? "Gult: hold igen" : acwr.v >= 0.8 ? "Grønt: belastningen passer" : "Lavt: der er plads") + (acwr.est ? " · estimat" : "") : "kommer, når ugen har km og RPE"} cls={acwrClass(acwr?.v)} />
+        {(() => { const a = weekYoung && acwrLast ? acwrLast : acwr; const label = weekYoung && acwrLast ? `ACWR, uge ${lastDone.i}` : "ACWR nu"; const verdict = a ? (a.v > 1.5 ? "Rødt: skær ned, ingen hårde pas" : a.v > 1.3 ? "Gult: hold igen" : a.v >= 0.8 ? "Grønt: belastningen passer" : "Lavt: der er plads") + (a.est ? " · estimat" : "") : "kommer, når ugen har km og RPE"; return (
+          <Tile label={label} value={a ? r1(a.v).toFixed(2) : "–"} sub={weekYoung && acwrLast ? `${verdict} · denne uge er i gang${acwr ? ` (${r1(acwr.v).toFixed(2)} indtil nu)` : ""}` : verdict} cls={acwrClass(a?.v)} />); })()}
         <Tile label="Længste tur, 4 uger" value={longest ?? "–"} unit=" km" sub={recent.length ? `${recent.length} ture · ${r1(recent.length / 4)} pr. uge` : "ingen ture i loggen"} />
         <Tile label="Andre pas denne uge" value={curLog.xn || 0} sub={curLog.xmin ? `${curLog.xmin} min · styrke/HIIT/andet` : liftDays.length ? `${liftDays.length} styrkepas i planen` : "ingen"} />
-        <Tile label="Planen indtil nu" value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? `${Math.round(ranToDate)} af ${Math.round(planKmToDate)} km · ${hit} af ${done.length} uger ramt` : "første uge er i gang"} />
+        <Tile label="Planen indtil nu" value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? `${Math.round(ranToDate)} af ${Math.round(planKmToDate)} km i alt · uge for uge: ${hit} på planen${over ? `, ${over} over` : ""}${under ? `, ${under} under` : ""}` : "første uge er i gang"} cls={rated.length && hit === 0 && over > 0 ? "warn" : ""} />
         {avg(sleep) != null && <Tile label="Søvn, snit 12 uger" value={avg(sleep)} unit=" t" sub={latest(sleep) != null ? `seneste uge ${latest(sleep)} t` : ""} cls={avg(sleep) < 6.5 ? "warn" : ""} />}
         {latest(hr) != null && <Tile label="Hvilepuls" value={latest(hr)} sub={avg(hr) != null ? `snit ${avg(hr)}${latest(hr) - avg(hr) >= 5 ? " · høj: sov og skær ned" : ""}` : ""} cls={avg(hr) != null && latest(hr) - avg(hr) >= 5 ? "bad" : ""} />}
         {fitness && <Tile label="Form for din alder" value={`${fitness.percentile} %`} sub={`bedre end ca. ${fitness.percentile} % · ${fitness.category.toLowerCase()}`} cls={fitness.percentile >= 70 ? "good" : fitness.percentile >= 30 ? "" : "warn"} />}
-        {fitness && <Tile label="Fitnessalder" value={fitness.fitnessAge} unit=" år" sub={fitness.ageDiff > 0 ? `${fitness.ageDiff} år yngre end dit pas` : fitness.ageDiff < 0 ? `${-fitness.ageDiff} år ældre end dit pas` : "som din alder"} cls={fitness.ageDiff >= 5 ? "good" : fitness.ageDiff <= -5 ? "warn" : ""} />}
+        {fitness && <Tile label="Fitnessalder" value={fitness.fitnessAge} unit=" år" sub={`VO2 max ${fitness.vo2}${fitness.measured ? "" : " (anslået)"} · som en gennemsnitlig ${fitness.fitnessAge}-årig`} cls={fitness.ageDiff >= 5 ? "good" : fitness.ageDiff <= -5 ? "warn" : ""} />}
         {latest(vo2) != null && !fitness?.measured && <Tile label="VO2 max" value={latest(vo2)} sub="fra dit ur" />}
         {latest(wt) != null && <Tile label="Vægt" value={latest(wt)} unit=" kg" sub={p.weight ? `profil ${p.weight} kg` : ""} />}
       </div>
@@ -142,7 +149,7 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
               {["Meget lav", "Lav", "Middel", "God", "Fremragende", "Elite"].map((c, i) => <div key={c} className={`scale-seg ${fitness.category === c ? "on" : ""}`}><small>{c}</small></div>)}
               <i className="scale-pin" style={{ left: `${fitness.percentile}%` }} title={`${fitness.percentile} %`} />
             </div>
-            <p className="muted">Din kondition ligger i gruppen <b>{fitness.category.toLowerCase()}</b> for {fitness.sexUsed === "f" ? "kvinder" : "mænd"} på {p.age || "din"} år: bedre end cirka {fitness.percentile} % af dem. Det svarer til en gennemsnitlig {fitness.fitnessAge}-årig, altså en fitnessalder på {fitness.fitnessAge} år. {fitness.note} Normerne er Cooper Institutes tabeller, og tallet er et estimat, ikke en dom: det flytter sig med rolige kilometer og søvn.</p>
+            <p className="muted">Din kondition ligger i gruppen <b>{fitness.category.toLowerCase()}</b> for {fitness.sexUsed === "f" ? "kvinder" : "mænd"} på {p.age || "din"} år: bedre end cirka {fitness.percentile} % af dem. Fitnessalderen er den alder, hvor en gennemsnitsperson i befolkningen har samme VO2 max som dig{fitness.fitnessAge <= 20 ? ", og din ligger over gennemsnittet for 20-årige, så den kan ikke blive lavere" : ""}. Det er befolkningen generelt, ikke andre løbere: blandt trænede løbere på din alder er {fitness.vo2} et almindeligt godt tal. {fitness.note} Normerne er Cooper Institutes tabeller, og tallet er et estimat, ikke en dom: det flytter sig med rolige kilometer og søvn.</p>
           </div>
         )}
         {insights?.findings?.length > 0 && (
