@@ -6,6 +6,8 @@ import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js
 import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
 import Dashboard from "./Dashboard.jsx";
+import { quoteFor } from "./quotes.js";
+import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
@@ -681,6 +683,19 @@ export default function App() {
     return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
   }, [plan.coach, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const sessionFor = (ti) => { const k = liftDays.indexOf(ti); if (k < 0 || !strengthPlan.sessions.length) return null; return strengthPlan.sessions[k % strengthPlan.sessions.length]; };
+  // Form against age and sex norms: measured VO2 max from the log when there is one, else estimated from heart rates.
+  const latestVo2 = (() => { const keys = Object.keys(log).filter((k) => log[k]?.vo2 > 0).sort(); return keys.length ? +log[keys[keys.length - 1]].vo2 : null; })();
+  const fitness = useMemo(() => fitnessReport({ age: p.age, sex: p.sex, restHR: p.restHR, maxHR, vo2: latestVo2 }), [p.age, p.sex, p.restHR, maxHR, latestVo2]);
+  // Last week in one line, shown on I dag in the first days of a new week.
+  const lastWeek = useMemo(() => {
+    const prev = plan.rows.find((r) => r.key === ymd(addDays(parseLocal(cur.key), -7)));
+    if (!prev) return null;
+    const l = log[prev.key] || {}; const a = acwrFor(prev.key);
+    if (!(l.km > 0) && !(l.xn > 0)) return null;
+    const pct = prev.km ? Math.round(((l.km || 0) / prev.km) * 100) : null;
+    const verdict = pct == null ? "" : pct >= 85 && pct <= 120 ? "Lige på planen. Bliv ved." : pct > 120 ? "Over planen. Planens tal er et loft, så hold igen i denne uge." : pct >= 60 ? "Lidt under planen. Det er fint, hvis kroppen havde brug for det." : "Langt under planen. Kig på, om dagene passer, eller om ugen bare var svær.";
+    return { i: prev.i, km: l.km || 0, plan: prev.km, pct, acwr: a?.v ?? null, xn: l.xn || 0, xmin: l.xmin || 0, sleep: l.sleep, verdict };
+  }, [plan.rows, cur.key, log]); // eslint-disable-line react-hooks/exhaustive-deps
   const nutritionFor = (dayType) => ({ targets: dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType }), meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body }) });
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
 
@@ -705,7 +720,7 @@ export default function App() {
   const [chat, setChat] = useState(() => loadChat());
   const [coachQ, setCoachQ] = useState("");
   // Body goal, strength and today's nutrition targets, so the coach can answer about lifting and food too.
-  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const t = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(t); return { krop_mål: p.body || "keep", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
+  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const t = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(t); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.fitnessAge } : null, krop_mål: p.body || "keep", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachErr, setCoachErr] = useState(null);
   // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.
@@ -840,7 +855,13 @@ export default function App() {
           return (
             <>
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}{plan.coach ? " · trænerplan" : ""}</div>
+              <div className="quote">{quoteFor({ type: raceDay ? "race" : v > 0 ? (long ? "long" : hard ? "hard" : "easy") : lift ? "lift" : "rest", phase: cur.phase, deload: cur.deload })}</div>
               {coachOfferBox}
+              {lastWeek && ti <= 2 && (
+                <div className="advice recap">
+                  <b>Sidste uge (uge {lastWeek.i}):</b> {lastWeek.km} af {lastWeek.plan} km{lastWeek.pct != null ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${lastWeek.xn} andre pas, ${lastWeek.xmin} min` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · søvn ${lastWeek.sleep} t` : ""}. {lastWeek.verdict}
+                </div>
+              )}
               <section className={`panel today ${done ? "done" : ""}`}>
                 {(v > 0 || raceDay || (lift && session)) && <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
@@ -1096,7 +1117,7 @@ export default function App() {
         </aside>
         )}
 
-        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} onGo={(v) => setView(v)} />}
+        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onGo={(v) => setView(v)} />}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>

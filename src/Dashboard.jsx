@@ -61,7 +61,7 @@ const Tile = ({ label, value, unit, sub, cls = "" }) => (
   <div className={`tile ${cls}`}><small>{label}</small><b>{value}{unit && <span>{unit}</span>}</b>{sub && <small className="sub">{sub}</small>}</div>
 );
 
-export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, onGo }) {
+export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onGo }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
   const curLog = log[cur.key] || {};
@@ -95,7 +95,9 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
         <Tile label="Planen indtil nu" value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? `${Math.round(ranToDate)} af ${Math.round(planKmToDate)} km · ${hit} af ${done.length} uger ramt` : "første uge er i gang"} />
         {avg(sleep) != null && <Tile label="Søvn, snit 12 uger" value={avg(sleep)} unit=" t" sub={latest(sleep) != null ? `seneste uge ${latest(sleep)} t` : ""} cls={avg(sleep) < 6.5 ? "warn" : ""} />}
         {latest(hr) != null && <Tile label="Hvilepuls" value={latest(hr)} sub={avg(hr) != null ? `snit ${avg(hr)}${latest(hr) - avg(hr) >= 5 ? " · høj: sov og skær ned" : ""}` : ""} cls={avg(hr) != null && latest(hr) - avg(hr) >= 5 ? "bad" : ""} />}
-        {latest(vo2) != null && <Tile label="VO2 max" value={latest(vo2)} sub="fra dit ur" />}
+        {fitness && <Tile label="Form for din alder" value={`${fitness.percentile} %`} sub={`bedre end ca. ${fitness.percentile} % · ${fitness.category.toLowerCase()}`} cls={fitness.percentile >= 70 ? "good" : fitness.percentile >= 30 ? "" : "warn"} />}
+        {fitness && <Tile label="Fitnessalder" value={fitness.fitnessAge} unit=" år" sub={fitness.ageDiff > 0 ? `${fitness.ageDiff} år yngre end dit pas` : fitness.ageDiff < 0 ? `${-fitness.ageDiff} år ældre end dit pas` : "som din alder"} cls={fitness.ageDiff >= 5 ? "good" : fitness.ageDiff <= -5 ? "warn" : ""} />}
+        {latest(vo2) != null && !fitness?.measured && <Tile label="VO2 max" value={latest(vo2)} sub="fra dit ur" />}
         {latest(wt) != null && <Tile label="Vægt" value={latest(wt)} unit=" kg" sub={p.weight ? `profil ${p.weight} kg` : ""} />}
       </div>
 
@@ -129,6 +131,16 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
             <h2 style={{ margin: 0 }}>Hvilepuls</h2>
             <Line rows={hr} color="hr" cur={cur.key} />
             <p className="muted">7 slag over din normale er et stopsignal: sov, og skær 30–50 % af ugen.</p>
+          </div>
+        )}
+        {fitness && (
+          <div className="panel">
+            <div className="row-between"><h2 style={{ margin: 0 }}>Din form i forhold til andre</h2><span className="muted">VO2 max {fitness.vo2}{fitness.measured ? "" : " (anslået)"}</span></div>
+            <div className="scale">
+              {["Meget lav", "Lav", "Middel", "God", "Fremragende", "Elite"].map((c, i) => <div key={c} className={`scale-seg ${fitness.category === c ? "on" : ""}`}><small>{c}</small></div>)}
+              <i className="scale-pin" style={{ left: `${fitness.percentile}%` }} title={`${fitness.percentile} %`} />
+            </div>
+            <p className="muted">Din kondition ligger i gruppen <b>{fitness.category.toLowerCase()}</b> for {fitness.sexUsed === "f" ? "kvinder" : "mænd"} på {p.age || "din"} år: bedre end cirka {fitness.percentile} % af dem. Det svarer til en gennemsnitlig {fitness.fitnessAge}-årig, altså en fitnessalder på {fitness.fitnessAge} år. {fitness.note} Normerne er Cooper Institutes tabeller, og tallet er et estimat, ikke en dom: det flytter sig med rolige kilometer og søvn.</p>
           </div>
         )}
         {insights?.findings?.length > 0 && (
