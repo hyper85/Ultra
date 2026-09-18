@@ -60,6 +60,11 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Overblik: tryk på nedtællingen øverst (eller "Overblik ›" på "I dag") for en side med dine tal: denne uge mod planen,
+snit sidste 4 uger, ACWR nu, længste tur, andre pas, hvor meget af planen du har ramt, og søvn, hvilepuls, VO2 max og
+vægt, når loggen har dem. Under tallene: km pr. uge mod planen, ACWR over tid med det grønne bånd, måned for måned fra
+uret, søvn og hvilepuls som kurver, og de mønstre appen har fundet. Logoet øverst fører altid til forsiden.
+
 Strava-forbindelse: under Log → Strava trykker du "Forbind Strava" (kræver login). Derefter henter appen dine ture
 selv, hver gang du åbner den: de sidste 120 dage første gang, og alt nyt siden sidst bagefter, gennem den samme
 dublet-tjek som filimport. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect
