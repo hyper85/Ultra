@@ -3,6 +3,7 @@ import { ymd, parseLocal, mondayOf, addDays } from "./import.js";
 import coachPlan from "./data/coach-plan.json";
 import { BODY, GEAR, pickLiftDays, buildStrength, gearLabel } from "./strength.js";
 import { weekTargets, bmrOf } from "./nutrition.js";
+import { RACES, vertFor } from "./races.js";
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
 const coachCard = () => {
@@ -143,6 +144,14 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
         <section className="panel ob-panel">
           <h2>Løbet</h2>
           <p className="muted">Målet først. Datoen bestemmer, hvor mange uger planen har at arbejde med.</p>
+          <div className="muted">Vælg et kendt løb, eller skriv dit eget.</div>
+          <div className="chips race-chips">{RACES.map((r) => <button key={r.name} type="button" className={d.raceName === r.name ? "on" : ""} onClick={() => setD({ ...d, raceName: r.name, raceKm: r.km[r.km.length - 1], raceVert: vertFor(r, r.km[r.km.length - 1]) })}>{r.name}</button>)}</div>
+          {(() => { const r = RACES.find((x) => x.name === d.raceName); return r ? (
+            <div className="advice">
+              <div>{r.where} · {r.url}</div>
+              <div className="chips" style={{ marginTop: 6 }}>{r.km.map((k) => <button key={k} type="button" className={+d.raceKm === k ? "on" : ""} onClick={() => setD({ ...d, raceKm: k, raceVert: vertFor(r, k) })}>{k === 83 ? "50 miles" : k === 161 ? "100 miles" : `${k} km`}</button>)}</div>
+              <div className="muted" style={{ marginTop: 6 }}>Datoen skifter hvert år: tjek den på løbets side og skriv den nedenfor. Højdemeter er et skøn, ret dem gerne.</div>
+            </div>) : null; })()}
           <label>Navn på løbet<input value={d.raceName} onChange={set("raceName")} placeholder="fx Hammer Trail Winter 50 miles" /></label>
           <div className="row2">
             <label>Løbsdato<input type="date" value={d.raceDate} onChange={set("raceDate")} min={ymd(addDays(new Date(), 1))} required /></label>

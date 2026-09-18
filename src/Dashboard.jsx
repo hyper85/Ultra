@@ -61,7 +61,7 @@ const Tile = ({ label, value, unit, sub, cls = "" }) => (
   <div className={`tile ${cls}`}><small>{label}</small><b>{value}{unit && <span>{unit}</span>}</b>{sub && <small className="sub">{sub}</small>}</div>
 );
 
-export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onGo }) {
+export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, streak = 0, onShare, shareMsg, onGo }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
   const curLog = log[cur.key] || {};
@@ -85,8 +85,10 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
   const pct = cur.km ? Math.min(999, Math.round(((curLog.km || 0) / cur.km) * 100)) : null;
   return (
     <section className="stack dash">
-      <h1 className="screen-title">Overblik</h1>
+      <div className="row-between"><h1 className="screen-title" style={{ margin: 0 }}>Overblik</h1>{onShare && <button type="button" className="btn ghost" onClick={onShare}>Del ugen</button>}</div>
+      {shareMsg && <div className="advice">{shareMsg}</div>}
       <div className="tiles">
+        <Tile label="Streak" value={streak} unit={streak === 1 ? " uge" : " uger"} sub={streak >= 4 ? "i træk med træning. Kontinuitet slår alt." : streak > 0 ? "i træk med logget træning" : "log noget i denne uge for at starte"} cls={streak >= 4 ? "good" : ""} />
         <Tile label="Denne uge" value={curLog.km || 0} unit={` / ${cur.km} km`} sub={pct != null ? `${pct} % af planen · uge ${cur.i} af ${plan.weeks}` : `uge ${cur.i} af ${plan.weeks}`} />
         <Tile label="Snit sidste 4 uger" value={last4.length ? Math.round(mean(last4)) : "–"} unit=" km/uge" sub={last4.length ? `${last4.length} uger med data` : "log en uge først"} />
         <Tile label="ACWR nu" value={acwr ? r1(acwr.v).toFixed(2) : "–"} sub={acwr ? (acwr.v > 1.5 ? "Rødt: skær ned, ingen hårde pas" : acwr.v > 1.3 ? "Gult: hold igen" : acwr.v >= 0.8 ? "Grønt: belastningen passer" : "Lavt: der er plads") + (acwr.est ? " · estimat" : "") : "kommer, når ugen har km og RPE"} cls={acwrClass(acwr?.v)} />
