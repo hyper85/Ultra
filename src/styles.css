@@ -465,3 +465,6 @@ details.strava { margin-bottom: 12px; }
 .streak { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 999px; background: #2a1a10; border: 1px solid rgba(252,76,2,.45); color: var(--text); font-size: 12.5px; font-weight: 600; white-space: nowrap; margin-bottom: 8px; }
 .streak svg { width: 16px; height: 16px; fill: var(--orange); }
 .race-chips button { font-size: 13px; }
+
+.race-links { margin-top: 6px; font-size: 13px; }
+.race-links a { color: var(--orange); text-decoration: none; }
