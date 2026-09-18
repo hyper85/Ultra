@@ -188,7 +188,6 @@ tr.dayrow td { background: #141414; padding: 10px 8px 12px; }
 .topbar-inner { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { flex: 0 0 auto; font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; }
 .topbar-race { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; background: none; border: 0; padding: 0; cursor: pointer; text-align: right; font: inherit; font-size: 13px; }
-.topbar-race .muted { color: var(--orange); }
 .topbar-race b { color: var(--volt); font-family: "Barlow Condensed", sans-serif; font-size: 20px; margin-right: 4px; }
 main.wrap { max-width: 1180px; padding: 16px 16px 92px; }
 .stack { display: grid; gap: 14px; }
@@ -216,7 +215,7 @@ main.wrap { max-width: 1180px; padding: 16px 16px 92px; }
 .thisweek.mini div.done { border-top-color: var(--green); }
 .thisweek.mini .ran { margin-top: 2px; }
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; background: rgba(17,17,17,.95); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
-.tabbar button { flex: 1; background: none; border: none; color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 4px; border-radius: 10px; display: grid; gap: 2px; justify-items: center; min-height: 48px; cursor: pointer; }
+.tabbar button { flex: 1; background: none; border: none; color: var(--muted); font-size: 11.5px; font-weight: 600; padding: 6px 2px; white-space: nowrap; border-radius: 10px; display: grid; gap: 2px; justify-items: center; min-height: 48px; cursor: pointer; }
 .tabbar button .ic { font-size: 20px; line-height: 1; }
 .tabbar button.on { color: var(--volt); }
 .tabbar button:focus-visible { outline: 2px solid var(--orange); }
