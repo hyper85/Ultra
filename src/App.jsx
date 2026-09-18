@@ -5,6 +5,7 @@ import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./O
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
 import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
+import Dashboard from "./Dashboard.jsx";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
@@ -781,8 +782,8 @@ export default function App() {
     <>
       <header className="topbar">
         <div className="topbar-inner">
-          <div className="brand">Ultraplan</div>
-          <div className="topbar-race"><b>{daysToRace}</b> dage til {p.raceName || "løbet"}</div>
+          <button type="button" className="brand" onClick={() => { setView("today"); window.scrollTo(0, 0); }} aria-label="Til forsiden">Ultraplan</button>
+          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); window.scrollTo(0, 0); }} title="Se dit overblik"><b>{daysToRace}</b> dage til {p.raceName || "løbet"} <span className="muted">· overblik ›</span></button>
         </div>
       </header>
       <nav className="tabbar" aria-label="Hovedmenu">
@@ -866,7 +867,7 @@ export default function App() {
               <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
 
               <section className="panel">
-                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km · <button type="button" className="linkbtn" onClick={() => setView("plan")}>Se planen ›</button></span></div>
+                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km · <button type="button" className="linkbtn" onClick={() => setView("overblik")}>Overblik ›</button></span></div>
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
@@ -1094,6 +1095,7 @@ export default function App() {
         </aside>
         )}
 
+        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} onGo={(v) => setView(v)} />}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>

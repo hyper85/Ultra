@@ -186,8 +186,9 @@ tr.dayrow td { background: #141414; padding: 10px 8px 12px; }
 /* ===== simple layout: top bar, one column, bottom tab bar ===== */
 .topbar { position: sticky; top: 0; z-index: 20; background: rgba(11,11,11,.9); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .topbar-inner { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.brand { flex: 0 0 auto; font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; }
-.topbar-race { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.brand { flex: 0 0 auto; font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; }
+.topbar-race { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; background: none; border: 0; padding: 0; cursor: pointer; text-align: right; font: inherit; font-size: 13px; }
+.topbar-race .muted { color: var(--orange); }
 .topbar-race b { color: var(--volt); font-family: "Barlow Condensed", sans-serif; font-size: 20px; margin-right: 4px; }
 main.wrap { max-width: 1180px; padding: 16px 16px 92px; }
 .stack { display: grid; gap: 14px; }
@@ -409,3 +410,43 @@ td .dayform .dayform-row label { flex: 1 1 80px; }
 
 details.strava { margin-bottom: 12px; }
 .strava-btn { background: #fc4c02; border-color: #fc4c02; }
+
+/* overblik */
+.dash .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tile { display: grid; gap: 2px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); border-left: 4px solid var(--line); }
+.tile small { color: var(--muted); font-size: 12px; }
+.tile b { font-family: "Barlow Condensed", Impact, sans-serif; font-size: 26px; line-height: 1.05; }
+.tile b span { font-size: 14px; font-family: inherit; color: var(--muted); margin-left: 2px; }
+.tile .sub { font-size: 12px; }
+.tile.good { border-left-color: var(--green); }
+.tile.warn { border-left-color: var(--amber); }
+.tile.bad { border-left-color: var(--red); }
+.tile.low { border-left-color: var(--blue); }
+.dash-grid { display: grid; gap: 12px; margin-top: 12px; }
+.chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 11px; }
+.chart .tick.cur { fill: var(--text); font-weight: 700; }
+.chart .bar.plan { fill: #3a3a3a; }
+.chart .bar.ran { fill: var(--orange); }
+.chart .bar.ran.cur { fill: var(--volt); }
+.chart .dot { fill: var(--muted); }
+.chart .band { fill: rgba(56, 176, 96, .14); }
+.chart .line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .line.accent, .chart .pt.accent { stroke: var(--orange); }
+.chart .line.acwr { stroke: var(--text); }
+.chart .pt.acwr { fill: var(--muted); stroke: none; }
+.chart .pt.acwr.good { fill: var(--green); }
+.chart .pt.acwr.warn { fill: var(--amber); }
+.chart .pt.acwr.bad { fill: var(--red); }
+.chart .pt.acwr.low { fill: var(--blue); }
+.chart .line.sleep { stroke: var(--blue); } .chart .pt.sleep { fill: var(--blue); }
+.chart .line.hr { stroke: var(--red); } .chart .pt.hr { fill: var(--red); }
+.chart .pt.cur { stroke: var(--text); stroke-width: 1.5; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: middle; }
+.sw.plan { background: #3a3a3a; } .sw.ran { background: var(--orange); }
+@media (min-width: 1000px) {
+  main[data-view="overblik"] > section.stack { grid-column: 1 / -1; }
+  .dash .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
