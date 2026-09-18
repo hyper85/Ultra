@@ -3,7 +3,7 @@ import { ymd, parseLocal, mondayOf, addDays } from "./import.js";
 import coachPlan from "./data/coach-plan.json";
 import { BODY, GEAR, pickLiftDays, buildStrength, gearLabel } from "./strength.js";
 import { weekTargets, bmrOf } from "./nutrition.js";
-import { RACES, vertFor } from "./races.js";
+import { RACES, vertFor, distanceKm, myPosition } from "./races.js";
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
 const coachCard = () => {
@@ -81,6 +81,9 @@ export const proteinG = (weight, body) => Math.round(weight * (body === "lean" ?
 
 export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, buildPlan, onDone, rerun }) {
   const [step, setStep] = useState(0);
+  const [pos, setPos] = useState(null); const [posMsg, setPosMsg] = useState(null);
+  const findNear = async () => { setPosMsg("Finder din position…"); const p0 = await myPosition(); if (!p0) { setPos(null); setPosMsg("Kunne ikke få din position. Tillad placering i browseren, eller vælg et løb i listen."); return; } setPos(p0); setPosMsg(null); };
+  const raceList = pos ? [...RACES].map((r) => ({ ...r, dist: distanceKm(pos.lat, pos.lon, r.lat, r.lon) })).sort((a, b) => a.dist - b.dist) : RACES;
   const [d, setD] = useState(() => ({ ...initial, body: initial.body || "keep", gear: initial.gear || "home", liftCount: initial.liftDays ? initial.liftDays.length : 2, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
   const set = (k) => (e) => setD({ ...d, [k]: e.target.type === "number" ? (e.target.value === "" ? "" : +e.target.value) : e.target.value });
   const setDay = (i, patch) => { const A = (d.sched?.A || []).map((x, j) => (j === i ? { ...x, ...patch } : x)); setD({ ...d, sched: { ...(d.sched || {}), A, B: d.sched?.B || A.map((x) => ({ ...x })) } }); };
@@ -144,8 +147,9 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
         <section className="panel ob-panel">
           <h2>Løbet</h2>
           <p className="muted">Målet først. Datoen bestemmer, hvor mange uger planen har at arbejde med.</p>
-          <div className="muted">Vælg et kendt løb, eller skriv dit eget.</div>
-          <div className="chips race-chips">{RACES.map((r) => <button key={r.name} type="button" className={d.raceName === r.name ? "on" : ""} onClick={() => setD({ ...d, raceName: r.name, raceKm: r.km[r.km.length - 1], raceVert: vertFor(r, r.km[r.km.length - 1]) })}>{r.name}</button>)}</div>
+          <div className="row-between"><span className="muted">Vælg et kendt løb, eller skriv dit eget.</span><button type="button" className="linkbtn" onClick={findNear}>{pos ? "Sorteret efter afstand" : "Find løb nær mig"}</button></div>
+          {posMsg && <div className="muted" style={{ marginTop: 4 }}>{posMsg}</div>}
+          <div className="chips race-chips">{raceList.map((r) => <button key={r.name} type="button" className={d.raceName === r.name ? "on" : ""} onClick={() => setD({ ...d, raceName: r.name, raceKm: r.km[r.km.length - 1], raceVert: vertFor(r, r.km[r.km.length - 1]) })}>{r.name}{r.dist != null ? <span className="muted"> · {r.dist} km</span> : null}</button>)}</div>
           {(() => { const r = RACES.find((x) => x.name === d.raceName); return r ? (
             <div className="advice">
               <div>{r.where} · {r.url}</div>

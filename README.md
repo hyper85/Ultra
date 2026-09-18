@@ -65,7 +65,9 @@ Overblik har en streak-flise. "Del ugen" (på I dag ved Ugen og på Overblik) te
 (1080 × 1350: km mod planen, dagene, streak, ACWR, andre pas, dage til løbet, dagens linje) og åbner delingsarket;
 kan telefonen ikke dele filer, gemmes billedet som PNG. Intet sendes til en server. I spørgeskemaets første trin kan man
 vælge et kendt løb (Hammer Trail, Mols Bjerge Trail, Trailman, Hærvejsmarathon, Copenhagen Marathon, Kullamannen,
-Lidingöloppet Ultra) og en distance; datoen skriver man selv, for den skifter hvert år.
+Lidingöloppet Ultra) og en distance; datoen skriver man selv, for den skifter hvert år. "Find løb nær mig" beder om
+placering (kun ved tryk, aldrig automatisk) og sorterer listen efter afstand. Der findes ingen åben løbskalender,
+appen kan slå op i, så listen er kurateret, og egne løb tastes bare i feltet.
 
 Motivation og form: "I dag" har hver dag én linje, der passer til dagens type (hvile, rolig, hård, lang, styrke,
 løbsuge), og i starten af en ny uge en opsummering af sidste uge (km mod planen, andre pas, ACWR, søvn) med én
