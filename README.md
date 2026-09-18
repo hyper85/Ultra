@@ -60,6 +60,13 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
+Streak, deling og kendte løb: "I dag" viser "N uger i træk" (uger med logget træning, løb eller andre pas), og
+Overblik har en streak-flise. "Del ugen" (på I dag ved Ugen og på Overblik) tegner et billede af ugen på telefonen
+(1080 × 1350: km mod planen, dagene, streak, ACWR, andre pas, dage til løbet, dagens linje) og åbner delingsarket;
+kan telefonen ikke dele filer, gemmes billedet som PNG. Intet sendes til en server. I spørgeskemaets første trin kan man
+vælge et kendt løb (Hammer Trail, Mols Bjerge Trail, Trailman, Hærvejsmarathon, Copenhagen Marathon, Kullamannen,
+Lidingöloppet Ultra) og en distance; datoen skriver man selv, for den skifter hvert år.
+
 Motivation og form: "I dag" har hver dag én linje, der passer til dagens type (hvile, rolig, hård, lang, styrke,
 løbsuge), og i starten af en ny uge en opsummering af sidste uge (km mod planen, andre pas, ACWR, søvn) med én
 sætnings dom. Overblik viser "Form for din alder" og "Fitnessalder": VO2 max fra Garmins rapport, ellers anslået fra

@@ -8,6 +8,7 @@ import { StrengthSession, NutritionCard } from "./Strength.jsx";
 import Dashboard from "./Dashboard.jsx";
 import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
+import { shareWeek } from "./share.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import coachPlan from "./data/coach-plan.json";
 import { buildInsights, coachContext } from "./insights.js";
@@ -686,6 +687,25 @@ export default function App() {
   // Form against age and sex norms: measured VO2 max from the log when there is one, else estimated from heart rates.
   const latestVo2 = (() => { const keys = Object.keys(log).filter((k) => log[k]?.vo2 > 0).sort(); return keys.length ? +log[keys[keys.length - 1]].vo2 : null; })();
   const fitness = useMemo(() => fitnessReport({ age: p.age, sex: p.sex, restHR: p.restHR, maxHR, vo2: latestVo2 }), [p.age, p.sex, p.restHR, maxHR, latestVo2]);
+  // Streak: weeks in a row with logged training (runs or other sessions), counting back from the last completed
+  // week; the current week joins once it has something logged.
+  const streak = useMemo(() => {
+    const trained = (k) => (log[k]?.km > 0) || (log[k]?.xn > 0);
+    const done = plan.rows.filter((r) => r.key < cur.key);
+    let n = 0;
+    for (let k = done.length - 1; k >= 0; k--) { if (trained(done[k].key)) n++; else break; }
+    return trained(cur.key) ? n + 1 : n;
+  }, [plan.rows, cur.key, log]);
+  const [shareMsg, setShareMsg] = useState(null);
+  const doShareWeek = async () => {
+    const days = DAYS.map((_, i) => { const day = ymd(addDays(parseLocal(cur.key), i)); const other = otherByDay[day] || []; return { km: dayKmFor(cur.key)[i], plan: cur.days[i] || 0, lift: liftDays.includes(i), other: other.length ? xLabel(other[0].type) : null }; });
+    const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0;
+    try {
+      const r = await shareWeek({ week: { i: cur.i, n: plan.weeks, deload: cur.deload }, days, ran: (log[cur.key]?.km || 0), plan: cur.km, phase: cur.phase, streak, acwr: acwrFor(cur.key)?.v ?? null, other: log[cur.key]?.xn || 0, race: p.raceName, raceMeta: `${p.raceKm} km · ${p.raceVert || 0} m+ · ${p.raceDate ? new Date(p.raceDate).toLocaleDateString("da-DK", { day: "numeric", month: "long", year: "numeric" }) : ""}`, daysToRace: p.raceDate ? daysToRace : null, quote: quoteFor({ type: v > 0 ? (ti === cur.longDay ? "long" : ti === cur.qDay ? "hard" : "easy") : liftDays.includes(ti) ? "lift" : "rest", phase: cur.phase, deload: cur.deload }) });
+      setShareMsg(r === "shared" ? "Delt." : r === "saved" ? "Billedet er gemt som PNG. Del det, hvor du vil." : null);
+    } catch (e) { setShareMsg(`Kunne ikke lave billedet: ${e.message}`); }
+    setTimeout(() => setShareMsg(null), 4000);
+  };
   // Last week in one line, shown on I dag in the first days of a new week.
   const lastWeek = useMemo(() => {
     const prev = plan.rows.find((r) => r.key === ymd(addDays(parseLocal(cur.key), -7)));
@@ -855,7 +875,10 @@ export default function App() {
           return (
             <>
               <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · uge {cur.i} af {plan.weeks} · {cur.phase}{plan.coach ? " · trænerplan" : ""}</div>
-              <div className="quote">{quoteFor({ type: raceDay ? "race" : v > 0 ? (long ? "long" : hard ? "hard" : "easy") : lift ? "lift" : "rest", phase: cur.phase, deload: cur.deload })}</div>
+              <div className="quote-row">
+                <div className="quote">{quoteFor({ type: raceDay ? "race" : v > 0 ? (long ? "long" : hard ? "hard" : "easy") : lift ? "lift" : "rest", phase: cur.phase, deload: cur.deload })}</div>
+                {streak >= 2 && <span className="streak" title="Uger i træk med logget træning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9z" /></svg>{streak} uger i træk</span>}
+              </div>
               {coachOfferBox}
               {lastWeek && ti <= 2 && (
                 <div className="advice recap">
@@ -886,10 +909,11 @@ export default function App() {
                 {!lift && !(v > 0) && !raceDay && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Workout")}>Log styrke, HIIT eller andet</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
+              {shareMsg && <div className="advice">{shareMsg}</div>}
               <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
 
               <section className="panel">
-                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km · <button type="button" className="linkbtn" onClick={() => setView("overblik")}>Overblik ›</button></span></div>
+                <div className="row-between"><h2 style={{ margin: 0 }}>Ugen</h2><span className="muted">{curLog.km || 0} af {cur.km} km · <button type="button" className="linkbtn" onClick={doShareWeek}>Del ugen</button> · <button type="button" className="linkbtn" onClick={() => setView("overblik")}>Overblik ›</button></span></div>
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
@@ -1117,7 +1141,7 @@ export default function App() {
         </aside>
         )}
 
-        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onGo={(v) => setView(v)} />}
+        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} streak={streak} onShare={doShareWeek} shareMsg={shareMsg} onGo={(v) => setView(v)} />}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">Plan</h1>
