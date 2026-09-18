@@ -610,7 +610,8 @@ export default function App() {
      imported from Strava/Garmin); a missing pre-plan week falls back to "Km/uge nu" × RPE 5 so week 1 gets a real ratio. */
   // Week load = km × RPE for the runs, plus other sessions at half weight: minutes × RPE ÷ 12 (an hour of HIIT at
   // RPE 8 counts like an 8 km run at RPE 5). Strength and HIIT tire the body, but not the running tissues as much.
-  const loadOf = (l) => { if (!l) return null; const run = l.km && l.rpe ? l.km * l.rpe : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
+  // A week with km but no RPE (imported runs without heart rate) is estimated at RPE 5 and marked as an estimate.
+  const loadOf = (l) => { if (!l) return null; const run = l.km ? l.km * (l.rpe || 5) : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
   const baseline = (+p.currentKm || 0) * 5;
   const acwrFor = (key) => {
     const own = loadOf(log[key]);
@@ -618,10 +619,11 @@ export default function App() {
     const d = parseLocal(key); const prev = []; let est = false;
     for (let k = 1; k <= 4; k++) {
       const pk = ymd(addDays(d, -7 * k)); const l = log[pk]; const v = loadOf(l);
-      if (v != null) { prev.push(v); if (l.rpeAuto) est = true; }
+      if (v != null) { prev.push(v); if (l.rpeAuto || (l.km && !l.rpe)) est = true; }
       else if (pk < p.startDate && baseline) { prev.push(baseline); est = true; }
     }
-    return prev.length ? { v: own / (prev.reduce((a, b) => a + b, 0) / prev.length), est } : null;
+    const ownEst = !!(log[key]?.rpeAuto || (log[key]?.km && !log[key]?.rpe));
+    return prev.length ? { v: own / (prev.reduce((a, b) => a + b, 0) / prev.length), est: est || ownEst } : null;
   };
   const nPre = useMemo(() => {
     const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < p.startDate);
@@ -1162,7 +1164,7 @@ export default function App() {
                         <Fragment key={r.key}>
                         <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
                           <td style={{ whiteSpace: "nowrap" }}><button type="button" className={`wk ${openP ? "on" : ""}`} onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP} title="Vis dagene">
-                            <span className="chev">{openP ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></button></td>
+                            <span className="chev">{openP ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{-r.i} uger før</span> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></button></td>
                           <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <span className="muted">historik</span> : <><i className="phase-dot" style={{ background: PH[r.phase] }} />{r.phase}</>}</td>
                           <td className="num">{r.pre ? "" : <><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? `Planen ville gerne ${r.target} km – hverdagen giver plads til ${r.km}` : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</>}</td>
                           <td className={`num ran ${ranCls}`}>{ran > 0 ? ran : ""}</td>
@@ -1308,11 +1310,11 @@ export default function App() {
                     </ul>
                   </details>
                 </details>
-                {preRows.some((r) => !(log[r.key]?.km > 0)) && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? "Skjul ugerne før planen" : `Vis ${preRows.length} uger før planen`}</button>}
+                {preRows.length > 0 && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? "Skjul ugerne før planen" : `Vis ${preRows.length} uger før planen`}</button>}
                 <table>
                   <thead><tr><th>Uge</th><th className="num">Plan</th><th>Løbet km</th><th className="hide-phone">RPE</th><th className="hide-phone">Hvilepuls</th><th className="hide-phone">Vægt</th><th className="hide-phone">Søvn t</th><th className="num hide-phone">Belastning</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
-                    {[...(showPre ? preRows : preRows.filter((r) => log[r.key]?.km > 0)), ...planRows].map((r) => {
+                    {[...(showPre ? preRows : []), ...planRows].map((r) => {
                       const l = log[r.key] || {};
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
@@ -1328,7 +1330,7 @@ export default function App() {
                         <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
                           <td style={{ whiteSpace: "nowrap" }}>
                             <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title="Vis dagene i ugen" aria-expanded={open}>
-                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <><span className="muted">før</span> <b>{r.i}</b></> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
+                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{-r.i} uger før</span> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
                             </button>
                             {r.key === todayKey && <> <span className="pill l" title="Ugen er ikke slut – tallene er foreløbige">i gang</span></>}
                           </td>
