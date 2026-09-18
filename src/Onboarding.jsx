@@ -149,6 +149,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
           <p className="muted">Målet først. Datoen bestemmer, hvor mange uger planen har at arbejde med.</p>
           <div className="row-between"><span className="muted">Vælg et kendt løb, eller skriv dit eget.</span><button type="button" className="linkbtn" onClick={findNear}>{pos ? "Sorteret efter afstand" : "Find løb nær mig"}</button></div>
           {posMsg && <div className="muted" style={{ marginTop: 4 }}>{posMsg}</div>}
+          <div className="muted race-links">Alle løb i Danmark med datoer: <a href="https://www.motionsloeb.dk" target="_blank" rel="noopener">motionsloeb.dk</a> · <a href="https://www.sportstiming.dk" target="_blank" rel="noopener">sportstiming.dk</a> · ultraløb: <a href="https://statistik.d-u-v.org" target="_blank" rel="noopener">d-u-v.org</a> · trail: <a href="https://itra.run" target="_blank" rel="noopener">itra.run</a>. Skriv navn, dato og distance her bagefter.</div>
           <div className="chips race-chips">{raceList.map((r) => <button key={r.name} type="button" className={d.raceName === r.name ? "on" : ""} onClick={() => setD({ ...d, raceName: r.name, raceKm: r.km[r.km.length - 1], raceVert: vertFor(r, r.km[r.km.length - 1]) })}>{r.name}{r.dist != null ? <span className="muted"> · {r.dist} km</span> : null}</button>)}</div>
           {(() => { const r = RACES.find((x) => x.name === d.raceName); return r ? (
             <div className="advice">
