@@ -449,3 +449,13 @@ details.strava { margin-bottom: 12px; }
   .dash .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
+
+.quote { margin: 6px 2px 10px; font-size: 14px; color: var(--muted); font-style: italic; }
+.advice.recap { border-left-color: var(--blue); margin-bottom: 12px; }
+.scale { position: relative; display: grid; grid-template-columns: 10fr 20fr 20fr 20fr 20fr 10fr; gap: 2px; margin: 14px 0 6px; padding-bottom: 6px; }
+.scale-seg { height: 10px; border-radius: 4px; background: var(--panel-2); position: relative; }
+.scale-seg.on { background: var(--orange); }
+.scale-seg small { position: absolute; top: 14px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.scale-pin { position: absolute; top: -5px; width: 4px; height: 20px; margin-left: -2px; background: var(--text); border-radius: 2px; }
+.scale { margin-bottom: 26px; }
+@media (max-width: 480px) { .scale-seg small { font-size: 9px; } }

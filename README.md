@@ -60,7 +60,12 @@ rolige ture er rolige nok, og om hvilepulsen stiger. Det hele er regnet determin
 hver knap ændrer kun det, den siger (fx "Flyt løb fra onsdag til torsdag"). Det vigtigste fund vises også på
 "I dag".
 
-Overblik: tryk på nedtællingen øverst (eller "Overblik ›" på "I dag") for en side med dine tal: denne uge mod planen,
+Motivation og form: "I dag" har hver dag én linje, der passer til dagens type (hvile, rolig, hård, lang, styrke,
+løbsuge), og i starten af en ny uge en opsummering af sidste uge (km mod planen, andre pas, ACWR, søvn) med én
+sætnings dom. Overblik viser "Form for din alder" og "Fitnessalder": VO2 max fra Garmins rapport, ellers anslået fra
+hvile- og makspuls med alderskorrektion, sat mod Cooper Institutes normer for alder og køn. Tallet er et estimat.
+
+Overblik: tryk på fanen Overblik (eller "Overblik ›" på "I dag") for en side med dine tal: denne uge mod planen,
 snit sidste 4 uger, ACWR nu, længste tur, andre pas, hvor meget af planen du har ramt, og søvn, hvilepuls, VO2 max og
 vægt, når loggen har dem. Under tallene: km pr. uge mod planen, ACWR over tid med det grønne bånd, måned for måned fra
 uret, søvn og hvilepuls som kurver, og de mønstre appen har fundet. Logoet øverst fører altid til forsiden.
