@@ -551,6 +551,18 @@ export default function App() {
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
   const [showPre, setShowPre] = useState(false);
+  // How to run the week: the hard session with its zone, the long run, the easy runs with the runner's own pace.
+  // Used for the current week on Plan and for any week unfolded under "Alle uger".
+  const renderGuide = (r) => (
+    <div className="guide">
+      {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
+        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: t(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
+        : <div><b>{t("Ingen hård session")}</b><p>{describeSession("Kun roligt", { maxHR, easyPace: insights.summary.easyPace }).text}</p></div>}
+      {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p></div>}
+      {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
+      {(() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")}</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+    </div>
+  );
   const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the race card on I dag
   const exportICS = () => downloadICS(planToICS({ rows: plan.rows, liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
@@ -1198,12 +1210,7 @@ export default function App() {
               })}
             </div>
             {dayEdit?.key === cur.key && renderDayForm(cur.days[dayEdit.i])}
-            <div className="guide">
-              {cur.qDay != null && cur.days[cur.qDay] > 0 ? (() => { const g = describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(cur.qDay), quality: t(cur.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
-                : <div><b>{t("Ingen hård session")}</b><p>{describeSession("Kun roligt", { maxHR, easyPace: insights.summary.easyPace }).text}</p></div>}
-              {cur.longDay != null && cur.lng > 0 && !cur.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(cur.longDay), km: cur.lng })}</b><p>{describeLong({ km: cur.lng, carbs: cur.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: cur.phase })}</p></div>}
-              {cur.days.some((v, i) => v > 0 && i !== cur.qDay && i !== cur.longDay) && <div><b>{t("Rolige ture")}</b><p>{describeEasy({ km: cur.days.filter((v, i) => v > 0 && i !== cur.qDay && i !== cur.longDay).join(` ${t("og")} `), maxHR, easyPace: insights.summary.easyPace })}</p></div>}
-            </div>
+            {renderGuide(cur)}
             {curLog.auto && curLog.km > 0
               ? <div className="muted" style={{ marginTop: 10 }}>{t("Løbet indtil nu i denne uge:")} <b style={{ color: "var(--text)" }}>{curLog.km} km</b> {t("på {runs} af {plan} km planlagt. Tryk på en dag for at logge en tur.", { runs: tn(curLog.n, "{n} tur", "{n} ture"), plan: cur.km })}</div>
               : <div className="muted" style={{ marginTop: 10 }}>{t("Tryk på en dag for at logge en tur – så passer ugens tal, også før ugen er slut.")}</div>}
@@ -1236,42 +1243,45 @@ export default function App() {
 
           <div className="stack">
             {view === "plan" && (
-              <div className="panel scroll">
+              <div className="panel">
                 <h2>{t("Alle uger")}</h2>
-                <table>
-                  <thead><tr><th>{t("Uge")}</th><th>{t("Fase")}</th><th className="num">Km</th><th className="num">{t("Løbet")}</th>{DAYS.map((d) => <th key={d} className="num hide-phone">{d}</th>)}<th className="hide-phone">{t("Hård session")}</th><th className="hide-phone">{t("Fokus")}</th></tr></thead>
-                  <tbody>
-                    {[...preRows.filter((r) => log[r.key]?.km > 0), ...planRows].map((r) => {
-                      const ran = log[r.key]?.km; const km = dayKmFor(r.key);
-                      const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
-                      const openP = openPlanWeek === r.key;
-                      return (
-                        <Fragment key={r.key}>
-                        <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}><button type="button" className={`wk ${openP ? "on" : ""}`} onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP} title={t("Vis dagene")}>
-                            <span className="chev">{openP ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{t("{n} uger før", { n: -r.i })}</span> : <><b>{r.i}</b>{r.deload ? "●" : ""}{r.isRace ? "★" : ""}</>} <span className="muted">{fmt(r.wkStart)}</span></button></td>
-                          <td style={{ whiteSpace: "nowrap" }}>{r.pre ? <span className="muted">{t("historik")}</span> : <><i className="phase-dot" style={{ background: PH[r.phase] }} />{t(r.phase)}</>}</td>
-                          <td className="num">{r.pre ? "" : <><b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}</b>{r.unplaced >= 3 ? <span className="muted"> /{r.target}</span> : ""}</>}</td>
-                          <td className={`num ran ${ranCls}`}>{ran > 0 ? ran : ""}</td>
-                          {DAYS.map((_, i) => { const v = r.pre ? 0 : r.days[i]; return (
-                            <td key={i} className="num hide-phone" style={!r.pre && i === r.longDay && v ? { color: "var(--orange)", fontWeight: 700 } : !r.pre && i === r.qDay && v ? { color: "var(--volt)", fontWeight: 600 } : undefined}>
-                              {v || ""}{km[i] > 0 && <small className={`act ${v && km[i] >= v * 0.9 ? "ok" : ""}`}>{km[i]}</small>}
-                            </td>); })}
-                          <td className="hide-phone" style={{ whiteSpace: "nowrap" }}>{r.pre ? "" : t(r.quality)}</td>
-                          <td className="muted hide-phone" style={{ minWidth: 220 }}>{r.pre ? t("Før planen. Tallene er fra dit ur eller det, du har tastet.") : t(r.focus)}</td>
-                        </tr>
+                <p className="muted" style={{ marginTop: -4 }}>{t("Tryk på en uge for at se dagene, den hårde session, tempo og den lange tur.")}</p>
+                <div className="weeklist">
+                  {[...preRows.filter((r) => log[r.key]?.km > 0), ...planRows].map((r) => {
+                    const ran = log[r.key]?.km; const km = dayKmFor(r.key);
+                    const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
+                    const openP = openPlanWeek === r.key;
+                    const isCur = !r.pre && r.i === cur.i;
+                    const line2 = r.pre ? t("Før planen. Tallene er fra dit ur eller det, du har tastet.")
+                      : r.isRace ? `★ ${p.raceName || t("Løbet")} · ${p.raceKm || r.lng} km`
+                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${t(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null].filter(Boolean).join(" · ");
+                    return (
+                      <div key={r.key} className={`wkcard ${openP ? "open" : ""} ${isCur ? "cur" : ""} ${r.pre ? "pre" : ""} ${r.key < todayKey && !isCur ? "past" : ""}`}>
+                        <button type="button" className="wkhead" onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP}>
+                          <span className="wknum">{r.pre ? <small>{t("{n} uger før", { n: -r.i })}</small> : <><b>{r.i}</b>{r.deload && !r.isRace ? <i title={t("let uge")}>●</i> : ""}{r.isRace ? <i className="star">★</i> : ""}</>}</span>
+                          <span className="wkmain">
+                            <span className="wktitle">{fmt(r.wkStart)}–{fmt(addDays(r.wkStart, 6))}{r.pre ? "" : <> · <i className="phase-dot" style={{ background: PH[r.phase] }} />{t(r.phase)}{r.deload && !r.isRace && r.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}{isCur ? ` · ${t("nu")}` : ""}</>}</span>
+                            <span className="wksub">{line2}</span>
+                            {!r.pre && <span className="wkdays hide-phone">{DAYS.map((d, i) => { const v = r.days[i]; return <span key={i} className={v ? (i === r.longDay ? "long" : i === r.qDay ? "hard" : "run") : liftDays.includes(i) ? "lift" : ""}><small>{d}</small>{v || (liftDays.includes(i) ? "S" : "–")}{km[i] > 0 && <em className={v && km[i] >= v * 0.9 ? "ok" : ""}>{km[i]}</em>}</span>; })}</span>}
+                          </span>
+                          <span className="wkkm">
+                            {!r.pre && <b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}<small> km</small></b>}
+                            {ran > 0 && <span className={`ran ${ranCls}`}>✓ {ran} km</span>}
+                          </span>
+                          <span className="chev" aria-hidden="true">›</span>
+                        </button>
                         {openP && (
-                          <tr className="dayrow"><td colSpan={13}>
-                            {!r.pre && <div style={{ marginBottom: 8 }}><b>{t(r.quality)}</b>{r.qDay != null && r.days[r.qDay] > 0 ? <span className="muted"> · {dayLow(r.qDay)}</span> : ""}<div className="muted">{t(r.focus)}</div></div>}
+                          <div className="wkbody">
+                            {!r.pre && <div className="muted" style={{ marginBottom: 8 }}>{t(r.focus)}</div>}
                             {renderDayGrid(r)}
                             {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
-                          </td></tr>
+                            {!r.pre && renderGuide(r)}
+                          </div>
                         )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

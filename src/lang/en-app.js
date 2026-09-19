@@ -1,6 +1,14 @@
 /* English for the Danish strings in src/App.jsx. Keys are the Danish strings exactly as written in the code.
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
+  // Alle uger (week cards)
+  "Tryk på en uge for at se dagene, den hårde session, tempo og den lange tur.": "Tap a week to see the days, the hard session, pace and the long run.",
+  "lang tur {km} km {day}": "long run {km} km {day}",
+  "back-to-back {km} km": "back-to-back {km} km",
+  "nu": "now",
+  "Løbsuge": "Race week",
+  "Back-to-back {day} · {km} km": "Back-to-back {day} · {km} km",
+  "Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.": "The day after the long run, on tired legs: heart rate under {hr}, walk the climbs, {carbs} g carbs per hour.",
   "I dag": "Today",
   // ---- label constants (days, availability, time of day, level, family)
   "Man": "Mon",
@@ -454,8 +462,6 @@ export default {
   "løbet {km} km": "ran {km} km",
   "Alle uger": "All weeks",
   "Uge": "Week",
-  "Fase": "Phase",
-  "Fokus": "Focus",
   "Vis dagene": "Show the days",
   "{n} uger før": "{n} weeks before",
   "historik": "history",
