@@ -10,7 +10,9 @@ import Anthropic from "@anthropic-ai/sdk";
                           MiniMax, Qwen …) through its OpenAI-compatible /v1/chat/completions. Default glm-5.3-flash.
    - ZAI_API_KEY        → Z.ai directly (https://api.z.ai/api/paas/v4, OpenAI-compatible). Default glm-5.3-flash.
    COACH_PROVIDER=anthropic|opencode|zai forces one when several keys exist; COACH_MODEL overrides the model.
-   The wire format follows the model: ids starting with "claude" use the Messages API, all others chat completions. */
+   The wire format follows the model: ids starting with "claude" use the Messages API, all others chat completions.
+   The request carries `lang` ("da" default, or "en"): in English the system prompt tells the model to answer in
+   English and explains the Danish keys of the context JSON; the context itself is sent as the app built it. */
 
 export const config = { maxDuration: 60 };
 
@@ -31,11 +33,11 @@ const pickProvider = () => {
 };
 
 // OpenAI-compatible chat completions (GLM, Kimi, MiniMax, Qwen … on OpenCode Zen and Z.ai). Plain fetch: no extra SDK.
-const chatCompletion = async (provider, messages, { extras = true, nudged = false } = {}) => {
+const chatCompletion = async (provider, messages, { extras = true, nudged = false, lang = "da" } = {}) => {
   // Z.ai's own API accepts a `thinking` switch for GLM; gateways like OpenCode Zen reject unknown fields with 400,
   // so extras are only sent to Z.ai, and any 400 is retried once with the plain, minimal body.
   // Thinking models (GLM, Kimi …) reason before they answer; the budget must hold both, or the answer never comes.
-  const body = { model: provider.model, max_tokens: 8000, messages: [{ role: "system", content: SYSTEM }, ...messages] };
+  const body = { model: provider.model, max_tokens: 8000, messages: [{ role: "system", content: systemFor(lang) }, ...messages] };
   if (extras) { body.temperature = 0.4; if (provider.name === "zai" && /^glm/i.test(provider.model)) body.thinking = { type: "disabled" }; }
   const r = await fetch(provider.chatURL, {
     method: "POST",
@@ -45,7 +47,7 @@ const chatCompletion = async (provider, messages, { extras = true, nudged = fals
   });
   let data = null; try { data = await r.json(); } catch { /* not json */ }
   if (!r.ok) {
-    if (r.status === 400 && extras) return chatCompletion(provider, messages, { extras: false });
+    if (r.status === 400 && extras) return chatCompletion(provider, messages, { extras: false, lang });
     const e = new Error(data?.error?.message || data?.message || data?.error || `HTTP ${r.status}`); e.status = r.status; throw e;
   }
   const choice = data?.choices?.[0]; const msg = choice?.message;
@@ -57,10 +59,10 @@ const chatCompletion = async (provider, messages, { extras = true, nudged = fals
   if (!content && reasoning) {
     if (!nudged) {
       const last = messages[messages.length - 1];
-      const nudge = { ...last, content: `${asText(last.content) || last.content}\n\n(Svar direkte og kort på dansk til løberen. Ingen lange overvejelser først.)` };
-      return chatCompletion(provider, [...messages.slice(0, -1), nudge], { extras, nudged: true });
+      const nudge = { ...last, content: `${asText(last.content) || last.content}\n\n${lang === "en" ? "(Answer the runner directly and briefly, in English. No long deliberation first.)" : "(Svar direkte og kort på dansk til løberen. Ingen lange overvejelser først.)"}` };
+      return chatCompletion(provider, [...messages.slice(0, -1), nudge], { extras, nudged: true, lang });
     }
-    const e = new Error("Modellen brugte hele sit budget på at tænke og skrev intet svar. Prøv igen med et kortere spørgsmål, eller vælg en anden model i COACH_MODEL."); e.status = 502; throw e;
+    const e = new Error(lang === "en" ? "The model spent its whole budget thinking and wrote no answer. Try again with a shorter question, or pick another model in COACH_MODEL." : "Modellen brugte hele sit budget på at tænke og skrev intet svar. Prøv igen med et kortere spørgsmål, eller vælg en anden model i COACH_MODEL."); e.status = 502; throw e;
   }
   return { text: content, model: data?.model || provider.model, finish: choice?.finish_reason || null };
 };
@@ -77,6 +79,11 @@ Sådan svarer du:
 - Smerte, der ændrer skridtet: stop. Smerte over 2 uger: fysioterapeut. Ved smerte eller sygdom siger du kort, at du ikke er læge.
 - Er brugerens spørgsmål ikke om løb, træning, kost eller restitution, så svar venligt at det ligger uden for din rolle.
 - Ingen indledning, ingen afsluttende opsummering. Bare svaret.`;
+// Added when the runner uses the app in English. The context keeps its Danish keys; this tells the model what they mean.
+const SYSTEM_EN = `
+- Answer in English (the runner uses the app in English).
+- The context JSON uses Danish keys (dato = date, løber = runner, alder = age, køn = sex, vægt_kg = weight, højde_cm = height, hvilepuls = resting HR, makspuls = max HR, niveau = level, mål = goal, krop = body/injury state, skadested = injury site, kost = diet, tåler_ikke = intolerances, familie = family, hverdag = weekday availability, løb = race, højdemeter = vertical metres, plan: uge = week, af = of, fase = phase, top_km_uge = peak km/week, løbedage = run days, lang_tur_dag = long-run day, nuværende_base_km_uge = current base km/week, denne_uge = this week, dage = days, hård_session = hard session, lang_tur_km = long run km, fokus = focus, justeret = adjusted, råd_i_appen = the app's advice, seneste_uger = recent weeks, plan_km = planned km, løbet_km = km run, belastning = load, andre_pas_min = other sessions min, søvn_t = sleep hours, i_gang = current, fra_uret_12_uger = last 12 weeks from the watch, historik_fra_uret = watch history, måneder = months, ture = runs, længste = longest, snit = average, tempo = pace, mønstre = patterns, fund = findings, form = fitness, krop_mål = body goal, styrke = strength, udstyr = equipment, pas = sessions, kost_i_dag = today's nutrition, kulhydrat = carbs, fedt = fat). Phases: Genopbygning = rebuild, Opbygning = build, Ultra-prep = ultra prep, Nedtrapning = taper.`;
+const systemFor = (lang) => (lang === "en" ? SYSTEM + SYSTEM_EN : SYSTEM);
 
 /* Plan mode: the coach proposes parameters for the deterministic plan engine. The engine builds the plan and the
    runner applies it with one tap – the model never writes the plan itself. */
@@ -90,6 +97,7 @@ Regler:
 - longDay: den ugedag (0 = mandag … 6 = søndag) hvor de længste ture faktisk ligger, hvis hverdagen tillader det.
 - currentKm: gennemsnit af de sidste 4 uger fra uret, afrundet. Mangler urdata, så behold det nuværende tal.
 - Ingen andre felter. Ingen markdown, ingen kodehegn, ingen forklaring før eller efter. Første tegn i svaret er { og sidste er }.`;
+const planPromptFor = (lang) => (lang === "en" ? PLAN_PROMPT.replace("2–4 sætninger på dansk om hvorfor", "2–4 sentences in English on why") : PLAN_PROMPT);
 const clampNum = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 // Find the first balanced {...} in a reply (models wrap JSON in fences or prose) and parse it leniently.
 const extractJSON = (text) => {
@@ -131,12 +139,14 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { return json(res, 400, { error: "Ugyldig JSON." }); } }
   const mode = body?.mode === "plan" ? "plan" : "chat";
+  const lang = body?.lang === "en" ? "en" : "da";
+  const L = (da, en) => (lang === "en" ? en : da); // user-facing messages follow the app's language
   const question = String(body?.question || "").trim().slice(0, 800);
   const history = Array.isArray(body?.history) ? body.history.slice(-8) : [];
   const context = body?.context && typeof body.context === "object" ? body.context : null;
-  if (!question) return json(res, 400, { error: "Skriv et spørgsmål." });
+  if (!question) return json(res, 400, { error: L("Skriv et spørgsmål.", "Write a question.") });
   const ctxText = JSON.stringify(context || {});
-  if (ctxText.length > 30000) return json(res, 413, { error: "For meget kontekst." });
+  if (ctxText.length > 30000) return json(res, 413, { error: L("For meget kontekst.", "Too much context.") });
 
   const messages = [];
   for (const h of history) {
@@ -144,31 +154,32 @@ export default async function handler(req, res) {
   }
   if (messages.length && messages[0].role !== "user") messages.shift();
   if (mode === "plan") messages.length = 0; // a proposal is a fresh, single turn
-  messages.push({ role: "user", content: mode === "plan" ? `Løberens tal fra appen (JSON):\n${ctxText}\n\n${PLAN_PROMPT}` : `Løberens tal fra appen (JSON):\n${ctxText}\n\nSpørgsmål: ${question}` });
+  const intro = L("Løberens tal fra appen (JSON):", "The runner's numbers from the app (JSON):");
+  messages.push({ role: "user", content: mode === "plan" ? `${intro}\n${ctxText}\n\n${planPromptFor(lang)}` : `${intro}\n${ctxText}\n\n${L("Spørgsmål", "Question")}: ${question}` });
 
-  const badKey = () => json(res, 503, { error: `API-nøglen til AI-træneren (${provider.label}) er ugyldig.` });
-  const noModel = () => json(res, 502, { error: `Modellen "${provider.model}" findes ikke hos ${provider.label}. Sæt COACH_MODEL til en model, der findes.` });
-  const busy = () => json(res, 429, { error: "AI-træneren har travlt. Prøv igen om lidt." });
+  const badKey = () => json(res, 503, { error: L(`API-nøglen til AI-træneren (${provider.label}) er ugyldig.`, `The AI coach's API key (${provider.label}) is invalid.`) });
+  const noModel = () => json(res, 502, { error: L(`Modellen "${provider.model}" findes ikke hos ${provider.label}. Sæt COACH_MODEL til en model, der findes.`, `The model "${provider.model}" does not exist at ${provider.label}. Set COACH_MODEL to a model that exists.`) });
+  const busy = () => json(res, 429, { error: L("AI-træneren har travlt. Prøv igen om lidt.", "The AI coach is busy. Try again in a moment.") });
   const ok = (text, model, finish = null) => {
     if (mode === "plan") {
       const proposal = parseProposal(text, context);
       if (!proposal) {
-        const why = finish === "length" ? "Svaret blev afbrudt, før JSON'en var færdig." : text ? `Modellen svarede: "${text.slice(0, 160)}${text.length > 160 ? "…" : ""}"` : "Modellen svarede tomt.";
-        return json(res, 502, { error: `Træneren (${provider.label}, ${provider.model}) gav ikke et brugbart forslag. ${why} Prøv igen, eller sæt COACH_MODEL til en anden model.` });
+        const why = finish === "length" ? L("Svaret blev afbrudt, før JSON'en var færdig.", "The answer was cut off before the JSON was complete.") : text ? L(`Modellen svarede: "${text.slice(0, 160)}${text.length > 160 ? "…" : ""}"`, `The model answered: "${text.slice(0, 160)}${text.length > 160 ? "…" : ""}"`) : L("Modellen svarede tomt.", "The model answered nothing.");
+        return json(res, 502, { error: L(`Træneren (${provider.label}, ${provider.model}) gav ikke et brugbart forslag. ${why} Prøv igen, eller sæt COACH_MODEL til en anden model.`, `The coach (${provider.label}, ${provider.model}) gave no usable proposal. ${why} Try again, or set COACH_MODEL to another model.`) });
       }
       return json(res, 200, { proposal, text: proposal.note, model, provider: provider.name });
     }
-    return json(res, 200, { text: text || "Jeg fik ikke noget svar. Prøv at spørge igen.", model, provider: provider.name });
+    return json(res, 200, { text: text || L("Jeg fik ikke noget svar. Prøv at spørge igen.", "I got no answer. Try asking again."), model, provider: provider.name });
   };
 
   if (provider.format === "chat") {
-    try { const { text, model, finish } = await chatCompletion(provider, messages); return ok(text, model, finish); }
+    try { const { text, model, finish } = await chatCompletion(provider, messages, { lang }); return ok(text, model, finish); }
     catch (err) {
       if (err.status === 401 || err.status === 403) return badKey();
       if (err.status === 404) return noModel();
       if (err.status === 429) return busy();
-      const detail = /abort|timeout/i.test(err.name || "") ? "Den brugte for lang tid." : err.message && !/^HTTP \d+$/.test(err.message) ? `Svar fra ${provider.label}: ${String(err.message).slice(0, 200)}` : "";
-      return json(res, 502, { error: `AI-træneren (${provider.label}, ${provider.model}) svarede ikke${err.status ? ` (${err.status})` : ""}. ${detail}`.trim() });
+      const detail = /abort|timeout/i.test(err.name || "") ? L("Den brugte for lang tid.", "It took too long.") : err.message && !/^HTTP \d+$/.test(err.message) ? `${L("Svar fra", "Reply from")} ${provider.label}: ${String(err.message).slice(0, 200)}` : "";
+      return json(res, 502, { error: `${L("AI-træneren", "The AI coach")} (${provider.label}, ${provider.model}) ${L("svarede ikke", "did not answer")}${err.status ? ` (${err.status})` : ""}. ${detail}`.trim() });
     }
   }
 
@@ -176,19 +187,19 @@ export default async function handler(req, res) {
   // x-api-key like Anthropic; the Bearer header is sent too, as their docs use that form.
   const client = new Anthropic({ apiKey: provider.apiKey, baseURL: provider.anthropicURL, maxRetries: 1, timeout: 55_000,
     ...(provider.name !== "anthropic" ? { defaultHeaders: { Authorization: `Bearer ${provider.apiKey}` } } : {}) });
-  const request = { model: provider.model, max_tokens: 2000, system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }], messages };
+  const request = { model: provider.model, max_tokens: 2000, system: [{ type: "text", text: systemFor(lang), cache_control: { type: "ephemeral" } }], messages };
   try {
     // Anthropic directly: server-side refusal fallbacks and an effort level. Through a gateway only the plain Messages API is assumed.
     const response = provider.beta
       ? await client.beta.messages.create({ ...request, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", output_config: { effort: "medium" } })
       : await client.messages.create(request);
-    if (response.stop_reason === "refusal") return ok("Det kan jeg ikke hjælpe med her. Spørg om din træning, kost eller restitution.", response.model);
+    if (response.stop_reason === "refusal") return ok(L("Det kan jeg ikke hjælpe med her. Spørg om din træning, kost eller restitution.", "I can't help with that here. Ask about your training, nutrition or recovery."), response.model);
     return ok(response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim(), response.model, response.stop_reason === "max_tokens" ? "length" : null);
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return badKey();
     if (err instanceof Anthropic.NotFoundError) return noModel();
     if (err instanceof Anthropic.RateLimitError) return busy();
-    if (err instanceof Anthropic.APIError) return json(res, 502, { error: `AI-træneren (${provider.label}) svarede ikke (${err.status}).` });
-    return json(res, 502, { error: "AI-træneren svarede ikke. Prøv igen om lidt." });
+    if (err instanceof Anthropic.APIError) return json(res, 502, { error: L(`AI-træneren (${provider.label}) svarede ikke (${err.status}).`, `The AI coach (${provider.label}) did not answer (${err.status}).`) });
+    return json(res, 502, { error: L("AI-træneren svarede ikke. Prøv igen om lidt.", "The AI coach did not answer. Try again in a moment.") });
   }
 }

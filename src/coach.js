@@ -1,4 +1,5 @@
 /* Client for the AI coach (api/coach.js). The chat lives only on this device (localStorage), never in the cloud. */
+import { t, getLang } from "./i18n.js";
 
 export const COACH_KEY = "ultraplan-coach";
 
@@ -10,12 +11,12 @@ export class CoachError extends Error { constructor(message, setup = false) { su
 export async function askCoach({ question, history, context }) {
   let r;
   try {
-    r = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history, context }) });
-  } catch { throw new CoachError("Kunne ikke kontakte AI-træneren. Tjek din internetforbindelse."); }
+    r = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history, context, lang: getLang() }) });
+  } catch { throw new CoachError(t("Kunne ikke kontakte AI-træneren. Tjek din internetforbindelse.")); }
   let data = null;
   try { data = await r.json(); } catch { /* not json */ }
-  if (r.status === 404) throw new CoachError("AI-træneren findes kun i den udgave, der kører på Vercel.", true);
-  if (!r.ok) throw new CoachError(data?.error || `AI-træneren svarede ikke (${r.status}).`, r.status === 503);
+  if (r.status === 404) throw new CoachError(t("AI-træneren findes kun i den udgave, der kører på Vercel."), true);
+  if (!r.ok) throw new CoachError(data?.error || t("AI-træneren svarede ikke ({status}).", { status: r.status }), r.status === 503);
   return data.text;
 }
 
@@ -23,16 +24,17 @@ export async function askCoach({ question, history, context }) {
 export async function proposePlan({ context }) {
   let r;
   try {
-    r = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "plan", question: "Foreslå planparametre", context }) });
-  } catch { throw new CoachError("Kunne ikke kontakte AI-træneren. Tjek din internetforbindelse."); }
+    r = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "plan", question: "Foreslå planparametre", context, lang: getLang() }) });
+  } catch { throw new CoachError(t("Kunne ikke kontakte AI-træneren. Tjek din internetforbindelse.")); }
   let data = null;
   try { data = await r.json(); } catch { /* not json */ }
-  if (r.status === 404) throw new CoachError("AI-træneren findes kun i den udgave, der kører på Vercel.", true);
-  if (!r.ok) throw new CoachError(data?.error || `AI-træneren svarede ikke (${r.status}).`, r.status === 503);
-  if (!data?.proposal) throw new CoachError("Træneren gav ikke et brugbart forslag. Prøv igen.");
+  if (r.status === 404) throw new CoachError(t("AI-træneren findes kun i den udgave, der kører på Vercel."), true);
+  if (!r.ok) throw new CoachError(data?.error || t("AI-træneren svarede ikke ({status}).", { status: r.status }), r.status === 503);
+  if (!data?.proposal) throw new CoachError(t("Træneren gav ikke et brugbart forslag. Prøv igen."));
   return data;
 }
 
+// Danish; the screen renders each with t().
 export const SUGGESTED = [
   "Hvordan griber jeg denne uge an?",
   "Hvad skal jeg spise før og under den lange tur?",

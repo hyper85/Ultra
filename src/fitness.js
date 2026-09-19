@@ -2,6 +2,7 @@
    placed against age- and sex-specific norms, giving a category, a rough percentile among people of the same age
    and sex, and a "fitness age": the age at which the average person has the same VO2 max.
    Estimates, and the app says so. Norms are the widely used Cooper Institute tables (ml/kg/min). */
+import { t } from "./i18n.js";
 
 // Category bounds per age band: [very poor top, poor top, fair top, good top, excellent top]; above = superior.
 const NORMS = {
@@ -20,7 +21,8 @@ export const estimateVO2 = ({ restHR, maxHR, age = 30 }) => (restHR > 25 && maxH
 
 const band = (sex, age) => (NORMS[sex] || NORMS.m).find((b) => age <= b[0]);
 
-/* fitnessReport({ age, sex, restHR, maxHR, vo2 }) -> { vo2, measured, category, percentile, fitnessAge, note } */
+/* fitnessReport({ age, sex, restHR, maxHR, vo2 }) -> { vo2, measured, category, categoryIndex, percentile, fitnessAge, note }
+   category is translated; categoryIndex (0–5, into CATS) is the stable value to compare against. */
 export function fitnessReport({ age, sex = "m", restHR, maxHR, vo2 }) {
   const s = sex === "f" ? "f" : "m";
   const a = +age > 0 ? +age : 40;
@@ -35,7 +37,8 @@ export function fitnessReport({ age, sex = "m", restHR, maxHR, vo2 }) {
   }
   percentile = Math.max(1, Math.min(99, percentile));
   const idx = bounds.findIndex((x, i) => i > 0 && v < x);
-  const category = CATS[idx < 0 ? 5 : Math.min(5, idx - 1)];
+  const categoryIndex = idx < 0 ? 5 : Math.min(5, idx - 1);
+  const category = t(CATS[categoryIndex]);
   // Fitness age: the age whose average equals the runner's VO2 max, by linear interpolation; clamped to 18–80.
   const avg = AVG[s];
   let fitnessAge;
@@ -43,6 +46,6 @@ export function fitnessReport({ age, sex = "m", restHR, maxHR, vo2 }) {
   else if (v <= avg[avg.length - 1][1]) fitnessAge = Math.round(avg[avg.length - 1][0] + (avg[avg.length - 1][1] - v) * 2.5);
   else for (let i = 0; i < avg.length - 1; i++) { const [a0, v0] = avg[i], [a1, v1] = avg[i + 1]; if (v <= v0 && v >= v1) { fitnessAge = Math.round(a0 + (v0 - v) / (v0 - v1) * (a1 - a0)); break; } }
   fitnessAge = Math.max(20, Math.min(80, fitnessAge));
-  const note = measured ? "VO2 max fra dit ur (Garmin-rapport)." : "VO2 max anslået fra hvile- og makspuls (15,3 × maks/hvile). Hent Garmins VO2 max-rapport for et bedre tal.";
-  return { vo2: v, measured, category, percentile, fitnessAge, ageDiff: a - fitnessAge, sexUsed: s, note };
+  const note = measured ? t("VO2 max fra dit ur (Garmin-rapport).") : t("VO2 max anslået fra hvile- og makspuls (15,3 × maks/hvile). Hent Garmins VO2 max-rapport for et bedre tal.");
+  return { vo2: v, measured, category, categoryIndex, percentile, fitnessAge, ageDiff: a - fitnessAge, sexUsed: s, note };
 }

@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 /* ================= dates ================= */
 export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 export const parseLocal = (str) => { const [y, m, d] = String(str).split("-").map(Number); return new Date(y, m - 1, d); };
@@ -22,7 +24,8 @@ export const kind = (type) => {
 // Sessions without kilometres (strength, HIIT, cycling, swimming) count by minutes × RPE (session-RPE).
 export const XTYPES = [["Strength", "Styrke"], ["HIIT", "HIIT"], ["Ride", "Cykling"], ["Workout", "Andet"]];
 const STRAVA_LABELS = { weighttraining: "Styrke", highintensityintervaltraining: "HIIT", crossfit: "Crossfit", ride: "Cykling", virtualride: "Cykling", ebikeride: "Cykling", gravelride: "Cykling", mountainbikeride: "Cykling", swim: "Svømning", yoga: "Yoga", elliptical: "Crosstrainer", stairstepper: "Trappemaskine", rowing: "Roning", workout: "Andet", pilates: "Pilates", walk: "Gang", hike: "Vandring", strengthtraining: "Styrke", cardio: "Cardio" };
-export const xLabel = (type) => XTYPES.find(([k]) => k === type)?.[1] || STRAVA_LABELS[String(type || "").toLowerCase().replace(/[^a-z]/g, "")] || String(type || "Andet").replace(/([a-z])([A-Z])/g, "$1 $2");
+// Display label for a session type, translated. XTYPES and STRAVA_LABELS stay Danish (the dictionary has them).
+export const xLabel = (type) => { const l = XTYPES.find(([k]) => k === type)?.[1] || STRAVA_LABELS[String(type || "").toLowerCase().replace(/[^a-z]/g, "")]; return l ? t(l) : type ? String(type).replace(/([a-z])([A-Z])/g, "$1 $2") : t("Andet"); };
 
 /* ================= number / date parsing ================= */
 const parseNum = (s) => {
@@ -107,7 +110,7 @@ const findCol = (headers, tests) => { for (const t of tests) { const i = headers
 export class ImportError extends Error {}
 export const activitiesFromCSV = (text, fileName = "csv") => {
   const rows = parseCSV(text);
-  if (rows.length < 2) throw new ImportError(`${fileName}: filen er tom eller har kun en overskriftslinje.`);
+  if (rows.length < 2) throw new ImportError(t("{file}: filen er tom eller har kun en overskriftslinje.", { file: fileName }));
   const headers = rows[0].map(norm);
   const isStrava = headers.includes("activity date");
   const cDate = findCol(headers, [/^activity date$/, /^start time$/, /^starttid/, /^date$/, /^dato$/, /^tidspunkt/, /date|dato/]);
@@ -121,7 +124,7 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
   if (!distCols.length) distCols = headers.map((h, i) => (/dist|afstand/.test(h) ? i : -1)).filter((i) => i >= 0);
   if (cDate < 0 || !distCols.length) {
     const found = rows[0].slice(0, 8).join(", ");
-    throw new ImportError(`${fileName}: kunne ikke finde ${cDate < 0 ? "en dato-kolonne" : "en distance-kolonne"}. Kolonnerne i filen begynder med: ${found}${rows[0].length > 8 ? ", …" : ""}. Send gerne filen, så kan formatet blive understøttet.`);
+    throw new ImportError(t("{file}: kunne ikke finde {what}. Kolonnerne i filen begynder med: {found}. Send gerne filen, så kan formatet blive understøttet.", { file: fileName, what: cDate < 0 ? t("en dato-kolonne") : t("en distance-kolonne"), found: found + (rows[0].length > 8 ? ", …" : "") }));
   }
   const out = [];
   for (const r of rows.slice(1)) {
@@ -221,7 +224,7 @@ const zipOpen = async (file) => {
   const dv = new DataView(buf.buffer);
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-  if (eocd < 0) throw new ImportError(`${file.name}: kunne ikke læse zip-filen.`);
+  if (eocd < 0) throw new ImportError(t("{file}: kunne ikke læse zip-filen.", { file: file.name }));
   const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
   const dec = new TextDecoder();
   const entries = []; let o = cdOff;
@@ -239,14 +242,14 @@ const zipBytes = async ({ buf, dv, fileName }, e) => {
   const raw = buf.subarray(start, start + e.csize);
   if (e.method === 0) return raw;
   if (e.method !== 8) return null;
-  if (typeof DecompressionStream === "undefined") throw new ImportError(`${fileName}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg filen inde i den.`);
+  if (typeof DecompressionStream === "undefined") throw new ImportError(t("{file}: din browser kan ikke pakke zip ud – pak den ud på computeren og vælg filen inde i den.", { file: fileName }));
   return new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
 };
 // A Strava/Garmin archive: every *.csv / *.gpx / *.tcx inside it, as text.
 const readZip = async (file) => {
   const z = await zipOpen(file);
   const wanted = z.entries.filter((e) => /\.(csv|gpx|tcx)$/i.test(e.name) && !/\/\./.test(e.name));
-  if (!wanted.length) throw new ImportError(`${file.name}: zip-filen indeholder ingen CSV-, GPX- eller TCX-filer.`);
+  if (!wanted.length) throw new ImportError(t("{file}: zip-filen indeholder ingen CSV-, GPX- eller TCX-filer.", { file: file.name }));
   const out = [];
   for (const e of wanted.slice(0, 500)) {
     const bytes = await zipBytes(z, e);
@@ -281,7 +284,7 @@ export const readExcel = async (file) => {
   const dec = new TextDecoder();
   const get = async (name) => { const e = z.entries.find((x) => x.name === name || x.name === name.replace(/^\//, "")); if (!e) return null; const b = await zipBytes(z, e); return b ? dec.decode(b) : null; };
   const wb = await get("xl/workbook.xml");
-  if (!wb) throw new ImportError(`${file.name}: kunne ikke læse regnearket. Gem det som .xlsx i Excel og prøv igen.`);
+  if (!wb) throw new ImportError(t("{file}: kunne ikke læse regnearket. Gem det som .xlsx i Excel og prøv igen.", { file: file.name }));
   // Shared strings: every <si> is one string, possibly split into rich-text runs.
   const sst = Array.from(((await get("xl/sharedStrings.xml")) || "").matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g), (m) => tTexts(m[1]));
   // Styles: cellXfs index -> "date" | "time" | null, so date cells become readable text instead of serial numbers.
@@ -291,7 +294,7 @@ export const readExcel = async (file) => {
   const kinds = Array.from(xfs.matchAll(/<xf\b([^>]*)\/?>/g), (m) => { const id = +(attr(m[1], "numFmtId") || 0); return DATE_FMT_IDS.has(id) ? (id >= 18 && id <= 21 || id >= 45 && id <= 47 ? "time" : "date") : custom[id] || null; });
   // Sheets, in workbook order, resolved through the relationships file.
   const rels = {}; for (const m of ((await get("xl/_rels/workbook.xml.rels")) || "").matchAll(/<Relationship\b([^>]*)\/?>/g)) { const id = attr(m[1], "Id"), t = attr(m[1], "Target"); if (id && t) rels[id] = t.startsWith("/") ? t.slice(1) : t.startsWith("xl/") ? t : `xl/${t}`; }
-  const sheets = Array.from(wb.matchAll(/<sheet\b([^>]*)\/?>/g), (m) => ({ name: attr(m[1], "name") || "Ark", path: rels[attr(m[1], "r:id") || attr(m[1], "id") || ""] }));
+  const sheets = Array.from(wb.matchAll(/<sheet\b([^>]*)\/?>/g), (m) => ({ name: attr(m[1], "name") || t("Ark"), path: rels[attr(m[1], "r:id") || attr(m[1], "id") || ""] }));
   const out = [];
   for (const [i, sh] of sheets.entries()) {
     const xmlText = sh.path ? await get(sh.path) : await get(`xl/worksheets/sheet${i + 1}.xml`);
@@ -325,7 +328,7 @@ export const readExcel = async (file) => {
     const text = rows.map((r) => { const rr = r.slice(); while (rr.length < width) rr.push(""); return rr.map(csvCell).join(","); }).join("\n");
     out.push({ name: sheets.length > 1 ? `${file.name} (${sh.name})` : file.name, text });
   }
-  if (!out.length) throw new ImportError(`${file.name}: regnearket er tomt.`);
+  if (!out.length) throw new ImportError(t("{file}: regnearket er tomt.", { file: file.name }));
   return out;
 };
 
@@ -352,7 +355,8 @@ export const activityFromStrava = (a) => {
   return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}` });
 };
 
-// A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity.
+// A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity. `source` ("Manuel") and the
+// name "Indtastet" are stored values and stay Danish; the screens show them with t().
 export const manualActivity = ({ day, km, min, rpe, type = "Run" }) => {
   const d = parseLocal(day); d.setHours(12, 0, 0, 0);
   const a = mk({ date: d, km: +km || 0, min: min ? +min : null, hr: null, type, name: type === "Run" ? "Indtastet" : xLabel(type), source: "Manuel", file: "" });
@@ -370,11 +374,11 @@ export const parseFile = async (file) => {
     return use.flatMap((x) => parseText(x.text, x.name));
   }
   if (n.endsWith(".xlsx") || n.endsWith(".xlsm")) return (await readExcel(file)).flatMap((x) => activitiesFromCSV(x.text, x.name));
-  if (n.endsWith(".xls") || n.endsWith(".ods") || n.endsWith(".numbers")) throw new ImportError(`${file.name}: gem regnearket som .xlsx (Filer → Gem som) eller som CSV, og vælg den fil.`);
-  if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(`${file.name}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.`);
+  if (n.endsWith(".xls") || n.endsWith(".ods") || n.endsWith(".numbers")) throw new ImportError(t("{file}: gem regnearket som .xlsx (Filer → Gem som) eller som CSV, og vælg den fil.", { file: file.name }));
+  if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(t("{file}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.", { file: file.name }));
   const text = decodeText(await file.arrayBuffer());
-  if (!text.trim()) throw new ImportError(`${file.name}: filen er tom.`);
-  if (text.charCodeAt(0) === 0x50 && text.charCodeAt(1) === 0x4b) throw new ImportError(`${file.name}: det ligner en zip-fil – omdøb den til .zip eller pak den ud.`);
+  if (!text.trim()) throw new ImportError(t("{file}: filen er tom.", { file: file.name }));
+  if (text.charCodeAt(0) === 0x50 && text.charCodeAt(1) === 0x4b) throw new ImportError(t("{file}: det ligner en zip-fil – omdøb den til .zip eller pak den ud.", { file: file.name }));
   return parseText(text, file.name); // any text file: sniff GPX/TCX, otherwise treat as CSV
 };
 
@@ -522,7 +526,7 @@ const periodWeeks = (label) => {
 };
 export const wellnessFromCSV = (text, fileName = "csv") => {
   const rows = parseCSV(text);
-  if (rows.length < 2) throw new ImportError(`${fileName}: filen er tom eller har kun en overskriftslinje.`);
+  if (rows.length < 2) throw new ImportError(t("{file}: filen er tom eller har kun en overskriftslinje.", { file: fileName }));
   const headers = rows[0].map(norm);
   const cDate = findCol(headers, [/^date$/, /^dato$/, /^week$/, /^uge$/, /^month$/, /^måned$/, /^period/, /date|dato|week|uge|month|måned|period/]);
   const cols = []; const skipped = [];
@@ -532,8 +536,8 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
     if (m && !cols.some((c) => c.m.key === m.key)) cols.push({ idx, m });
     else if (h) skipped.push(rows[0][idx]);
   });
-  if (cDate < 0) throw new ImportError(`${fileName}: fandt ingen dato-kolonne. Kolonnerne begynder med: ${rows[0].slice(0, 6).join(", ")}.`);
-  if (!cols.length) throw new ImportError(`${fileName}: ingen af tallene bruges af appen (${rows[0].filter((_, k) => k !== cDate).slice(0, 4).join(", ")}). Tempo, distance, tid og kalorier kommer fra dine ture i stedet.`);
+  if (cDate < 0) throw new ImportError(t("{file}: fandt ingen dato-kolonne. Kolonnerne begynder med: {cols}.", { file: fileName, cols: rows[0].slice(0, 6).join(", ") }));
+  if (!cols.length) throw new ImportError(t("{file}: ingen af tallene bruges af appen ({cols}). Tempo, distance, tid og kalorier kommer fra dine ture i stedet.", { file: fileName, cols: rows[0].filter((_, k) => k !== cDate).slice(0, 4).join(", ") }));
   const acc = {}; // monday -> key -> [values]
   for (const row of rows.slice(1)) {
     const r = [...row];
@@ -552,6 +556,6 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
     for (const [key, vals] of Object.entries(byKey)) { const avg = vals.reduce((x, y) => x + y, 0) / vals.length; w[key] = key === "hr" || key === "stress" || key === "endurance" ? Math.round(avg) : Math.round(avg * 10) / 10; counts[key] = (counts[key] || 0) + 1; }
     if (Object.keys(w).length) weeks[k] = w;
   }
-  if (!Object.keys(weeks).length) throw new ImportError(`${fileName}: kunne ikke læse datoerne (fx "${rows[1]?.[cDate] || ""}").`);
-  return { weeks, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, m.label])) };
+  if (!Object.keys(weeks).length) throw new ImportError(t(`{file}: kunne ikke læse datoerne (fx "{example}").`, { file: fileName, example: rows[1]?.[cDate] || "" }));
+  return { weeks, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, t(m.label)])) };
 };

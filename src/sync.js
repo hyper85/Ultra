@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { t } from "./i18n.js";
 
 /* Cloud sync via Supabase. The app is local-first: everything lives in localStorage and works without an account.
    When VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set (Vercel → Settings → Environment Variables) and the user
@@ -38,13 +39,13 @@ export const verifyCode = async (email, token) => {
 export const inviteFriend = async (email) => {
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
-  if (!token) throw new Error("Log ind for at invitere.");
+  if (!token) throw new Error(t("Log ind for at invitere."));
   let r;
   try { r = await fetch("/api/invite", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ email }) }); }
-  catch { throw new Error("Kunne ikke kontakte serveren. Tjek din internetforbindelse."); }
+  catch { throw new Error(t("Kunne ikke kontakte serveren. Tjek din internetforbindelse.")); }
   let body = null; try { body = await r.json(); } catch { /* not json */ }
-  if (r.status === 404) throw new Error("Invitationer findes kun i den udgave, der kører på Vercel.");
-  if (!r.ok) throw new Error(body?.error || `Invitationen kunne ikke sendes (${r.status}).`);
+  if (r.status === 404) throw new Error(t("Invitationer findes kun i den udgave, der kører på Vercel."));
+  if (!r.ok) throw new Error(body?.error || t("Invitationen kunne ikke sendes ({status}).", { status: r.status }));
   return body;
 };
 
@@ -53,19 +54,19 @@ export const inviteFriend = async (email) => {
 const stravaCall = async (op, extra = {}) => {
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
-  if (!token && op !== "config") throw new Error("Log ind under Mere → Konto for at forbinde Strava.");
+  if (!token && op !== "config") throw new Error(t("Log ind under Mere → Konto for at forbinde Strava."));
   let r;
   try { r = await fetch("/api/strava", { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ op, ...extra }) }); }
-  catch { throw new Error("Kunne ikke kontakte serveren. Tjek din internetforbindelse."); }
+  catch { throw new Error(t("Kunne ikke kontakte serveren. Tjek din internetforbindelse.")); }
   let body = null; try { body = await r.json(); } catch { /* not json */ }
-  if (r.status === 404 && !body) throw new Error("Strava findes kun i den udgave, der kører på Vercel.");
-  if (!r.ok) { const e = new Error(body?.error || `Strava-forbindelsen fejlede (${r.status}).`); e.status = r.status; e.connected = body?.connected; throw e; }
+  if (r.status === 404 && !body) throw new Error(t("Strava findes kun i den udgave, der kører på Vercel."));
+  if (!r.ok) { const e = new Error(body?.error || t("Strava-forbindelsen fejlede ({status}).", { status: r.status })); e.status = r.status; e.connected = body?.connected; throw e; }
   return body;
 };
 export const STRAVA_STATE_KEY = "ultraplan-strava-state";
 export const stravaConnectURL = async () => {
   const cfg = await stravaCall("config");
-  if (!cfg?.clientId) throw new Error("Strava er ikke sat op endnu. Sæt STRAVA_CLIENT_ID og STRAVA_CLIENT_SECRET i Vercel.");
+  if (!cfg?.clientId) throw new Error(t("Strava er ikke sat op endnu. Sæt STRAVA_CLIENT_ID og STRAVA_CLIENT_SECRET i Vercel."));
   const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
   try { localStorage.setItem(STRAVA_STATE_KEY, state); } catch { /* ignore */ }
   const redirect = window.location.origin + window.location.pathname;

@@ -1,7 +1,9 @@
 /* Nutrition that follows the training. Calories by day type from the resting metabolism, then the body goal
    (keep / lean / muscle / fit) and the race goal adjust them; protein by body weight, carbohydrate by the work
    of the day, fat is what is left. Meal ideas follow the diet the runner actually eats and swap for intolerances.
-   Numbers are estimates: the runner's own scale and energy decide, and the app says so. */
+   Numbers are estimates: the runner's own scale and energy decide, and the app says so.
+   DAY_TYPES and MEALS are Danish; every label, note, meal and hint returned by the functions is translated. */
+import { t, getLang } from "./i18n.js";
 
 // Mifflin-St Jeor resting metabolism.
 export const bmrOf = ({ weight = 80, height = 178, age = 40, sex = "m" }) => Math.round(10 * weight + 6.25 * height - 5 * age + (sex === "f" ? -161 : 5));
@@ -13,7 +15,7 @@ export const DAY_TYPES = [
   ["lift", "Styrkedag"],
   ["rest", "Hviledag"],
 ];
-export const dayTypeLabel = (t) => DAY_TYPES.find(([k]) => k === t)?.[1] || "Hviledag";
+export const dayTypeLabel = (k) => t(DAY_TYPES.find(([x]) => x === k)?.[1] || "Hviledag");
 
 // What kind of day it is, from the plan's numbers for that weekday.
 export const dayTypeOf = ({ km = 0, isLong = false, isHard = false, isRace = false, lift = false }) => (isRace || (km > 0 && isLong) ? "long" : km > 0 && isHard ? "quality" : km > 0 ? "easy" : lift ? "lift" : "rest");
@@ -23,25 +25,25 @@ const CARB = { all: { long: 7, quality: 5, easy: 4, lift: 4, rest: 3 }, lowcarb:
 
 /* dayTargets({ bmr, weight, body, goal, diet, dayType }) -> { kcal, protein, carbs, fat, note } in kcal and grams. */
 export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", diet = "all", dayType = "rest" }) {
-  const t = KCAL[dayType] ? dayType : "rest";
-  let kcal = KCAL[t](bmr);
+  const k = KCAL[dayType] ? dayType : "rest";
+  let kcal = KCAL[k](bmr);
   if (body === "lean") kcal -= 300;
-  if (body === "muscle" && (t === "lift" || t === "quality")) kcal += 200;
-  if (goal === "perform" && t === "quality") kcal += 100;
+  if (body === "muscle" && (k === "lift" || k === "quality")) kcal += 200;
+  if (goal === "perform" && k === "quality") kcal += 100;
   kcal = Math.max(bmr * 1.15, kcal);
   kcal = Math.round(kcal / 10) * 10;
   const protein = Math.round(weight * (body === "lean" ? 2.2 : 2));
-  const perKg = (diet === "lowcarb" ? CARB.lowcarb : CARB.all)[t];
+  const perKg = (diet === "lowcarb" ? CARB.lowcarb : CARB.all)[k];
   let carbs = Math.round(weight * perKg);
   const fatMin = Math.round(weight * 0.8);
   let fat = Math.round((kcal - protein * 4 - carbs * 4) / 9);
   if (fat < fatMin) { fat = fatMin; carbs = Math.max(Math.round(weight * 1.5), Math.round((kcal - protein * 4 - fat * 9) / 4)); }
-  const note = t === "long" ? "Kulhydrat er brændstoffet i dag: spis det før, under og efter turen." : t === "quality" ? "Kulhydrat før passet, protein efter." : t === "lift" ? "Protein tæt på passet, resten af dagen som normalt." : t === "rest" ? "Mindre kulhydrat, samme protein. Grønt fylder tallerkenen." : "Rolig dag, rolig kost. Protein i hvert måltid.";
-  return { kcal, protein, carbs, fat, note, dayType: t };
+  const note = k === "long" ? t("Kulhydrat er brændstoffet i dag: spis det før, under og efter turen.") : k === "quality" ? t("Kulhydrat før passet, protein efter.") : k === "lift" ? t("Protein tæt på passet, resten af dagen som normalt.") : k === "rest" ? t("Mindre kulhydrat, samme protein. Grønt fylder tallerkenen.") : t("Rolig dag, rolig kost. Protein i hvert måltid.");
+  return { kcal, protein, carbs, fat, note, dayType: k };
 }
 
 // Weekly overview: one row per day type the plan uses.
-export const weekTargets = (args) => DAY_TYPES.map(([k, label]) => ({ key: k, label, ...dayTargets({ ...args, dayType: k }) }));
+export const weekTargets = (args) => DAY_TYPES.map(([k, label]) => ({ key: k, label: t(label), ...dayTargets({ ...args, dayType: k }) }));
 
 // Meal ideas. Two variants per meal: "carb" for the days with work, "protein" for the calm ones.
 const MEALS = {
@@ -70,11 +72,23 @@ const MEALS = {
     mellem: { carb: "Dadler eller en gel til turen", protein: "Ost, nødder eller et par æg" },
   },
 };
+// Swaps for intolerances, on the text in the language it is shown in (the English meals use the English words).
+const SWAPS = {
+  da: {
+    Laktose: [[/\bskyr\b/gi, "laktosefri skyr"], [/\bmælk\b/gi, "havredrik"], [/hytteost/gi, "laktosefri hytteost"], [/\bost\b/gi, "laktosefri ost"], [/kvark/gi, "sojaskyr"]],
+    Gluten: [[/rugbrød/gi, "glutenfrit brød"], [/havregrød/gi, "glutenfri havregrød"], [/pasta/gi, "risnudler"], [/seitan/gi, "tofu"]],
+    Nødder: [[/nødder/gi, "græskarkerner"]],
+  },
+  en: {
+    Laktose: [[/\bskyr\b/gi, "lactose-free skyr"], [/\bmilk\b/gi, "oat drink"], [/cottage cheese/gi, "lactose-free cottage cheese"], [/(?<!cottage )\bcheese\b/gi, "lactose-free cheese"], [/quark/gi, "soy skyr"]],
+    Gluten: [[/rye bread/gi, "gluten-free bread"], [/oat porridge/gi, "gluten-free oat porridge"], [/pasta/gi, "rice noodles"], [/seitan/gi, "tofu"]],
+    Nødder: [[/\bnuts\b/gi, "pumpkin seeds"]],
+  },
+};
 const swap = (text, intol = []) => {
   let s = text;
-  if (intol.includes("Laktose")) s = s.replace(/skyr og bær/gi, "laktosefri skyr og bær").replace(/\bskyr\b/gi, "laktosefri skyr").replace(/\bmælk\b/gi, "havredrik").replace(/hytteost/gi, "laktosefri hytteost").replace(/\bost\b/gi, "laktosefri ost").replace(/kvark/gi, "sojaskyr");
-  if (intol.includes("Gluten")) s = s.replace(/rugbrød/gi, "glutenfrit brød").replace(/havregrød/gi, "glutenfri havregrød").replace(/pasta/gi, "risnudler").replace(/seitan/gi, "tofu");
-  if (intol.includes("Nødder")) s = s.replace(/nødder/gi, "græskarkerner");
+  const rules = SWAPS[getLang()] || SWAPS.da;
+  for (const key of intol) for (const [re, to] of rules[key] || []) s = s.replace(re, to);
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
@@ -82,9 +96,9 @@ const swap = (text, intol = []) => {
 export function mealIdeas({ diet = "all", intol = [], dayType = "rest", body = "keep" } = {}) {
   const lib = MEALS[diet] || MEALS.all;
   const variant = dayType === "long" || dayType === "quality" ? "carb" : "protein";
-  const rows = [["Morgenmad", lib.morgenmad[variant]], ["Frokost", lib.frokost[variant]], ["Aftensmad", lib.aftensmad[variant]], ["Mellemmåltid", lib.mellem[variant]]].map(([meal, text]) => ({ meal, text: swap(text, intol) }));
-  const hint = body === "lean" ? "Halvdelen af tallerkenen er grønt, protein i hvert måltid, og drik vand før du spiser. Sulten efter en lang tur er ægte: spis, men vælg protein og grønt først."
-    : body === "muscle" ? "Protein i alle fire måltider, og noget at spise inden for en time efter styrke. Et ekstra mellemmåltid på styrkedage."
-    : dayType === "long" ? "Spis 2–3 timer før turen, tag 40–90 g kulhydrat i timen undervejs, og spis inden for en time efter." : "Tre måltider og et mellemmåltid. Protein i hvert af dem.";
+  const rows = [["Morgenmad", lib.morgenmad[variant]], ["Frokost", lib.frokost[variant]], ["Aftensmad", lib.aftensmad[variant]], ["Mellemmåltid", lib.mellem[variant]]].map(([meal, text]) => ({ meal: t(meal), text: swap(t(text), intol) }));
+  const hint = body === "lean" ? t("Halvdelen af tallerkenen er grønt, protein i hvert måltid, og drik vand før du spiser. Sulten efter en lang tur er ægte: spis, men vælg protein og grønt først.")
+    : body === "muscle" ? t("Protein i alle fire måltider, og noget at spise inden for en time efter styrke. Et ekstra mellemmåltid på styrkedage.")
+    : dayType === "long" ? t("Spis 2–3 timer før turen, tag 40–90 g kulhydrat i timen undervejs, og spis inden for en time efter.") : t("Tre måltider og et mellemmåltid. Protein i hvert af dem.");
   return { rows, hint };
 }
