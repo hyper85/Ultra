@@ -3,6 +3,14 @@
 Periodiseret ultra-træningsplan, pulszoner, kost og ACWR-belastningstjek – regner selv ud fra dine tal.
 Bygget med Vite + React. PWA: kan lægges på hjemmeskærmen som app.
 
+## Sprog
+
+Appen findes på dansk og engelsk. Vælg under Mere → Sprog, på login-siden eller øverst i spørgeskemaet. Valget gemmes på enheden; en ny installation følger telefonens sprog. Dansk er kildesproget: alle tekster i koden er danske og slås op i `src/lang/en-*.js`, når engelsk er valgt (`t()` i `src/i18n.js`). AI-træneren svarer på det valgte sprog.
+
+## Løbsdag og kalender
+
+Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret start), mad og drikke undervejs (kulhydrat, væske, natrium pr. time og i alt) og en pakkeliste efter distance og årstid. Skriv din måltid, ellers bruges appens skøn ud fra dit rolige tempo. "Læg planen i din kalender" gemmer hele planen som en .ics-fil til Google/Apple/Outlook.
+
 ## Kør lokalt
     npm install
     npm run dev

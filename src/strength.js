@@ -2,7 +2,10 @@
    (squat, hinge, single-leg, push, pull, core, calf), chosen by the equipment the runner actually has, and
    dosed by the plan's phase and the body goal. Pure and deterministic, like the plan engine.
    Principle: strength supports the running. Heavy and short in the build, maintained in ultra-prep, light in the
-   taper, nothing in race week. A runner who wants muscle gets more sets and reps, not more days than they have. */
+   taper, nothing in race week. A runner who wants muscle gets more sets and reps, not more days than they have.
+   BODY, GEAR and DAILY_ANKLE are Danish constants (the screens render them with t()); everything buildStrength,
+   bodyLabel and gearLabel return is translated. */
+import { t } from "./i18n.js";
 
 export const BODY = [
   ["keep", "Holde vægten", "Kroppen som den er. Kosten holder vægten stabil, styrken holder dig hel."],
@@ -15,8 +18,8 @@ export const GEAR = [
   ["home", "Håndvægte eller elastik", "Et par håndvægte eller en kettlebell og en elastik."],
   ["gym", "Fitnesscenter", "Stang, stativ, håndvægte og maskiner."],
 ];
-export const bodyLabel = (k) => BODY.find(([x]) => x === k)?.[1] || "Holde vægten";
-export const gearLabel = (k) => GEAR.find(([x]) => x === k)?.[1] || "Håndvægte eller elastik";
+export const bodyLabel = (k) => t(BODY.find(([x]) => x === k)?.[1] || "Holde vægten");
+export const gearLabel = (k) => t(GEAR.find(([x]) => x === k)?.[1] || "Håndvægte eller elastik");
 
 // One exercise per pattern per equipment level. "how" is the one sentence a tired runner needs.
 const EX = {
@@ -99,23 +102,25 @@ const fmt = (sets, reps, ex) => ({ ...ex, sets, reps, label: `${ex.name} ${sets}
    -> { sessions: [{ key, name, focus, minutes, exercises: [{ name, how, sets, reps, label }] }], daily, note } */
 export function buildStrength({ body = "keep", gear = "home", phase = "Opbygning", deload = false, isRace = false, count = 2 } = {}) {
   const g = EX.squat[gear] ? gear : "home";
-  const pick = (k) => ({ ...EX[k][g], pattern: k });
+  const pick = (k) => ({ ...EX[k][g], name: t(EX[k][g].name), how: t(EX[k][g].how), pattern: k });
   const n = Math.max(0, Math.min(3, count));
-  if (isRace || n === 0) return { sessions: [], daily: DAILY_ANKLE, note: isRace ? "Løbsuge: ingen styrke. Kun ankelrutinen og hvile." : "Ingen styrkepas valgt. Ankelrutinen hver dag er stadig en god idé." };
+  const daily = DAILY_ANKLE.map((x) => t(x));
+  if (isRace || n === 0) return { sessions: [], daily, note: isRace ? t("Løbsuge: ingen styrke. Kun ankelrutinen og hvile.") : t("Ingen styrkepas valgt. Ankelrutinen hver dag er stadig en god idé.") };
   const base = DOSE[phase] || DOSE.Opbygning;
   let sets = base.sets, reps = base.reps, rest = base.rest, note = base.note;
   // Body goal changes the dose, never the movements.
   if (body === "muscle" && phase !== "Nedtrapning") { sets += 1; reps = phase === "Genopbygning" ? "10–12" : "8–12"; rest = "90 s"; note = "Til muskler: et sæt mere, 8–12 gentagelser, og spis efter passet."; }
   if (body === "lean") { reps = phase === "Ultra-prep" ? "8" : "12–15"; rest = "45 s"; note = "Til vægttab: lidt lettere, flere gentagelser, kort pause. Styrken holder musklerne, mens vægten går ned."; }
   if (deload) { sets = Math.max(1, sets - 1); note = "Let uge: et sæt mindre. Teknik, ikke træthed."; }
-  const A = { key: "A", name: "Styrke A", focus: "Ben og hofte", exercises: [fmt(sets, reps, pick("squat")), fmt(sets, reps, pick("hinge")), fmt(sets, `${reps}/ben`, pick("single")), fmt(3, "20 s/side", pick("hip")), fmt(3, "12/ben", pick("calf"))] };
-  const B = { key: "B", name: "Styrke B", focus: "Overkrop og core", exercises: [fmt(sets, reps, pick("push")), fmt(sets, reps, pick("pull")), fmt(Math.max(2, sets - 1), reps, pick("press")), fmt(3, "40 m", pick("carry")), fmt(3, "8/side", pick("core"))] };
+  const perLeg = t("{reps}/ben", { reps }), perSide = "8/side", calf = t("12/ben"), hip = "20 s/side";
+  const A = { key: "A", name: t("Styrke A"), focus: t("Ben og hofte"), exercises: [fmt(sets, reps, pick("squat")), fmt(sets, reps, pick("hinge")), fmt(sets, perLeg, pick("single")), fmt(3, hip, pick("hip")), fmt(3, calf, pick("calf"))] };
+  const B = { key: "B", name: t("Styrke B"), focus: t("Overkrop og core"), exercises: [fmt(sets, reps, pick("push")), fmt(sets, reps, pick("pull")), fmt(Math.max(2, sets - 1), reps, pick("press")), fmt(3, "40 m", pick("carry")), fmt(3, perSide, pick("core"))] };
   if (body === "muscle") B.exercises.push(fmt(3, "10–12", pick("curl")));
-  const C = { key: "C", name: "Styrke C", focus: body === "muscle" ? "Hele kroppen" : "Kraft og fjedre", exercises: body === "muscle"
-    ? [fmt(sets, reps, pick("hinge")), fmt(sets, reps, pick("push")), fmt(sets, `${reps}/ben`, pick("single")), fmt(sets, reps, pick("pull")), fmt(3, "12/ben", pick("calf"))]
-    : [fmt(3, "20 s", pick("hop")), fmt(2, `${reps}/ben`, pick("single")), fmt(2, reps, pick("hinge")), fmt(3, "8/side", pick("core")), fmt(3, "12/ben", pick("calf"))] };
+  const C = { key: "C", name: t("Styrke C"), focus: body === "muscle" ? t("Hele kroppen") : t("Kraft og fjedre"), exercises: body === "muscle"
+    ? [fmt(sets, reps, pick("hinge")), fmt(sets, reps, pick("push")), fmt(sets, perLeg, pick("single")), fmt(sets, reps, pick("pull")), fmt(3, calf, pick("calf"))]
+    : [fmt(3, "20 s", pick("hop")), fmt(2, perLeg, pick("single")), fmt(2, reps, pick("hinge")), fmt(3, perSide, pick("core")), fmt(3, calf, pick("calf"))] };
   const sessions = [A, B, C].slice(0, n).map((s) => ({ ...s, minutes: 10 + 6 * s.exercises.length + (body === "muscle" ? 10 : 0), rest }));
-  return { sessions, daily: DAILY_ANKLE, note };
+  return { sessions, daily, note: t(note) };
 }
 
 // Which weekdays get strength: days with time that are not the long run, not the quality day, and not the day
