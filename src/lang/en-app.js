@@ -2,6 +2,9 @@
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
   // Alle uger (week cards)
+  "plan {km} + S": "plan {km} + S",
+  "styrke {days}": "strength {days}",
+  "(efter løbeturen)": "(after the run)",
   "Tryk på en uge for at se dagene, den hårde session, tempo og den lange tur.": "Tap a week to see the days, the hard session, pace and the long run.",
   "lang tur {km} km {day}": "long run {km} km {day}",
   "back-to-back {km} km": "back-to-back {km} km",

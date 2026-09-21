@@ -532,3 +532,5 @@ details.strava { margin-bottom: 12px; }
 .wkbody { padding: 0 12px 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .wkbody .guide { margin-top: 10px; }
 .wkbody .guide > div { background: var(--panel); }
+.daygrid small.lift { color: var(--violet); }
+.guide > div.lift { border-left: 3px solid var(--violet); }

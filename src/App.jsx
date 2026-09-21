@@ -560,6 +560,7 @@ export default function App() {
         : <div><b>{t("Ingen hård session")}</b><p>{describeSession("Kun roligt", { maxHR, easyPace: insights.summary.easyPace }).text}</p></div>}
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p></div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
+      {!r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
       {(() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")}</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
     </div>
   );
@@ -625,7 +626,7 @@ export default function App() {
               onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : t("Tryk for at logge eller rette")}>
               <small>{n}</small>
               <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}</b>
-              <small className="muted">{other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? t("plan {km}", { km: planKm }) : t("hvile")) : "\u00a0"}</small>
+              <small className={liftDays.includes(i) && !r.pre && !(other.length && !(km[i] > 0)) ? "lift" : "muted"}>{other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? (liftDays.includes(i) && !r.isRace ? t("plan {km} + S", { km: planKm }) : t("plan {km}", { km: planKm })) : liftDays.includes(i) && !r.isRace ? liftName(i).charAt(0).toLowerCase() + liftName(i).slice(1) : t("hvile")) : "\u00a0"}</small>
             </div>
           );
         })}
@@ -711,6 +712,8 @@ export default function App() {
     if (plan.coach) { const st = coachPlan.strength; const mk = (key, name, focus, list) => ({ key, name, focus, exercises: list.map((x) => ({ name: x, label: t(x) })) }); return { sessions: [mk("A", t("Styrke A"), t("Ben og hofte"), st.A_tue), mk("B", t("Styrke B"), t("Overkrop og core"), st.B_thu)], daily: st.daily_ankle.map((x) => t(x)), note: t("Trænerens styrkepas, som de er.") }; }
     return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
   }, [plan.coach, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Strength for any plan week: the coach's fixed sessions, or the app's program dosed for that week's phase.
+  const strengthFor = (r) => (plan.coach || r.key === cur.key ? strengthPlan : buildStrength({ body: p.body, gear: p.gear, phase: r.phase, deload: r.deload, isRace: r.isRace, count: liftDays.length }));
   const sessionFor = (ti) => { const k = liftDays.indexOf(ti); if (k < 0 || !strengthPlan.sessions.length) return null; return strengthPlan.sessions[k % strengthPlan.sessions.length]; };
   // Form against age and sex norms: measured VO2 max from the log when there is one, else estimated from heart rates.
   const latestVo2 = (() => { const keys = Object.keys(log).filter((k) => log[k]?.vo2 > 0).sort(); return keys.length ? +log[keys[keys.length - 1]].vo2 : null; })();
@@ -1254,7 +1257,7 @@ export default function App() {
                     const isCur = !r.pre && r.i === cur.i;
                     const line2 = r.pre ? t("Før planen. Tallene er fra dit ur eller det, du har tastet.")
                       : r.isRace ? `★ ${p.raceName || t("Løbet")} · ${p.raceKm || r.lng} km`
-                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${t(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null].filter(Boolean).join(" · ");
+                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${t(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null, liftDays.length && !r.isRace ? t("styrke {days}", { days: liftDays.map((i) => dayLow(i)).join(" + ") }) : null].filter(Boolean).join(" · ");
                     return (
                       <div key={r.key} className={`wkcard ${openP ? "open" : ""} ${isCur ? "cur" : ""} ${r.pre ? "pre" : ""} ${r.key < todayKey && !isCur ? "past" : ""}`}>
                         <button type="button" className="wkhead" onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP}>
