@@ -67,7 +67,7 @@ const schedFor = (p, wkStart) => {
 
 /* ================= coach plan (trænerplan) =================
    The real plan from the coach, week by week, used as-is. Principle 1: its numbers are a ceiling, not a floor.
-   Principle 3: the days are fixed (run Mon/Wed/Thu/Sat, lift Tue/Thu, long Sat, back-to-back Sun). */
+   Principle 3: the days are fixed (run Mon/Wed/Thu/Sat, legs Mon evening after the run, upper body Tue, long Sat, back-to-back Sun). */
 const PHASE_DA = { Rebuild: "Genopbygning", Build: "Opbygning", "Ultra Prep": "Ultra-prep", Taper: "Nedtrapning" };
 export function buildCoachPlan(p) {
   const sched = p.sched?.A || defaultSched();
@@ -736,7 +736,7 @@ export default function App() {
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
   const strengthPlan = useMemo(() => {
-    if (plan.coach) { const st = coachPlan.strength; const mk = (key, name, focus, list) => ({ key, name, focus, exercises: list.map((x) => ({ name: x, label: t(x) })) }); return { sessions: [mk("A", t("Styrke A"), t("Ben og hofte"), st.A_tue), mk("B", t("Styrke B"), t("Overkrop og core"), st.B_thu)], daily: st.daily_ankle.map((x) => t(x)), note: t("Trænerens styrkepas, som de er.") }; }
+    if (plan.coach) { const st = coachPlan.strength; const mk = (key, name, focus, list) => ({ key, name, focus, exercises: list.map((x) => ({ name: x, label: t(x) })) }); return { sessions: [mk("A", t("Styrke A"), t("Ben og hofte"), st.A_mon_lower), mk("B", t("Styrke B"), t("Overkrop og core"), st.B_tue_upper)], daily: st.daily_ankle.map((x) => t(x)), note: t("Trænerens styrkepas, som de er."), rule: t(st.rule) }; }
     return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
   }, [plan.coach, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Strength for any plan week: the coach's fixed sessions, or the app's program dosed for that week's phase.
@@ -1190,7 +1190,7 @@ export default function App() {
                 </div>
               </>
             )}
-            <p className="muted">{strengthPlan.note}{!plan.coach ? ` ${t("Dosis følger fasen: nu {phase}{deload}.", { phase: t(cur.phase).toLowerCase(), deload: cur.deload ? `, ${t("let uge")}` : "" })}` : ""}</p>
+            <p className="muted">{strengthPlan.note}{strengthPlan.rule ? ` ${strengthPlan.rule}` : ""}{!plan.coach ? ` ${t("Dosis følger fasen: nu {phase}{deload}.", { phase: t(cur.phase).toLowerCase(), deload: cur.deload ? `, ${t("let uge")}` : "" })}` : ""}</p>
             {strengthPlan.sessions.map((x, i) => <StrengthSession key={x.key} session={{ ...x, name: `${x.name}${liftDays[i] != null ? " · " + dayLow(liftDays[i]) : ""}` }} rest={x.rest} />)}
             <div className="tips"><div><b>{t("Ankel · hver dag")}</b><span>{strengthPlan.daily.join(" · ")}</span></div></div>
             {plan.coach && <div className="muted" style={{ marginBottom: 14 }}>{t("Mål:")} {Object.entries(coachPlan.race.goals).map(([k, v]) => `${k} ${v}`).join(" · ")} · {t("spænde {target}.", { target: coachPlan.race.target })}</div>}
