@@ -534,3 +534,7 @@ details.strava { margin-bottom: 12px; }
 .wkbody .guide > div { background: var(--panel); }
 .daygrid small.lift { color: var(--violet); }
 .guide > div.lift { border-left: 3px solid var(--violet); }
+.dayform.preview { border-left: 3px solid var(--line); }
+.preview-line { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.preview-line:last-of-type { border-bottom: 0; }
+.preview-line span { font-size: 13px; }

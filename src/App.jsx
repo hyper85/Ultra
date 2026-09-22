@@ -587,9 +587,36 @@ export default function App() {
     setDayForm({ km: "", min: "", rpe: "", type: "Run" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
   };
   // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
+  const isFuture = (key, i) => ymd(addDays(parseLocal(key), i)) > todayStr;
+  const tapTitle = (key, i) => (isFuture(key, i) ? t("Tryk for at se, hvad dagen byder på") : t("Tryk for at logge eller rette"));
+  // A day that has not come yet: what the plan asks for, in one card. Nothing can be logged ahead of time.
+  const renderDayPreview = (r, i) => {
+    const day = ymd(addDays(parseLocal(r.key), i));
+    const v = r.days[i] || 0; const d = r.sched?.[i] || {}; const lift = liftDays.includes(i);
+    const long = i === r.longDay && v > 0, hard = i === r.qDay && v > 0, b2b = r.sun > 0 && i === (r.longDay + 1) % 7 && v > 0;
+    const raceDay = day === p.raceDate;
+    const hrCap = Math.round(maxHR * 0.7); const carbs = r.phase === "Ultra-prep" ? "60–90" : "40–60";
+    const pace = insights.summary.easyPace;
+    const lines = [];
+    if (raceDay) lines.push([`${p.raceName || t("Løbet")} · ${p.raceKm} km`, t("Start absurd roligt, gå hver stigning, spis fra minut 30.")]);
+    else if (hard) { const g = describeSession(r.quality, { maxHR, easyPace: pace }); lines.push([t("Hård session {km} km · {quality}", { km: v, quality: t(r.quality) }), g.zone]); }
+    else if (long) lines.push([t("Lang tur {km} km", { km: v }), t("Puls under {hr} · gå stigningerne · {carbs} g kulhydrat/t", { hr: Math.round(maxHR * 0.75), carbs })]);
+    else if (b2b) lines.push([t("Back-to-back {km} km", { km: v }), t("På trætte ben · puls under {hr}", { hr: hrCap })]);
+    else if (v > 0) lines.push([t("Rolig tur {km} km", { km: v }), pace ? t("Snakketempo · puls under {hr} · ca. {pace}/km", { hr: hrCap, pace }) : t("Snakketempo · puls under {hr}", { hr: hrCap })]);
+    if (lift && !raceDay) { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (ses) lines.push([`${ses.name}${ses.focus ? ` · ${ses.focus}` : ""}${ses.minutes ? ` · ${t("ca. {n} min", { n: ses.minutes })}` : ""}`, ses.exercises.map((e) => e.label || e.name).join(" · ")]); }
+    if (!lines.length) lines.push([t("Hvile"), t("Hviledag. Sov, spis, gå en tur.")]);
+    return (
+      <div className="dayform preview">
+        <div className="dayform-head"><b>{DAYS[i]} {fmt(parseLocal(day))}</b> <span className="muted">{d.time ? `· ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}{d.note ? ` · ${d.note}` : ""}</span></div>
+        {lines.map(([h, sub]) => <div key={h} className="preview-line"><b>{h}</b>{sub && <span className="muted">{sub}</span>}</div>)}
+        <div className="dayform-row"><span className="muted">{t("Dagen kan logges, når den er nået.")}</span><button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button></div>
+      </div>
+    );
+  };
   const renderDayForm = (planKm) => {
     if (!dayEdit) return null;
     const day = ymd(addDays(parseLocal(dayEdit.key), dayEdit.i));
+    if (day > todayStr) { const row = planRows.find((r) => r.key === dayEdit.key); return row ? renderDayPreview(row, dayEdit.i) : null; }
     return (
       <form className="dayform" onSubmit={saveDay}>
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
@@ -623,7 +650,7 @@ export default function App() {
           const other = otherByDay[ymd(addDays(parseLocal(r.key), i))] || [];
           return (
             <div key={n} role="button" tabIndex={0} className={`${km[i] > 0 ? (ok || planKm === null || !planKm ? "done" : "part") : other.length ? "done" : ""} ${isEditing(r.key, i) ? "edit" : ""}`}
-              onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : t("Tryk for at logge eller rette")}>
+              onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : tapTitle(r.key, i)}>
               <small>{n}</small>
               <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}</b>
               <small className={liftDays.includes(i) && !r.pre && !(other.length && !(km[i] > 0)) ? "lift" : "muted"}>{other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? (liftDays.includes(i) && !r.isRace ? t("plan {km} + S", { km: planKm }) : t("plan {km}", { km: planKm })) : liftDays.includes(i) && !r.isRace ? liftName(i).charAt(0).toLowerCase() + liftName(i).slice(1) : t("hvile")) : "\u00a0"}</small>
@@ -950,7 +977,7 @@ export default function App() {
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
-                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} role="button" tabIndex={0} title={t("Tryk for at logge en tur")}>
+                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} role="button" tabIndex={0} title={tapTitle(cur.key, i)}>
                       <small>{DAYS[i]}</small><b>{w || (liftDays.includes(i) ? (plan.coach ? liftShort(i) : "S") : "–")}</b>{dayKm[i] > 0 ? <small className="ran">{dayKm[i]}</small> : (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).length > 0 ? <small className="ran">✓</small> : null}
                     </div>
                   ))}
@@ -1199,7 +1226,7 @@ export default function App() {
                 const d = cur.sched[i] || {};
                 const other = otherByDay[ymd(addDays(parseLocal(cur.key), i))] || [];
                 return (
-                  <div key={i} role="button" tabIndex={0} title={t("Tryk for at logge en tur eller et pas")} onClick={() => openDay(cur.key, i, v > 0 ? "Run" : lift ? "Strength" : "Run")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
+                  <div key={i} role="button" tabIndex={0} title={tapTitle(cur.key, i)} onClick={() => openDay(cur.key, i, v > 0 ? "Run" : lift ? "Strength" : "Run")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
                     className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] || other.length ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>
