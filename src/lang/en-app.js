@@ -1,6 +1,18 @@
 /* English for the Danish strings in src/App.jsx. Keys are the Danish strings exactly as written in the code.
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
+  // Future-day preview
+  "Tryk for at se, hvad dagen byder på": "Tap to see what the day holds",
+  "Tryk for at logge eller rette": "Tap to log or edit",
+  "Hård session {km} km · {quality}": "Hard session {km} km · {quality}",
+  "Lang tur {km} km": "Long run {km} km",
+  "Puls under {hr} · gå stigningerne · {carbs} g kulhydrat/t": "Heart rate under {hr} · walk the climbs · {carbs} g carbs/h",
+  "Back-to-back {km} km": "Back-to-back {km} km",
+  "På trætte ben · puls under {hr}": "On tired legs · heart rate under {hr}",
+  "Rolig tur {km} km": "Easy run {km} km",
+  "Snakketempo · puls under {hr} · ca. {pace}/km": "Conversational pace · heart rate under {hr} · about {pace}/km",
+  "Snakketempo · puls under {hr}": "Conversational pace · heart rate under {hr}",
+  "Dagen kan logges, når den er nået.": "The day can be logged once it arrives.",
   // Alle uger (week cards)
   "plan {km} + S": "plan {km} + S",
   "styrke {days}": "strength {days}",
@@ -314,7 +326,6 @@ export default {
   "Ugen": "The week",
   "Del ugen": "Share the week",
   "Overblik ›": "Overview ›",
-  "Tryk for at logge en tur": "Tap to log a run",
   "Se alle": "See all",
   "Dit løb": "Your race",
   "top {km} km/uge": "peak {km} km/week",
@@ -445,7 +456,6 @@ export default {
   "Justeret af trænerråd ({reason})": "Adjusted by coach advice ({reason})",
   "Vis justeret": "Show adjusted",
   "Vis original": "Show original",
-  "Tryk for at logge en tur eller et pas": "Tap to log a run or a session",
   "lang": "long",
   "hård": "hard",
   "rolig": "easy",
