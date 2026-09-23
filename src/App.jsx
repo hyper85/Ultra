@@ -18,6 +18,7 @@ import { t, tn, locale, getLang } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
 import RaceDay from "./RaceDay.jsx";
 import { planToICS, downloadICS } from "./ics.js";
+import { hillBenefit } from "./race.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -471,13 +472,13 @@ export default function App() {
   const applyActivities = (nextActs, includeHikes, base = log) => {
     const weeks = weeklyTotals(nextActs, { includeHikes, maxHR });
     const n = { ...base };
-    for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, xmin, xn, xload, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
+    for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, xmin, xn, xload, vert, ekm, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
     for (const [k, w] of Object.entries(weeks)) {
       const l = n[k] || {};
       const rpe = l.rpe != null && l.rpe !== "" && !l.rpeAuto ? l.rpe : w.rpe ?? l.rpe;
-      const { xmin, xn, xload, ...keep } = l;
+      const { xmin, xn, xload, vert: _v, ekm: _e, ...keep } = l;
       // km and RPE only when the week has runs; a week with only strength keeps a typed km untouched.
-      const runPart = w.n ? { km: w.km, n: w.n, auto: true, ...(rpe != null ? { rpe, rpeAuto: !(l.rpe != null && l.rpe !== "" && !l.rpeAuto) } : {}) } : (l.auto ? (() => { const { km, auto, rpeAuto, rpe: r0, n: _n, ...rest } = l; return { ...rest, ...(!rpeAuto && r0 != null ? { rpe: r0 } : {}) }; })() : {});
+      const runPart = w.n ? { km: w.km, n: w.n, auto: true, ...(w.vert > 0 ? { vert: w.vert, ekm: w.ekm } : {}), ...(rpe != null ? { rpe, rpeAuto: !(l.rpe != null && l.rpe !== "" && !l.rpeAuto) } : {}) } : (l.auto ? (() => { const { km, auto, rpeAuto, rpe: r0, n: _n, vert, ekm, ...rest } = l; return { ...rest, ...(!rpeAuto && r0 != null ? { rpe: r0 } : {}) }; })() : {});
       n[k] = { ...keep, ...runPart, ...(w.xn ? { xmin: w.xmin, xn: w.xn, xload: w.xload } : {}) };
     }
     saveLog(n);
@@ -547,7 +548,7 @@ export default function App() {
 
   /* ---- day-by-day logging for the current week ---- */
   const [dayEdit, setDayEdit] = useState(null); // { key: Monday of the week, i: weekday index }
-  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "", type: "Run" });
+  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "", type: "Run", incline: "" });
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
   const [showPre, setShowPre] = useState(false);
@@ -575,16 +576,16 @@ export default function App() {
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
   const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
-  const openDay = (key, i, type = "Run") => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type }); setDayMsg(null); };
+  const openDay = (key, i, type = "Run") => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null); };
   const saveDay = (e) => {
     e.preventDefault();
     const isRun = dayForm.type === "Run";
     if (!dayEdit || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
-    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type });
+    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type, incline: isRun ? dayForm.incline : 0 });
     const { next, added } = mergeActivities(acts, [act]);
     if (!added) { setDayMsg({ warn: true, text: isRun ? t("Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert.") : t("Der er allerede et pas af den slags den dag med omtrent samme varighed. Slet det først, hvis det er forkert.") }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
-    setDayForm({ km: "", min: "", rpe: "", type: "Run" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
+    setDayForm({ km: "", min: "", rpe: "", type: "Run", incline: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
   };
   // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
   const isFuture = (key, i) => ymd(addDays(parseLocal(key), i)) > todayStr;
@@ -621,7 +622,7 @@ export default function App() {
       <form className="dayform" onSubmit={saveDay}>
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
         {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
-          <div key={x.id} className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button></div>
+          <div key={x.id} className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button></div>
         ))}
         {((actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0) && <div className="muted" style={{ margin: "8px 0 2px" }}>{t("Tilføj et pas mere:")}</div>}
         <div className="chips dayform-types">{[["Run", "Løb"], ...XTYPES].map(([k, l]) => <button key={k} type="button" className={dayForm.type === k ? "on" : ""} onClick={() => setDayForm({ ...dayForm, type: k })}>{t(l)}</button>)}</div>
@@ -630,6 +631,12 @@ export default function App() {
           <label>{t("Minutter")}<input type="number" min="1" inputMode="numeric" required={dayForm.type !== "Run"} value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} autoFocus={dayForm.type !== "Run"} /></label>
           <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder={dayForm.type === "Run" ? t("valgfri") : t("fx 7")} /></label>
         </div>
+        {dayForm.type === "Run" && (
+          <div className="incline">
+            <label>{t("Løbebånd · stigning %")}<input type="number" step="0.5" min="0" max="25" inputMode="decimal" value={dayForm.incline} onChange={(e) => setDayForm({ ...dayForm, incline: e.target.value })} placeholder={t("tom = udendørs/fladt")} /></label>
+            {(() => { const h = hillBenefit({ km: dayForm.km, incline: dayForm.incline, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : null; })()}
+          </div>
+        )}
         {dayForm.type !== "Run" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
         <div className="dayform-row">
           <button className="btn" type="submit">{dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
@@ -652,7 +659,7 @@ export default function App() {
             <div key={n} role="button" tabIndex={0} className={`${km[i] > 0 ? (ok || planKm === null || !planKm ? "done" : "part") : other.length ? "done" : ""} ${isEditing(r.key, i) ? "edit" : ""}`}
               onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : tapTitle(r.key, i)}>
               <small>{n}</small>
-              <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}</b>
+              <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}{km[i] > 0 && (actsByDay[ymd(addDays(parseLocal(r.key), i))] || []).some((x) => x.vert > 0) ? <i className="vert">↗</i> : null}</b>
               <small className={liftDays.includes(i) && !r.pre && !(other.length && !(km[i] > 0)) ? "lift" : "muted"}>{other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? (liftDays.includes(i) && !r.isRace ? t("plan {km} + S", { km: planKm }) : t("plan {km}", { km: planKm })) : liftDays.includes(i) && !r.isRace ? liftName(i).charAt(0).toLowerCase() + liftName(i).slice(1) : t("hvile")) : "\u00a0"}</small>
             </div>
           );
@@ -676,7 +683,8 @@ export default function App() {
   // Week load = km × RPE for the runs, plus other sessions at half weight: minutes × RPE ÷ 12 (an hour of HIIT at
   // RPE 8 counts like an 8 km run at RPE 5). Strength and HIIT tire the body, but not the running tissues as much.
   // A week with km but no RPE (imported runs without heart rate) is estimated at RPE 5 and marked as an estimate.
-  const loadOf = (l) => { if (!l) return null; const run = l.km ? l.km * (l.rpe || 5) : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
+  // Climb counts in the load: a week's effort km (km + vertical metres / 100) × RPE when the runs carry elevation.
+  const loadOf = (l) => { if (!l) return null; const run = l.km ? (l.ekm > l.km ? l.ekm : l.km) * (l.rpe || 5) : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
   const baseline = (+p.currentKm || 0) * 5;
   const acwrFor = (key) => {
     const own = loadOf(log[key]);

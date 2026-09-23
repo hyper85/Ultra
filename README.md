@@ -11,6 +11,10 @@ Appen findes på dansk og engelsk. Vælg under Mere → Sprog, på login-siden e
 
 Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret start), mad og drikke undervejs (kulhydrat, væske, natrium pr. time og i alt) og en pakkeliste efter distance og årstid. Skriv din måltid, ellers bruges appens skøn ud fra dit rolige tempo. "Læg planen i din kalender" gemmer hele planen som en .ics-fil til Google/Apple/Outlook.
 
+## Løbebånd og højdemeter
+
+Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.
+
 ## Kør lokalt
     npm install
     npm run dev

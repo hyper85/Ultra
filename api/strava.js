@@ -24,6 +24,7 @@ const stravaToken = async (params) => {
 const mapActivity = (a) => ({
   stravaId: a.id, startLocal: a.start_date_local, km: (a.distance || 0) / 1000, min: (a.moving_time || a.elapsed_time || 0) / 60,
   hr: a.average_heartrate ? Math.round(a.average_heartrate) : null, type: a.sport_type || a.type || "Workout", name: a.name || "",
+  vert: Math.round(a.total_elevation_gain || 0),
 });
 
 export default async function handler(req, res) {

@@ -73,3 +73,17 @@ export function kitList({ km, vert = 0, dateISO, totalMin = 0 }) {
 const KIT_KEY = "ultraplan-kit";
 export const loadKit = () => { try { return JSON.parse(localStorage.getItem(KIT_KEY) || "{}"); } catch { return {}; } };
 export const saveKit = (v) => { try { localStorage.setItem(KIT_KEY, JSON.stringify(v)); } catch { /* ignore */ } };
+
+/* What a treadmill incline (or any climb) gives: vertical metres, effort km (100 m ≈ 1 km flat), metres per km against
+   the race's own profile, and a one-line verdict. Pure arithmetic; the runner's RPE still carries the real effort. */
+export function hillBenefit({ km, incline = 0, vert, raceKm, raceVert }) {
+  const d = +km || 0;
+  const v = vert != null ? Math.round(vert) : Math.round(d * 10 * (+incline || 0));
+  if (!(d > 0) || !(v > 0)) return null;
+  const ekm = Math.round((d + v / 100) * 10) / 10;
+  const mPerKm = Math.round(v / d);
+  const raceMPerKm = raceKm > 0 && raceVert > 0 ? Math.round(raceVert / raceKm) : null;
+  const ratio = raceMPerKm ? mPerKm / raceMPerKm : null;
+  const verdict = !raceMPerKm ? "" : ratio < 0.6 ? t("Fladere end løbet: fint til rolige ture.") : ratio <= 1.4 ? t("Matcher løbets profil: mest specifik træning, du kan lave i Odense.") : ratio <= 2.5 ? t("Stejlere end løbets snit: ligner de hårde stykker. Gå, hvis pulsen løber væk.") : t("Meget stejlt: kort og med gang. Ikke som rolig tur.");
+  return { vert: v, ekm, extraKm: Math.round((ekm - d) * 10) / 10, mPerKm, raceMPerKm, ratio, verdict };
+}

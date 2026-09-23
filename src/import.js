@@ -215,7 +215,8 @@ const mk = (a) => {
   const km = Math.round(a.km * 100) / 100;
   const slot = Math.round((a.date.getHours() * 60 + a.date.getMinutes()) / 5); // 5-minute start slot for dedupe
   const id = km > 0 ? `${ymd(a.date)}-${slot}-${km.toFixed(1)}` : `${ymd(a.date)}-${slot}-x-${String(a.type || "x").toLowerCase().replace(/[^a-z0-9]+/g, "")}-${Math.round(a.min || 0)}`;
-  return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file };
+  return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file,
+    ...(a.vert > 0 ? { vert: Math.round(a.vert) } : {}), ...(a.incline > 0 ? { incline: a.incline } : {}) };
 };
 
 // Minimal zip reader (no library): the central directory lists the entries; DecompressionStream inflates them.
@@ -352,14 +353,16 @@ export const activityFromStrava = (a) => {
   const date = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
   const km = +a.km || 0, min = +a.min || 0;
   if (!(km > 0) && !(min > 0)) return null;
-  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}` });
+  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}`, vert: +a.vert || 0 });
 };
 
 // A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity. `source` ("Manuel") and the
 // name "Indtastet" are stored values and stay Danish; the screens show them with t().
-export const manualActivity = ({ day, km, min, rpe, type = "Run" }) => {
+// `incline` (%, treadmill) turns into vertical metres: km × 1000 × incline / 100.
+export const manualActivity = ({ day, km, min, rpe, type = "Run", incline }) => {
   const d = parseLocal(day); d.setHours(12, 0, 0, 0);
-  const a = mk({ date: d, km: +km || 0, min: min ? +min : null, hr: null, type, name: type === "Run" ? "Indtastet" : xLabel(type), source: "Manuel", file: "" });
+  const inc = +incline > 0 ? Math.round(+incline * 10) / 10 : 0;
+  const a = mk({ date: d, km: +km || 0, min: min ? +min : null, hr: null, type, name: type === "Run" ? (inc ? "Løbebånd" : "Indtastet") : xLabel(type), source: "Manuel", file: "", vert: inc ? Math.round((+km || 0) * 10 * inc) : 0, incline: inc });
   if (rpe) a.rpe = Math.min(10, Math.max(1, Math.round(+rpe)));
   return a;
 };
@@ -445,9 +448,9 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
   for (const a of Object.values(acts)) {
     const k = kind(a.type); // recomputed so improved classification also applies to activities imported earlier
     const key = ymd(mondayOf(parseLocal(a.day)));
-    const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0, xmin: 0, xn: 0, xload: 0 });
+    const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0, xmin: 0, xn: 0, xload: 0, vert: 0 });
     if (k === "run" || (includeHikes && k === "hike")) {
-      w.km += a.km; w.n++; w.min += a.min || 0;
+      w.km += a.km; w.n++; w.min += a.min || 0; w.vert += a.vert || 0;
       const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
       if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
     } else if (k !== "hike" && a.min > 0) {
@@ -455,7 +458,8 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
       w.xmin += a.min; w.xn++; w.xload += a.min * (a.rpe || rpeFromHR(a.hr, maxHR) || (k === "strength" ? 6 : 4));
     }
   }
-  for (const [key, w] of Object.entries(weeks)) { w.km = Math.round(w.km * 10) / 10; w.rpe = w.rpeT ? Math.round(w.rpeW / w.rpeT) : null; w.xload = Math.round(w.xload); if (!w.n && !w.xn) delete weeks[key]; }
+  // Effort km: climb counts as distance (100 m ≈ 1 km), the trail runner's rule of thumb; used for the week's load.
+  for (const [key, w] of Object.entries(weeks)) { w.km = Math.round(w.km * 10) / 10; w.vert = Math.round(w.vert); w.ekm = Math.round((w.km + w.vert / 100) * 10) / 10; w.rpe = w.rpeT ? Math.round(w.rpeW / w.rpeT) : null; w.xload = Math.round(w.xload); if (!w.n && !w.xn) delete weeks[key]; }
   return weeks;
 };
 
