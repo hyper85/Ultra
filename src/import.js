@@ -216,7 +216,7 @@ const mk = (a) => {
   const slot = Math.round((a.date.getHours() * 60 + a.date.getMinutes()) / 5); // 5-minute start slot for dedupe
   const id = km > 0 ? `${ymd(a.date)}-${slot}-${km.toFixed(1)}` : `${ymd(a.date)}-${slot}-x-${String(a.type || "x").toLowerCase().replace(/[^a-z0-9]+/g, "")}-${Math.round(a.min || 0)}`;
   return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file,
-    ...(a.vert > 0 ? { vert: Math.round(a.vert) } : {}), ...(a.incline > 0 ? { incline: a.incline } : {}) };
+    ...(a.vert > 0 ? { vert: Math.round(a.vert) } : {}), ...(a.incline > 0 ? { incline: a.incline } : {}), ...(a.treadmill ? { treadmill: true } : {}) };
 };
 
 // Minimal zip reader (no library): the central directory lists the entries; DecompressionStream inflates them.
@@ -353,7 +353,7 @@ export const activityFromStrava = (a) => {
   const date = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
   const km = +a.km || 0, min = +a.min || 0;
   if (!(km > 0) && !(min > 0)) return null;
-  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}`, vert: +a.vert || 0 });
+  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}`, vert: +a.vert || 0, treadmill: !!a.treadmill });
 };
 
 // A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity. `source` ("Manuel") and the
@@ -406,6 +406,18 @@ export const findDuplicate = (a, existing) => {
   }
   return null;
 };
+// What a typed copy knows that the watch does not: the RPE, and a treadmill incline (the watch records 0 m of climb
+// indoors). Recomputed on the watch's exact distance.
+const carryTyped = (typed, watch) => ({
+  ...(typed.rpe && !watch.rpe ? { rpe: typed.rpe } : {}),
+  ...(typed.incline > 0 && !(watch.vert > 0) ? { incline: typed.incline, vert: Math.round(watch.km * 10 * typed.incline), treadmill: true } : {}),
+});
+// Set or clear the treadmill incline (%) on a stored run, e.g. one fetched from Strava. Clearing removes the climb.
+export const withIncline = (a, incline) => {
+  const inc = +incline > 0 ? Math.min(25, Math.round(+incline * 10) / 10) : 0;
+  const { incline: _i, vert: _v, ...rest } = a;
+  return inc ? { ...rest, incline: inc, vert: Math.round(a.km * 10 * inc) } : rest;
+};
 // Merge parsed activities into the store. A duplicate keeps the stored copy, except that a copy from the watch
 // replaces a typed one (more exact, has heart rate); the typed RPE is carried over. Returns { next, added, replaced }.
 export const mergeActivities = (acts, parsed) => {
@@ -415,7 +427,7 @@ export const mergeActivities = (acts, parsed) => {
     const dup = findDuplicate(a, Object.values(next).filter((b) => b.day === a.day));
     if (dup) {
       const old = next[dup];
-      if (old.source === "Manuel" && a.source !== "Manuel") { delete next[dup]; next[a.id] = { ...a, ...(old.rpe && !a.rpe ? { rpe: old.rpe } : {}) }; replaced++; }
+      if (old.source === "Manuel" && a.source !== "Manuel") { delete next[dup]; next[a.id] = { ...a, ...carryTyped(old, a) }; replaced++; }
       continue;
     }
     next[a.id] = a; added++;
@@ -430,7 +442,7 @@ export const dedupeStore = (acts) => {
   for (const m of manual) {
     const others = Object.values(next).filter((b) => b.id !== m.id && b.source !== "Manuel" && b.day === m.day);
     const dup = findDuplicate(m, others);
-    if (dup) { if (m.rpe && !next[dup].rpe) next[dup] = { ...next[dup], rpe: m.rpe }; delete next[m.id]; removed++; }
+    if (dup) { next[dup] = { ...next[dup], ...carryTyped(m, next[dup]) }; delete next[m.id]; removed++; }
   }
   return { next, removed };
 };

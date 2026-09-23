@@ -13,7 +13,7 @@ Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret s
 
 ## Løbebånd og højdemeter
 
-Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.
+Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. En løbebåndstur fra Strava har 0 højdemeter (uret måler ikke stigning indendørs): tryk "↗ Stigning" ved turen på dagen og skriv båndets %. Det bliver stående ved næste synk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.
 
 ## Kør lokalt
     npm install

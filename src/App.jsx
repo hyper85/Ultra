@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
 import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
@@ -544,6 +544,8 @@ export default function App() {
     setImporting(false);
   };
   const actList = useMemo(() => Object.values(acts).sort((x, y) => (x.date < y.date ? 1 : -1)), [acts]);
+  const [incEdit, setIncEdit] = useState(null); // { id, value } while the incline of a stored run is being set
+  const saveIncline = (id) => { const a = acts[id]; if (!a || !incEdit) return; const next = { ...acts, [id]: withIncline(a, incEdit.value) }; saveActs(next); applyActivities(next, p.includeHikes); setIncEdit(null); };
   const removeActivity = (id) => { const next = { ...acts }; delete next[id]; saveActs(next); applyActivities(next, p.includeHikes); };
 
   /* ---- day-by-day logging for the current week ---- */
@@ -622,7 +624,23 @@ export default function App() {
       <form className="dayform" onSubmit={saveDay}>
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
         {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
-          <div key={x.id} className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}</span></span><button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button></div>
+          <Fragment key={x.id}>
+          <div className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
+            <span className="dayform-actions">
+              {x.km > 0 && (!(x.vert > 0) || x.incline > 0) && <button type="button" className={`btn ghost ${x.treadmill && !x.incline ? "hint" : ""}`} onClick={() => setIncEdit(incEdit?.id === x.id ? null : { id: x.id, value: x.incline || "" })} title={t("Løbebånd · stigning %")}>{x.incline ? `↗ ${x.incline} %` : t("↗ Stigning")}</button>}
+              <button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button>
+            </span>
+          </div>
+          {incEdit?.id === x.id && (
+            <div className="incline inline">
+              <div className="dayform-row">
+                <label>{t("Løbebånd · stigning %")}<input type="number" step="0.5" min="0" max="25" inputMode="decimal" value={incEdit.value} onChange={(e) => setIncEdit({ ...incEdit, value: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveIncline(x.id); } }} placeholder={t("tom = udendørs/fladt")} autoFocus /></label>
+                <button type="button" className="btn" onClick={() => saveIncline(x.id)}>{t("Gem")}</button>
+              </div>
+              {(() => { const h = hillBenefit({ km: x.km, incline: incEdit.value, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : <div className="muted" style={{ fontSize: 13 }}>{t("Uret måler ikke stigning indendørs. Skriv båndets %, så tæller højdemetrene i ugen.")}</div>; })()}
+            </div>
+          )}
+          </Fragment>
         ))}
         {((actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0) && <div className="muted" style={{ margin: "8px 0 2px" }}>{t("Tilføj et pas mere:")}</div>}
         <div className="chips dayform-types">{[["Run", "Løb"], ...XTYPES].map(([k, l]) => <button key={k} type="button" className={dayForm.type === k ? "on" : ""} onClick={() => setDayForm({ ...dayForm, type: k })}>{t(l)}</button>)}</div>
