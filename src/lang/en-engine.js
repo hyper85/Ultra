@@ -1,6 +1,7 @@
 /* English for the Danish strings in the engine modules (sessions, insights, strength, nutrition, fitness, import,
    sync, coach). Keys are the Danish strings exactly as written in the code; {placeholders} match the source. */
 export default {
+  "Løbebånd": "Treadmill",
   // ---------- sessions.js ----------
   "60–90 s gang": "60–90 s walk",
   "1 min rolig jog": "1 min easy jog",

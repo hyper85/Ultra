@@ -77,6 +77,18 @@ export default {
   "Løbsdag": "Race day",
   "pacing, mad og pakkeliste": "pacing, fuelling and kit list",
   "Pacing, mad og pakkeliste til løbet": "Pacing, fuelling and kit list for the race",
+  // hills / treadmill incline
+  "Fladere end løbet: fint til rolige ture.": "Flatter than the race: fine for easy runs.",
+  "Matcher løbets profil: mest specifik træning, du kan lave i Odense.": "Matches the race profile: the most specific training you can do on flat ground.",
+  "Stejlere end løbets snit: ligner de hårde stykker. Gå, hvis pulsen løber væk.": "Steeper than the race average: like the hard sections. Walk if the heart rate runs away.",
+  "Meget stejlt: kort og med gang. Ikke som rolig tur.": "Very steep: keep it short and walk. Not as an easy run.",
+  "Løbebånd · stigning %": "Treadmill · incline %",
+  "tom = udendørs/fladt": "blank = outdoors/flat",
+  "{vert} m+ · svarer til {ekm} km flad indsats": "{vert} m of climb · equals {ekm} km of flat effort",
+  "{m} m/km mod løbets {race} m/km": "{m} m/km against the race's {race} m/km",
+  "Højdemeter, 4 uger": "Climb, 4 weeks",
+  "{mine} m/km · løbet kræver {race} m/km": "{mine} m/km · the race asks {race} m/km",
+  "{mine} m/km": "{mine} m/km",
   // ics.js
   "Styrke": "Strength",
   "Uge {i} af {n} · {phase}": "Week {i} of {n} · {phase}",
