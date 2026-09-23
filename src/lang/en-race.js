@@ -89,6 +89,10 @@ export default {
   "Højdemeter, 4 uger": "Climb, 4 weeks",
   "{mine} m/km · løbet kræver {race} m/km": "{mine} m/km · the race asks {race} m/km",
   "{mine} m/km": "{mine} m/km",
+  "↗ Stigning": "↗ Incline",
+  "løbebånd": "treadmill",
+  "Gem": "Save",
+  "Uret måler ikke stigning indendørs. Skriv båndets %, så tæller højdemetrene i ugen.": "The watch does not measure incline indoors. Enter the treadmill %, and the climb counts in your week.",
   // ics.js
   "Styrke": "Strength",
   "Uge {i} af {n} · {phase}": "Week {i} of {n} · {phase}",
