@@ -1,6 +1,14 @@
 /* English for the Danish strings in src/App.jsx. Keys are the Danish strings exactly as written in the code.
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
+  // More: section summaries and groups
+  "Data": "Data",
+  "Puls og kost": "Heart rate and food",
+  "{n} år": "{n} yrs",
+  "hvilepuls {n}": "resting HR {n}",
+  "{n} løbedage": "{n} run days",
+  "maks {n}": "max {n}",
+  "Pacing, mad og pakkeliste ›": "Pacing, fuelling and kit list ›",
   "Løbsdag: {race}": "Race day: {race}",
   // Future-day preview
   "Tryk for at se, hvad dagen byder på": "Tap to see what the day holds",

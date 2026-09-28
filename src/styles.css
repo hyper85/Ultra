@@ -544,6 +544,63 @@ details.strava { margin-bottom: 12px; }
 .incline-note { display: grid; gap: 2px; margin-top: 6px; font-size: 13px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--panel); border-left: 3px solid var(--orange); }
 .daygrid i.vert { font-style: normal; font-size: 11px; color: var(--orange); margin-left: 2px; }
 .dayform-actions { display: inline-flex; gap: 6px; flex-shrink: 0; }
+
+/* ===== v2 polish: clearer heads, grouped settings, calmer cards ===== */
+/* Today: date on its own line, week/phase as small chips instead of one long sentence */
+.today-head { display: grid; gap: 8px; padding: 2px 2px 0; }
+.today-head .today-date { padding: 0; font-size: 15px; color: var(--text); font-weight: 600; }
+.meta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.meta-chip { display: inline-flex; align-items: center; gap: 0; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.meta-chip .phase-dot { margin-right: 6px; }
+.quote-row .quote { margin-top: 2px; }
+/* Today card: a thin accent in the colour of the day's session (same colours as the week strip) */
+.today { position: relative; overflow: hidden; }
+.today::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--line); }
+.today.kind-long::before { background: var(--orange); }
+.today.kind-hard::before { background: var(--volt); }
+.today.kind-easy::before, .today.kind-b2b::before { background: var(--green); }
+.today.kind-lift::before { background: var(--violet); }
+.today.kind-race::before { background: linear-gradient(90deg, var(--orange), var(--volt)); }
+.today.done::before { background: var(--green); }
+.today-ankle { padding-top: 10px; border-top: 1px solid var(--line); margin-top: 14px; }
+/* Panel head: title left, the key number right; links move to a quiet footer row */
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.panel-head h2 { margin: 0; }
+.panel-num { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.panel-num b { font-family: "Barlow Condensed", Impact, sans-serif; font-size: 24px; color: var(--text); margin-right: 2px; }
+.panel-foot { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.panel-foot .btn { flex: 1; }
+.btn.small { min-height: 38px; padding: 8px 12px; font-size: 13.5px; }
+/* More: grouped settings, a compact language row, a one-line summary on each closed section */
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
+.setting-row > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.setting-row b { font-size: 15px; }
+.setting-row .langswitch { flex: 0 0 auto; }
+.langswitch button { white-space: nowrap; }
+.group-label { margin: 10px 4px -4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+details.acc > summary { gap: 10px; }
+details.acc > summary .acc-sum { margin-left: auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+details.acc[open] > summary .acc-sum { display: none; }
+details.acc[open] > summary .chev { margin-left: auto; }
+details.acc > summary:hover h2 { color: var(--text); }
+/* Log form: the session types stay on one row and scroll sideways instead of wrapping */
+.dayform-types { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -2px; padding: 2px; }
+.dayform-types::-webkit-scrollbar { display: none; }
+.dayform-types button { flex: 0 0 auto; }
+.dayform-item { padding: 8px 0; margin-top: 0; border-bottom: 1px solid var(--line); }
+.dayform-head + .dayform-item { margin-top: 4px; }
+/* Tab bar: a soft pill behind the active tab */
+.tabbar button { position: relative; }
+.tabbar button.on::before { content: ""; position: absolute; inset: 3px 10%; border-radius: 12px; background: rgba(252,76,2,.12); z-index: -1; }
+.tabbar { isolation: isolate; }
+@media (min-width: 900px) { .tabbar button.on::before { inset: 4px 0; } }
+/* Top bar: the countdown as a pill */
+.topbar-race { padding: 4px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); max-width: 65%; }
+.topbar-race b { font-size: 18px; }
+/* Race card on I dag: reads as a link */
+.race-card-link { margin-top: 6px; color: var(--orange); font-size: 13px; font-weight: 600; }
+@media (min-width: 1000px) { main[data-view="today"] > .today-head, main[data-view="today"] > .quote-row { grid-column: 1 / -1; } }
+.week-panel .insight { margin-top: 12px; }
 .dayform-actions .btn.hint { border-color: var(--orange); color: var(--orange); }
 .incline.inline { margin: 2px 0 10px; padding: 10px; border-radius: var(--r-sm); background: var(--panel); }
 .incline.inline .dayform-row { align-items: flex-end; }
