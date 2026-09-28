@@ -584,9 +584,9 @@ details.acc[open] > summary .acc-sum { display: none; }
 details.acc[open] > summary .chev { margin-left: auto; }
 details.acc > summary:hover h2 { color: var(--text); }
 /* Log form: the session types stay on one row and scroll sideways instead of wrapping */
-.dayform-types { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -2px; padding: 2px; }
-.dayform-types::-webkit-scrollbar { display: none; }
-.dayform-types button { flex: 0 0 auto; }
+/* Log form: every session type visible at once, three per row (no hidden sideways scroll) */
+.chips.dayform-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.chips.dayform-types button { padding: 6px 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dayform-item { padding: 8px 0; margin-top: 0; border-bottom: 1px solid var(--line); }
 .dayform-head + .dayform-item { margin-top: 4px; }
 /* Tab bar: a soft pill behind the active tab */
