@@ -445,7 +445,9 @@ export default function App() {
   const liftShort = (i) => { const k = liftDays.indexOf(i); return k >= 0 && k < 3 ? "S" + "ABC"[k] : "S"; }; // "SA"/"SB" in the small week strip
   const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
-  const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - new Date()) / 86400000));
+  // Calendar days from today's date to the race date, not from the clock: counted from midnight, so the number only
+  // changes when the date does (rounding absorbs the hour lost or gained when summer time starts or ends).
+  const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - parseLocal(ymd(new Date()))) / 86400000));
   const todayKey = ymd(thisMonday());
   const lastPlanRow = plan.rows[plan.rows.length - 1];
   const curBase = plan.rows.find((r) => r.key === todayKey) || (todayKey > lastPlanRow.key ? lastPlanRow : plan.rows[0]);
@@ -904,7 +906,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <button type="button" className="brand" onClick={() => { setView("today"); window.scrollTo(0, 0); }} aria-label={t("Til forsiden")}>Ultraplan</button>
-          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); window.scrollTo(0, 0); }} title={t("Se dit overblik")}><b>{daysToRace}</b> {tn(daysToRace, "dag til {race}", "dage til {race}", { race: p.raceName || t("løbet") })}</button>
+          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); window.scrollTo(0, 0); }} title={t("Se dit overblik")}>{p.raceDate && ymd(new Date()) === p.raceDate ? <><b>★</b> {t("Løbsdag: {race}", { race: p.raceName || t("løbet") })}</> : <><b>{daysToRace}</b> {tn(daysToRace, "dag til {race}", "dage til {race}", { race: p.raceName || t("løbet") })}</>}</button>
         </div>
       </header>
       <nav className="tabbar" aria-label={t("Hovedmenu")}>

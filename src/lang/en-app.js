@@ -1,6 +1,7 @@
 /* English for the Danish strings in src/App.jsx. Keys are the Danish strings exactly as written in the code.
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
+  "Løbsdag: {race}": "Race day: {race}",
   // Future-day preview
   "Tryk for at se, hvad dagen byder på": "Tap to see what the day holds",
   "Tryk for at logge eller rette": "Tap to log or edit",
