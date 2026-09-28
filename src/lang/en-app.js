@@ -1,6 +1,13 @@
 /* English for the Danish strings in src/App.jsx. Keys are the Danish strings exactly as written in the code.
    Placeholders in braces ({n}, {km}, {date}) are filled by t(); keep them in the English text. */
 export default {
+  // log form, two steps
+  "Hvad lavede du?": "What did you do?",
+  "Tilføj et pas mere – hvad lavede du?": "Add another session – what did you do?",
+  "Skift": "Change",
+  "km · tid · RPE": "km · time · RPE",
+  "km · tid": "km · time",
+  "tid · RPE": "time · RPE",
   "Gang tæller som km i ugen, fordi \"Tæl vandring og gang med\" er slået til under Log.": "Walking counts as km in your week, because \"Count hiking and walking\" is on under Log.",
   "Gang tæller som tid på benene: minutter × RPE med halv vægt, ikke som løbe-km. 10 timer ved RPE 5 vejer som en lang tur på 50 km, så skær ned dagene efter.": "Walking counts as time on your feet: minutes × RPE at half weight, not as running km. 10 hours at RPE 5 weighs like a 50 km long run, so ease off the days after.",
   "som gang · min × RPE": "as walking · min × RPE",
@@ -215,7 +222,6 @@ export default {
   "· før planen": "· before the plan",
   "puls": "HR",
   "Slet": "Delete",
-  "Tilføj et pas mere:": "Add another session:",
   "Minutter": "Minutes",
   "valgfri": "optional",
   "fx 7": "e.g. 7",
