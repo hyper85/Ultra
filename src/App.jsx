@@ -575,7 +575,7 @@ export default function App() {
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sessions without km (strength, HIIT, cycling …) by day, so a day with one is not shown as skipped.
-  const otherByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (counted(x) || kind(x.type) === "hike" || !(x.min > 0)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const otherByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (counted(x) || !(x.min > 0 || (kind(x.type) === "hike" && x.km > 0))) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   const otherText = (list) => (list || []).map((x) => `${xLabel(x.type)}${x.km > 0 ? ` ${x.km} km` : ""}${x.min ? ` ${x.min} min` : ""}`).join(", ");
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
   const dayKm = dayKmFor(curBase.key);
@@ -583,9 +583,9 @@ export default function App() {
   const openDay = (key, i, type = "Run") => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null); };
   const saveDay = (e) => {
     e.preventDefault();
-    const isRun = dayForm.type === "Run";
+    const isRun = dayForm.type === "Run", isWalk = dayForm.type === "Walk";
     if (!dayEdit || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
-    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type, incline: isRun ? dayForm.incline : 0 });
+    const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun || isWalk ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type, incline: isRun ? dayForm.incline : 0 });
     const { next, added } = mergeActivities(acts, [act]);
     if (!added) { setDayMsg({ warn: true, text: isRun ? t("Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert.") : t("Der er allerede et pas af den slags den dag med omtrent samme varighed. Slet det først, hvis det er forkert.") }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
@@ -647,7 +647,7 @@ export default function App() {
         {((actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0) && <div className="muted" style={{ margin: "8px 0 2px" }}>{t("Tilføj et pas mere:")}</div>}
         <div className="chips dayform-types">{[["Run", "Løb"], ...XTYPES].map(([k, l]) => <button key={k} type="button" className={dayForm.type === k ? "on" : ""} onClick={() => setDayForm({ ...dayForm, type: k })}>{t(l)}</button>)}</div>
         <div className="dayform-row">
-          {dayForm.type === "Run" && <label>Km<input type="number" step="0.1" min="0.1" required inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>}
+          {(dayForm.type === "Run" || dayForm.type === "Walk") && <label>Km<input type="number" step="0.1" min="0.1" required={dayForm.type === "Run"} inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>}
           <label>{t("Minutter")}<input type="number" min="1" inputMode="numeric" required={dayForm.type !== "Run"} value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} autoFocus={dayForm.type !== "Run"} /></label>
           <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder={dayForm.type === "Run" ? t("valgfri") : t("fx 7")} /></label>
         </div>
@@ -657,7 +657,8 @@ export default function App() {
             {(() => { const h = hillBenefit({ km: dayForm.km, incline: dayForm.incline, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : null; })()}
           </div>
         )}
-        {dayForm.type !== "Run" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
+        {dayForm.type === "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{p.includeHikes ? t('Gang tæller som km i ugen, fordi "Tæl vandring og gang med" er slået til under Log.') : t("Gang tæller som tid på benene: minutter × RPE med halv vægt, ikke som løbe-km. 10 timer ved RPE 5 vejer som en lang tur på 50 km, så skær ned dagene efter.")}</div>}
+        {dayForm.type !== "Run" && dayForm.type !== "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
         <div className="dayform-row">
           <button className="btn" type="submit">{dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
           <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button>
@@ -1460,7 +1461,7 @@ export default function App() {
                                   <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</span></td>
                                   <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
                                   <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
-                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? t("uge fra {date}", { date: fmt(parseLocal(wk)) }) : k === "hike" ? t("nej (vandring slået fra)") : x.min > 0 ? t("som {type} · min × RPE", { type: xLabel(x.type).toLowerCase() }) : t("nej (ingen minutter)")}</td>
+                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? t("uge fra {date}", { date: fmt(parseLocal(wk)) }) : k === "hike" ? (x.min > 0 ? t("som gang · min × RPE") : t("nej (ingen minutter)")) : x.min > 0 ? t("som {type} · min × RPE", { type: xLabel(x.type).toLowerCase() }) : t("nej (ingen minutter)")}</td>
                                   <td className="muted">{t(x.source)}</td>
                                   <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>{t("Slet")}</button></td>
                                 </tr>

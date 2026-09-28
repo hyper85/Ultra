@@ -22,7 +22,7 @@ export const kind = (type) => {
   return "other";
 };
 // Sessions without kilometres (strength, HIIT, cycling, swimming) count by minutes × RPE (session-RPE).
-export const XTYPES = [["Strength", "Styrke"], ["HIIT", "HIIT"], ["Ride", "Cykling"], ["Workout", "Andet"]];
+export const XTYPES = [["Walk", "Gang"], ["Strength", "Styrke"], ["HIIT", "HIIT"], ["Ride", "Cykling"], ["Workout", "Andet"]];
 const STRAVA_LABELS = { weighttraining: "Styrke", highintensityintervaltraining: "HIIT", crossfit: "Crossfit", ride: "Cykling", virtualride: "Cykling", ebikeride: "Cykling", gravelride: "Cykling", mountainbikeride: "Cykling", swim: "Svømning", yoga: "Yoga", elliptical: "Crosstrainer", stairstepper: "Trappemaskine", rowing: "Roning", workout: "Andet", pilates: "Pilates", walk: "Gang", hike: "Vandring", strengthtraining: "Styrke", cardio: "Cardio" };
 // Display label for a session type, translated. XTYPES and STRAVA_LABELS stay Danish (the dictionary has them).
 export const xLabel = (type) => { const l = XTYPES.find(([k]) => k === type)?.[1] || STRAVA_LABELS[String(type || "").toLowerCase().replace(/[^a-z]/g, "")]; return l ? t(l) : type ? String(type).replace(/([a-z])([A-Z])/g, "$1 $2") : t("Andet"); };
@@ -465,8 +465,9 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
       w.km += a.km; w.n++; w.min += a.min || 0; w.vert += a.vert || 0;
       const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
       if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
-    } else if (k !== "hike" && a.min > 0) {
-      // Strength, HIIT, cycling and other sessions: minutes × RPE (RPE 6 when none is given). Their km are not run km.
+    } else if (a.min > 0) {
+      // Strength, HIIT, cycling, walks and hikes (when they are not counted as run km): minutes × RPE (RPE 6 for
+      // strength, 4 otherwise when none is given). Their km are not run km.
       w.xmin += a.min; w.xn++; w.xload += a.min * (a.rpe || rpeFromHR(a.hr, maxHR) || (k === "strength" ? 6 : 4));
     }
   }
