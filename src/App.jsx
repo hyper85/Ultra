@@ -28,6 +28,8 @@ const store = {
 
 /* ================= helpers ================= */
 // Danish day names; App() builds the translated copy (DAYS) from these at render time.
+// The session types a day can be logged as, with what each asks for (Danish keys for t()).
+const LOG_TYPES = [["Run", "Løb", "km · tid · RPE"], ["Walk", "Gang", "km · tid"], ["Strength", "Styrke", "tid · RPE"], ["HIIT", "HIIT", "tid · RPE"], ["Ride", "Cykling", "tid · RPE"], ["Workout", "Andet", "tid · RPE"]];
 const DAYS_DA = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
 const PH = {
   Genopbygning: "var(--blue)",
@@ -552,7 +554,7 @@ export default function App() {
 
   /* ---- day-by-day logging for the current week ---- */
   const [dayEdit, setDayEdit] = useState(null); // { key: Monday of the week, i: weekday index }
-  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "", type: "Run", incline: "" });
+  const [dayForm, setDayForm] = useState({ km: "", min: "", rpe: "", type: null, incline: "" });
   const [dayMsg, setDayMsg] = useState(null);
   const [openWeek, setOpenWeek] = useState(null); // week expanded day-by-day in the log
   const [showPre, setShowPre] = useState(false);
@@ -580,16 +582,21 @@ export default function App() {
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
   const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
-  const openDay = (key, i, type = "Run") => { setDayEdit(isEditing(key, i) ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null); };
+  // type: a named button ("Log dagens tur", "Log styrken") preselects its type; a tap on a day opens the chooser.
+  const openDay = (key, i, type = null) => {
+    const closing = isEditing(key, i);
+    setDayEdit(closing ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null);
+    if (!closing) setTimeout(() => { try { document.querySelector(".dayform")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch { /* ignore */ } }, 60);
+  };
   const saveDay = (e) => {
     e.preventDefault();
     const isRun = dayForm.type === "Run", isWalk = dayForm.type === "Walk";
-    if (!dayEdit || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
+    if (!dayEdit || !dayForm.type || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
     const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun || isWalk ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type, incline: isRun ? dayForm.incline : 0 });
     const { next, added } = mergeActivities(acts, [act]);
     if (!added) { setDayMsg({ warn: true, text: isRun ? t("Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert.") : t("Der er allerede et pas af den slags den dag med omtrent samme varighed. Slet det først, hvis det er forkert.") }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
-    setDayForm({ km: "", min: "", rpe: "", type: "Run", incline: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
+    setDayForm({ km: "", min: "", rpe: "", type: null, incline: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
   };
   // The small form for one day. planKm is what the plan asked for that day (null for weeks before the plan).
   const isFuture = (key, i) => ymd(addDays(parseLocal(key), i)) > todayStr;
@@ -627,7 +634,7 @@ export default function App() {
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
         {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
           <Fragment key={x.id}>
-          <div className="dayform-item"><span>✓ {x.km > 0 ? `${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
+          <div className="dayform-item"><span>✓ {x.km > 0 ? `${actKind(x.type) === "run" ? "" : `${xLabel(x.type)} `}${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
             <span className="dayform-actions">
               {x.km > 0 && (!(x.vert > 0) || x.incline > 0) && <button type="button" className={`btn ghost ${x.treadmill && !x.incline ? "hint" : ""}`} onClick={() => setIncEdit(incEdit?.id === x.id ? null : { id: x.id, value: x.incline || "" })} title={t("Løbebånd · stigning %")}>{x.incline ? `↗ ${x.incline} %` : t("↗ Stigning")}</button>}
               <button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button>
@@ -644,25 +651,37 @@ export default function App() {
           )}
           </Fragment>
         ))}
-        {((actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0) && <div className="muted" style={{ margin: "8px 0 2px" }}>{t("Tilføj et pas mere:")}</div>}
-        <div className="chips dayform-types">{[["Run", "Løb"], ...XTYPES].map(([k, l]) => <button key={k} type="button" className={dayForm.type === k ? "on" : ""} onClick={() => setDayForm({ ...dayForm, type: k })}>{t(l)}</button>)}</div>
-        <div className="dayform-row">
-          {(dayForm.type === "Run" || dayForm.type === "Walk") && <label>Km<input type="number" step="0.1" min="0.1" required={dayForm.type === "Run"} inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>}
-          <label>{t("Minutter")}<input type="number" min="1" inputMode="numeric" required={dayForm.type !== "Run"} value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} autoFocus={dayForm.type !== "Run"} /></label>
-          <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder={dayForm.type === "Run" ? t("valgfri") : t("fx 7")} /></label>
-        </div>
-        {dayForm.type === "Run" && (
-          <div className="incline">
-            <label>{t("Løbebånd · stigning %")}<input type="number" step="0.5" min="0" max="25" inputMode="decimal" value={dayForm.incline} onChange={(e) => setDayForm({ ...dayForm, incline: e.target.value })} placeholder={t("tom = udendørs/fladt")} /></label>
-            {(() => { const h = hillBenefit({ km: dayForm.km, incline: dayForm.incline, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : null; })()}
-          </div>
+        {!dayForm.type ? (
+          <>
+            <div className="dayform-ask">{(actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0 ? t("Tilføj et pas mere – hvad lavede du?") : t("Hvad lavede du?")}</div>
+            <div className="type-grid">{LOG_TYPES.map(([k, l, hint]) => <button key={k} type="button" className={`type-tile t-${k.toLowerCase()}`} onClick={() => setDayForm({ ...dayForm, type: k })}><b>{t(l)}</b><small>{t(hint)}</small></button>)}</div>
+            <div className="dayform-row"><button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button></div>
+          </>
+        ) : (
+          <>
+            <div className="type-picked">
+              <span className={`type-tile on t-${dayForm.type.toLowerCase()}`}><b>{t(LOG_TYPES.find(([k]) => k === dayForm.type)?.[1] || "Andet")}</b></span>
+              <button type="button" className="linkbtn" onClick={() => setDayForm({ ...dayForm, type: null })}>{t("Skift")}</button>
+            </div>
+            <div className="dayform-row">
+              {(dayForm.type === "Run" || dayForm.type === "Walk") && <label>Km<input type="number" step="0.1" min="0.1" required={dayForm.type === "Run"} inputMode="decimal" value={dayForm.km} onChange={(e) => setDayForm({ ...dayForm, km: e.target.value })} autoFocus /></label>}
+              <label>{t("Minutter")}<input type="number" min="1" inputMode="numeric" required={dayForm.type !== "Run"} value={dayForm.min} onChange={(e) => setDayForm({ ...dayForm, min: e.target.value })} autoFocus={dayForm.type !== "Run" && dayForm.type !== "Walk"} /></label>
+              <label>RPE 1–10<input type="number" min="1" max="10" inputMode="numeric" value={dayForm.rpe} onChange={(e) => setDayForm({ ...dayForm, rpe: e.target.value })} placeholder={dayForm.type === "Run" ? t("valgfri") : t("fx 7")} /></label>
+            </div>
+            {dayForm.type === "Run" && (
+              <div className="incline">
+                <label>{t("Løbebånd · stigning %")}<input type="number" step="0.5" min="0" max="25" inputMode="decimal" value={dayForm.incline} onChange={(e) => setDayForm({ ...dayForm, incline: e.target.value })} placeholder={t("tom = udendørs/fladt")} /></label>
+                {(() => { const h = hillBenefit({ km: dayForm.km, incline: dayForm.incline, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : null; })()}
+              </div>
+            )}
+            {dayForm.type === "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{p.includeHikes ? t('Gang tæller som km i ugen, fordi "Tæl vandring og gang med" er slået til under Log.') : t("Gang tæller som tid på benene: minutter × RPE med halv vægt, ikke som løbe-km. 10 timer ved RPE 5 vejer som en lang tur på 50 km, så skær ned dagene efter.")}</div>}
+            {dayForm.type !== "Run" && dayForm.type !== "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
+            <div className="dayform-row">
+              <button className="btn" type="submit">{dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
+              <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button>
+            </div>
+          </>
         )}
-        {dayForm.type === "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{p.includeHikes ? t('Gang tæller som km i ugen, fordi "Tæl vandring og gang med" er slået til under Log.') : t("Gang tæller som tid på benene: minutter × RPE med halv vægt, ikke som løbe-km. 10 timer ved RPE 5 vejer som en lang tur på 50 km, så skær ned dagene efter.")}</div>}
-        {dayForm.type !== "Run" && dayForm.type !== "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
-        <div className="dayform-row">
-          <button className="btn" type="submit">{dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
-          <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button>
-        </div>
         {dayMsg && <div className={`advice ${dayMsg.warn ? "warn" : ""}`}>{dayMsg.text}</div>}
       </form>
     );
@@ -1002,7 +1021,7 @@ export default function App() {
                 {didOther.length > 0 && <div className="today-ran">✓ {otherText(didOther)}{lift && !didStrength ? ` · ${t("styrken mangler stadig")}` : !lift && v > 0 && !(ran > 0) ? ` · ${t("i stedet for løbeturen")}` : ""}</div>}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, v > 0 || raceDay || ran > 0 ? "Run" : lift ? "Strength" : "Run")}>{ran > 0 && !(lift && !didStrength) ? t("Ret dagens tur") : lift && !(v > 0) ? (didStrength ? t("Ret dagens styrke") : t("Log styrke")) : v > 0 || raceDay ? t("Log dagens tur") : t("Log et pas alligevel")}</button>
                 {v > 0 && lift && !(ran > 0 && didStrength) && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Strength")}>{didStrength ? t("Ret styrken") : t("Log styrken")}</button>}
-                {!lift && !(v > 0) && !raceDay && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Workout")}>{t("Log styrke, HIIT eller andet")}</button>}
+                {!lift && !(v > 0) && !raceDay && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti)}>{t("Log styrke, HIIT eller andet")}</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               {shareMsg && <div className="advice">{shareMsg}</div>}
@@ -1274,7 +1293,7 @@ export default function App() {
                 const d = cur.sched[i] || {};
                 const other = otherByDay[ymd(addDays(parseLocal(cur.key), i))] || [];
                 return (
-                  <div key={i} role="button" tabIndex={0} title={tapTitle(cur.key, i)} onClick={() => openDay(cur.key, i, v > 0 ? "Run" : lift ? "Strength" : "Run")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
+                  <div key={i} role="button" tabIndex={0} title={tapTitle(cur.key, i)} onClick={() => openDay(cur.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
                     className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] || other.length ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
                     <b>{v || (lift ? "S" : "–")}</b>

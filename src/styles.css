@@ -404,8 +404,6 @@ td .dayform .dayform-row label { flex: 1 1 80px; }
 .ob-cards.two { grid-template-columns: 1fr 1fr; }
 @media (max-width: 420px) { .ob-cards.two { grid-template-columns: 1fr; } }
 
-.dayform-types { margin: 4px 0 8px; }
-.dayform-types button { padding: 6px 12px; min-height: 34px; font-size: 13px; }
 
 details.strava { margin-bottom: 12px; }
 .strava-btn { background: #fc4c02; border-color: #fc4c02; }
@@ -584,9 +582,7 @@ details.acc[open] > summary .acc-sum { display: none; }
 details.acc[open] > summary .chev { margin-left: auto; }
 details.acc > summary:hover h2 { color: var(--text); }
 /* Log form: the session types stay on one row and scroll sideways instead of wrapping */
-/* Log form: every session type visible at once, three per row (no hidden sideways scroll) */
-.chips.dayform-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.chips.dayform-types button { padding: 6px 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .dayform-item { padding: 8px 0; margin-top: 0; border-bottom: 1px solid var(--line); }
 .dayform-head + .dayform-item { margin-top: 4px; }
 /* Tab bar: a soft pill behind the active tab */
@@ -606,3 +602,20 @@ details.acc > summary:hover h2 { color: var(--text); }
 .incline.inline .dayform-row { align-items: flex-end; }
 .incline.inline label { flex: 1 1 140px; }
 .incline.inline input { max-width: none; }
+
+/* ---- log form in two steps: choose the type, then only its fields ---- */
+.dayform { border-color: rgba(252,76,2,.45); scroll-margin: 76px 0 96px; }
+.dayform-ask { margin: 10px 0 8px; font-weight: 700; font-size: 16px; }
+.type-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.type-tile { display: grid; gap: 2px; justify-items: center; padding: 12px 6px; min-height: 64px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; font: inherit; text-align: center; border-top: 3px solid var(--line); }
+.type-tile b { font-size: 15px; }
+.type-tile small { font-size: 11px; color: var(--muted); }
+.type-tile:active { transform: scale(.98); }
+.type-tile.t-run { border-top-color: var(--orange); }
+.type-tile.t-walk { border-top-color: var(--green); }
+.type-tile.t-strength { border-top-color: var(--violet); }
+.type-tile.t-hiit { border-top-color: var(--volt); }
+.type-tile.t-ride { border-top-color: var(--blue); }
+.type-picked { display: flex; align-items: center; gap: 12px; margin: 10px 0 2px; }
+.type-picked .type-tile { display: inline-grid; min-height: 0; padding: 6px 16px; cursor: default; background: #2a1a10; border-color: var(--orange); }
+.type-picked .linkbtn { font-size: 14px; padding: 8px 4px; }
