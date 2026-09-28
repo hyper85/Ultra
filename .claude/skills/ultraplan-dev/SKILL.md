@@ -111,6 +111,7 @@ Vercel URL as Site URL and `…/**` as redirect.
 
 - Danish UI copy, du-form, sentence case, no marketing. Every user-visible string goes through `t()` from `src/i18n.js` with an English entry in `src/lang/` (keep the Danish text as the key, exactly); run `node scripts/i18n-check.mjs` before shipping. Numbers in Barlow Condensed, body in Inter.
 - One primary action per screen; settings live under "Mere"; nothing scrolls sideways on a phone.
+- Screen heads: a title plus `.meta-chips` for context (week, phase, coach plan) instead of one long sentence; `.panel-head` puts the title left and the key number right; secondary links go in a `.panel-foot` button row. Under "Mere" every `details.acc` shows an `.acc-sum` one-line summary when closed, sections sit under `.group-label` headings (Din plan / Data / Puls og kost), everything starts closed, and language is a compact `.setting-row`. The I dag card carries a `kind-<type>` class that colours its top accent like the week strip.
 - Desktop (≥ 1000 px): `main.wrap` is a two-column grid keyed by `data-view` (today: card | week + race; plan: week + guide | chart, table full width; coach: `.coach-grid` findings | chat; more: settings | zones + food). Phone stays one column, max 720 px.
 - Keep the engine deterministic and explainable: every number the user sees should be traceable to
   an input, and estimates are labelled.

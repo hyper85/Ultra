@@ -962,7 +962,14 @@ export default function App() {
           ); }
           return (
             <>
-              <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · {t("uge {i} af {n}", { i: cur.i, n: plan.weeks })} · {t(cur.phase)}{plan.coach ? ` · ${t("trænerplan")}` : ""}</div>
+              <div className="today-head">
+                <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
+                <div className="meta-chips">
+                  <span className="meta-chip">{t("uge {i} af {n}", { i: cur.i, n: plan.weeks })}</span>
+                  <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
+                  {plan.coach && <span className="meta-chip">{t("trænerplan")}</span>}
+                </div>
+              </div>
               <div className="quote-row">
                 <div className="quote">{quoteFor({ type: raceDay ? "race" : v > 0 ? (long ? "long" : hard ? "hard" : "easy") : lift ? "lift" : "rest", phase: cur.phase, deload: cur.deload })}</div>
                 {streak >= 2 && <span className="streak" title={t("Uger i træk med logget træning")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9z" /></svg>{t("{n} uger i træk", { n: streak })}</span>}
@@ -973,7 +980,7 @@ export default function App() {
                   <b>{t("Sidste uge (uge {i}):", { i: lastWeek.i })}</b> {t("{km} af {plan} km", { km: lastWeek.km, plan: lastWeek.plan })}{lastWeek.pct != null ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${t("{n} andre pas, {min} min", { n: lastWeek.xn, min: lastWeek.xmin })}` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · ${t("søvn {h} t", { h: lastWeek.sleep })}` : ""}. {lastWeek.verdict}
                 </div>
               )}
-              <section className={`panel today ${done ? "done" : ""}`}>
+              <section className={`panel today ${done ? "done" : ""} kind-${raceDay ? "race" : long ? "long" : hard ? "hard" : b2b ? "b2b" : v > 0 ? "easy" : lift ? "lift" : "rest"}`}>
                 {(v > 0 || raceDay || (lift && session)) && <h2 className="today-kind">{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{t(cur.quality)}</b></div>}
@@ -998,10 +1005,9 @@ export default function App() {
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               {shareMsg && <div className="advice">{shareMsg}</div>}
-              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
 
-              <section className="panel">
-                <div className="row-between"><h2 style={{ margin: 0 }}>{t("Ugen")}</h2><span className="muted">{t("{km} af {plan} km", { km: curLog.km || 0, plan: cur.km })} · <button type="button" className="linkbtn" onClick={doShareWeek}>{t("Del ugen")}</button> · <button type="button" className="linkbtn" onClick={() => setView("overblik")}>{t("Overblik ›")}</button></span></div>
+              <section className="panel week-panel">
+                <div className="panel-head"><h2>{t("Ugen")}</h2><span className="panel-num"><b>{curLog.km || 0}</b> / {cur.km} km</span></div>
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
@@ -1019,10 +1025,16 @@ export default function App() {
                       : <button type="button" className="btn ghost" onClick={() => setView("coach")}>{t("Se alle")}</button>}
                   </div>
                 )}
+                <div className="panel-foot">
+                  <button type="button" className="btn ghost small" onClick={doShareWeek}>{t("Del ugen")}</button>
+                  <button type="button" className="btn ghost small" onClick={() => setView("overblik")}>{t("Overblik ›")}</button>
+                </div>
               </section>
 
+              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
+
               <section className="panel row-between" onClick={() => { setOpenRace(true); setView("plan"); }} role="button" tabIndex={0} style={{ cursor: "pointer" }} title={t("Pacing, mad og pakkeliste til løbet")}>
-                <div><div className="muted">{p.raceName || t("Dit løb")}</div><div><b>{p.raceKm} km</b> · {p.raceVert} m+ · {t("top {km} km/uge", { km: plan.peak })}</div></div>
+                <div><div className="muted">{p.raceName || t("Dit løb")}</div><div><b>{p.raceKm} km</b> · {p.raceVert} m+ · {t("top {km} km/uge", { km: plan.peak })}</div><div className="race-card-link">{t("Pacing, mad og pakkeliste ›")}</div></div>
                 <div className="count small"><b>{daysToRace}</b><span>{daysToRace === 1 ? t("dag") : t("dage")}</span></div>
               </section>
             </>
@@ -1083,13 +1095,12 @@ export default function App() {
         {view === "more" && (
         <aside className="stack">
           <h1 className="screen-title">{t("Mere")}</h1>
-          <details className="panel acc" open>
-            <summary><h2>{t("Sprog")}</h2><span className="chev" aria-hidden="true">›</span></summary>
-            <div style={{ marginTop: 12 }}><LangSwitch /></div>
-            <div className="muted" style={{ marginTop: 8 }}>{t("Valget gemmes på denne enhed.")}</div>
-          </details>
-          <details className="panel acc" open={syncEnabled}>
-            <summary><h2>{t("Konto")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+          <div className="panel setting-row">
+            <div><b>{t("Sprog")}</b><span className="muted">{t("Valget gemmes på denne enhed.")}</span></div>
+            <LangSwitch />
+          </div>
+          <details className="panel acc" open={syncEnabled && !user}>
+            <summary><h2>{t("Konto")}</h2>{user ? <span className="acc-sum">{user.email}</span> : null}<span className="chev" aria-hidden="true">›</span></summary>
             {!syncEnabled ? (
               <div className="muted">{t("Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.")}</div>
             ) : user ? (
@@ -1113,8 +1124,9 @@ export default function App() {
             )}
           </details>
 
+          <div className="group-label">{t("Din plan")}</div>
           <details className="panel acc">
-            <summary><h2>{t("Start")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Start")}</h2><span className="acc-sum">{plan.coach ? t("trænerplan") : fmt(startD)}</span><span className="chev" aria-hidden="true">›</span></summary>
             <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={p.coachMode !== false} onChange={(e) => setP({ ...p, coachMode: e.target.checked })} /> {t("Trænerplan – brug trænerens uger som de er")}</label>
             {plan.coach && <div className="muted" style={{ margin: "6px 0 10px" }}>{t("Trænerplanen har faste datoer: uge 1 starter 24. aug. 2026, løbet er 30. jan. 2027. Startdato og dage nedenfor bruges kun, når trænerplanen er slået fra.")}</div>}
             <label>{t("Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge")}
@@ -1133,7 +1145,7 @@ export default function App() {
           </details>
 
           <details className="panel acc">
-            <summary><h2>{t("Dig")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Dig")}</h2><span className="acc-sum">{[p.age ? t("{n} år", { n: p.age }) : null, p.weight ? `${p.weight} kg` : null, p.restHR ? t("hvilepuls {n}", { n: p.restHR }) : null].filter(Boolean).join(" · ")}</span><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
               <label>{t("Alder")}<input type="number" value={p.age} onChange={set("age")} /></label>
               <label>{t("Vægt (kg)")}<input type="number" value={p.weight} onChange={set("weight")} /></label>
@@ -1161,7 +1173,7 @@ export default function App() {
           </details>
 
           <details className="panel acc">
-            <summary><h2>{t("Løbet")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Løbet")}</h2><span className="acc-sum">{p.raceKm ? `${p.raceKm} km` : ""}{p.raceDate ? ` · ${fmt(parseLocal(p.raceDate))}` : ""}</span><span className="chev" aria-hidden="true">›</span></summary>
             <label>{t("Navn")}<input value={p.raceName} onChange={set("raceName")} /></label>
             <div className="row2">
               <label>{t("Løbsdato")}<input type="date" value={p.raceDate} min={p.startDate} onChange={set("raceDate")} /></label>
@@ -1171,7 +1183,7 @@ export default function App() {
           </details>
 
           <details className="panel acc">
-            <summary><h2>{t("Din hverdag")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Din hverdag")}</h2><span className="acc-sum">{t("{n} løbedage", { n: p.maxRunDays })}</span><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
               <label>{t("Familie")}<select value={p.family} onChange={(e) => setP({ ...p, family: e.target.value, altWeeks: e.target.value === "kids" ? p.altWeeks : false })}>{FAMILY_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
               <label>{t("Løbedage om ugen (inkl. lang tur)")}<select value={p.maxRunDays} onChange={(e) => setP({ ...p, maxRunDays: +e.target.value })}>{[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t("{n} dage", { n })}</option>)}</select></label>
@@ -1206,7 +1218,7 @@ export default function App() {
             <div className="muted" style={{ marginTop: 6 }}>{t('Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.')}</div>
           </details>
           <details className="panel acc" open={openMore === "strength"}>
-            <summary><h2>{t("Styrke")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Styrke")}</h2><span className="acc-sum">{liftDays.length ? liftDays.map((i) => DAYS[i]).join(" + ") : t("ingen")}</span><span className="chev" aria-hidden="true">›</span></summary>
             {!plan.coach && (
               <>
                 <label>{t("Hvad vil du med kroppen?")}</label>
@@ -1223,6 +1235,7 @@ export default function App() {
             <div className="tips"><div><b>{t("Ankel · hver dag")}</b><span>{strengthPlan.daily.join(" · ")}</span></div></div>
             {plan.coach && <div className="muted" style={{ marginBottom: 14 }}>{t("Mål:")} {Object.entries(coachPlan.race.goals).map(([k, v]) => `${k} ${v}`).join(" · ")} · {t("spænde {target}.", { target: coachPlan.race.target })}</div>}
           </details>
+          <div className="group-label">{t("Data")}</div>
           <details className="panel acc">
             <summary><h2>{t("Nulstil")}</h2><span className="chev" aria-hidden="true">›</span></summary>
             <div className="reset-list">
@@ -1239,7 +1252,13 @@ export default function App() {
           {view === "plan" && (<>
           <h1 className="screen-title">{t("Plan")}</h1>
           <div className="panel">
-            <h2>{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })} · {fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))} · {t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}{plan.coach ? ` · ${t("trænerplan")}` : ""}{cur.schedLabel ? ` · ${t("skema {k}", { k: cur.schedLabel })}` : ""}</h2>
+            <div className="panel-head"><h2>{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })}</h2><span className="panel-num"><b>{cur.km}</b> km</span></div>
+            <div className="meta-chips" style={{ marginBottom: 6 }}>
+              <span className="meta-chip">{fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))}</span>
+              <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
+              {plan.coach && <span className="meta-chip">{t("trænerplan")}</span>}
+              {cur.schedLabel && <span className="meta-chip">{t("skema {k}", { k: cur.schedLabel })}</span>}
+            </div>
             {coachOfferBox}
             {adjRow && (
               <div className="adj-badge">
@@ -1344,17 +1363,20 @@ export default function App() {
             )}
 
             {view === "more" && (
+              <>
+              <div className="group-label">{t("Puls og kost")}</div>
               <details className="panel acc">
-                <summary><h2>{t("Pulszoner")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+                <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
                 <table><tbody>{zones.map(([n, lo, hi, txt]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{txt}</td></tr>)}</tbody></table>
                 <p className="muted">{t("Rolige ture under {hr}. Det føles for langsomt. Det er meningen.", { hr: Math.round(maxHR * 0.7) })}</p>
               </details>
+              </>
             )}
 
             {view === "more" && (
               <details className="panel acc">
-                <summary><h2>{t("Kost")}</h2><span className="chev" aria-hidden="true">›</span></summary>
+                <summary><h2>{t("Kost")}</h2><span className="acc-sum">{t(DIETS.find(([k]) => k === (p.diet || "all"))?.[1] || "")}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Hvilestofskifte ≈")} <b>{bmr} kcal</b>. {t("Protein")} <b>{proteinG(p.weight, p.body)} g</b> {t("hver dag. Kulhydrat følger arbejdet.")} {t(BODY.find(([k]) => k === (p.body || "keep"))?.[2])}{p.goal === "perform" ? ` ${t("Mål: tid, lidt ekstra på kvalitetsdage.")}` : ""}</p>
                 <div className="chips" style={{ marginTop: 0 }}>{BODY.map(([k, n]) => <button key={k} type="button" className={(p.body || "keep") === k ? "on" : ""} onClick={() => setP({ ...p, body: k })}>{t(n)}</button>)}</div>
                 <div className="scroll" style={{ marginTop: 10 }}><table className="macro-table"><thead><tr><th>{t("Dag")}</th><th className="num">kcal</th><th className="num">{t("Protein")}</th><th className="num">{t("Kulhydrat")}</th><th className="num">{t("Fedt")}</th></tr></thead><tbody>{macroRows.map((r) => <tr key={r.key}><td>{r.label}</td><td className="num"><b>{r.kcal}</b></td><td className="num">{r.protein} g</td><td className="num">{r.carbs} g</td><td className="num">{r.fat} g</td></tr>)}</tbody></table></div>
