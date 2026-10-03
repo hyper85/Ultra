@@ -32,8 +32,10 @@ export const shortSession = (text) => {
 const splitQuality = (q) => { const [head, ...rest] = String(q || "").split(/\s{3,}/); return { session: shortSession(head), focus: rest.join(" ").trim() }; };
 
 // "11:00", "11h", 660 (minutes) → hours
+const hhmm = (v) => { const m = /^(\d{1,2})[:h.](\d{2})(?::(\d{2}))?/.exec(String(v || "").trim()); return m ? +m[1] + +m[2] / 60 + (+m[3] || 0) / 3600 : null; };
 const hoursOf = (e) => {
   if (+e.hours > 0) return +e.hours;
+  const res = e.result && (hhmm(e.result.total) ?? hhmm(e.result.moving)); if (res) return res;
   if (+e.durationH > 0) return +e.durationH;
   if (+e.minutes > 0) return +e.minutes / 60;
   const d = String(e.duration || e.time || e.expectedTime || "").trim();
@@ -42,7 +44,7 @@ const hoursOf = (e) => {
   return null;
 };
 const WALK = /walk|march|gang|vandr|hike|marsch|trek/i;
-export const normalizeEvent = (e) => {
+export const normalizeEvent = (e, raceDate = "") => {
   const date = String(e.date || e.day || e.dato || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const name = String(e.name || e.title || e.navn || "Event");
@@ -51,7 +53,12 @@ export const normalizeEvent = (e) => {
   // Expected duration: given, else estimated (walking 5 km/t, trail racing 7.5 km/t) and marked as an estimate.
   const given = hoursOf(e);
   const hours = given ?? (km ? Math.round((km / (kind === "walk" ? 5 : 7.5)) * 10) / 10 : null);
-  return { date, name, km, kind, hours, hoursEst: given == null && hours != null, vert: +(e.vert ?? e.elevation ?? 0) || 0, start: e.start || e.startTime || "", note: e.note || e.notes || e.focus || "", url: e.url || "" };
+  const r = e.result && typeof e.result === "object" ? e.result : null;
+  return { date, name, km, kind, hours, hoursEst: given == null && hours != null, vert: +(e.vert ?? e.elevation ?? 0) || 0, start: e.start || e.startTime || "",
+    note: [e.venue, e.mode, e.note || e.notes || e.focus].filter(Boolean).join(" · "), url: e.url || "",
+    done: e.status === "done" || !!r, result: r ? { km: +r.km || null, total: r.total || "", moving: r.moving || "", ascent: +r.ascent || null, avgHR: +r.avgHR || null } : null,
+    // the A-race itself (Hammer Trail) is the plan's race week, not an extra event on top of it
+    main: /a-?race/i.test(String(e.type || "")) || (!!raceDate && date === raceDate) };
 };
 
 // Hammer Trail Winter: 4 laps of 21.2 km. Targets for sub-12 include a 5-minute stop budget per lap; the cutoff
@@ -69,10 +76,20 @@ export function normalizeCoachPlan(raw) {
   }).filter((w) => /^\d{4}-\d{2}-\d{2}$/.test(w.start));
   const st = r.strength || {};
   const pick = (re) => { const k = Object.keys(st).find((x) => re.test(x)); return k ? st[k] : null; };
-  const strength = { A: pick(/^A[_-]/i) || bundled.strength.A_mon_lower, B: pick(/^B[_-]/i) || bundled.strength.B_tue_upper, daily: st.daily_ankle || bundled.strength.daily_ankle, rule: st.rule || (r === bundled ? bundled.strength.rule : "") };
+  // Sessions by weekday, read from the key ("B_tue_upper" = Styrke B on Tuesday, upper body). A key without a day
+  // falls back to the plan's lift days in order.
+  const DAYKEY = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const sessions = Object.keys(st).filter((k) => /^[A-C][_-]/i.test(k) && Array.isArray(st[k])).sort().map((k) => ({ key: k[0].toUpperCase(), list: st[k], day: DAYKEY.findIndex((d) => new RegExp(`(^|_)${d}(_|$)`, "i").test(k)), upper: /upper|over/i.test(k), lower: /lower|leg|ben/i.test(k) }));
+  sessions.forEach((x, i) => { if (x.day < 0) x.day = W.liftDays?.[i] ?? -1; });
+  const byDay = {}; for (const x of sessions) if (x.day >= 0) byDay[x.day] = x;
+  const strength = { byDay, sessions, A: sessions.find((x) => x.key === "A")?.list || [], B: sessions.find((x) => x.key === "B")?.list || [], daily: st.daily_ankle || bundled.strength?.daily_ankle || [], rule: st.rule || "" };
   const race = { ...bundled.race, ...(r.race || {}) };
-  const lapPlan = r.race?.lapPlan || r.lapPlan || (/hammer/i.test(race.name || "") ? HAMMER_LAPS : null);
-  const events = (r.events || []).map(normalizeEvent).filter(Boolean).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const rr = r.race || {};
+  const fromFields = +rr.laps > 0 && Array.isArray(rr.lapTargetsSub12) && rr.lapTargetsSub12.length
+    ? { start: rr.start || "06:00", laps: rr.lapTargetsSub12.map((target) => ({ km: +rr.lapKm || Math.round(((+rr.km || 0) / +rr.laps) * 10) / 10, target })), stopMin: +rr.stopBudgetMinPerLap || 0, cutoff: rr.cutoff || "", cutoffAfterLap: +rr.cutoffAfterLap || +rr.laps - 1 }
+    : null;
+  const lapPlan = rr.lapPlan || r.lapPlan || fromFields || (/hammer/i.test(race.name || "") ? HAMMER_LAPS : null);
+  const events = (r.events || []).map((e) => normalizeEvent(e, race.date)).filter(Boolean).sort((a, b) => (a.date < b.date ? -1 : 1));
   return { version: r.planVersion || r.version || null, race, week: W, weeks, strength, events, lapPlan, bundled: r === bundled };
 }
 

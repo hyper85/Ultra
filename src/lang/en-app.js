@@ -114,13 +114,6 @@ export default {
   "Volumen ned, friskhed op. Logistik og kit på plads.": "Volume down, freshness up. Logistics and kit sorted.",
 
   // ---- coach plan (src/data/coach-plan.json): sessions
-  "Stigninger 4×20s": "Strides 4×20s",
-  "Stigninger 6×20s": "Strides 6×20s",
-  "Stigninger + 10 min tempo": "Strides + 10 min tempo",
-  "Bakker 8×90s": "Hills 8×90s",
-  "6×3 min tærskel på bakker": "6×3 min threshold on hills",
-  "Stigninger + 2×10 min tempo": "Strides + 2×10 min tempo",
-  "Åbnere 4×2 min": "Openers 4×2 min",
 
   // ---- coach plan: week focus
 
@@ -143,7 +136,6 @@ export default {
   "OH press 3×8": "OH press 3×8",
   "Farmer's carry 3×40m": "Farmer's carry 3×40m",
   "Pallof/side plank 3/side": "Pallof/side plank 3/side",
-  "Man: rolig tur + ben om aftenen (6+ timer efter løbet). Tir: overkrop. Ons: tærskel, ingen styrke. Tor: rolig tur, ingen styrke. I ugerne med 38+ km lørdag (17–19): ben let, 2 sæt, ingen udfald.": "Mon: easy run + legs in the evening (6+ hours after the run). Tue: upper body. Wed: threshold, no strength. Thu: easy run, no strength. In the weeks with 38+ km on Saturday (17–19): legs light, 2 sets, no lunges.",
   "Single-leg calf raise 3×12": "Single-leg calf raise 3×12",
   "1-leg balance 2×60s": "1-leg balance 2×60s",
   "Banded inversion/eversion 2×15": "Banded inversion/eversion 2×15",

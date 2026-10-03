@@ -1,574 +1,591 @@
 {
-  "planVersion": "v4",
-  "source": "Hammer_Trail_Winter_50mi_Program-8.xlsx, Plan-fanen (samme data som coach-plan.json v4)",
-  "athlete": {
-    "name": "Hyper",
-    "age": 41,
-    "height": 181,
-    "weight": 89,
-    "restHR": 49,
-    "maxHR": 186,
-    "goalWeight": 85
+ "athlete": {
+  "name": "Hyper",
+  "age": 41,
+  "height": 181,
+  "weight": 89,
+  "restHR": 49,
+  "maxHR": 186,
+  "goalWeight": 85
+ },
+ "race": {
+  "name": "Hammer Trail Winter 50 miles",
+  "date": "2027-01-30",
+  "km": 84.8,
+  "vert": 3384,
+  "goals": {
+   "Aplus": "11:11:11",
+   "A": "sub 12:00",
+   "B": "sub 13:00",
+   "C": "finish",
+   "buckle": "12:30"
   },
-  "race": {
-    "name": "Hammer Trail Winter 50 miles",
-    "date": "2027-01-30",
-    "km": 83,
-    "vert": 3400,
-    "goals": {
-      "A+": "11:11:11",
-      "A": "sub-12",
-      "B": "sub-13",
-      "C": "finish",
-      "Buckle": "12:30"
-    },
-    "target": "sub-12:30",
-    "lapPlan": {
-      "start": "06:00",
-      "laps": [
-        {
-          "km": 21.2,
-          "target": "2:40"
-        },
-        {
-          "km": 21.2,
-          "target": "2:50"
-        },
-        {
-          "km": 21.2,
-          "target": "3:10"
-        },
-        {
-          "km": 21.2,
-          "target": "3:20"
-        }
-      ],
-      "stopMin": 5,
-      "cutoff": "16:00",
-      "cutoffAfterLap": 3
-    }
-  },
-  "week": {
-    "runDays": [
-      0,
-      2,
-      3,
-      5
-    ],
-    "liftDays": [
-      0,
-      1
-    ],
-    "qualityDay": 2,
-    "longDay": 5,
-    "b2bDay": 6
-  },
-  "strength": {
-    "A_mon_lower": [
-      "Squat 4×5",
-      "RDL 3×6",
-      "Lunge/step-up 3×8/ben",
-      "Calf raise 4×10 + single-leg eccentric 3×8",
-      "Copenhagen plank 3×20s"
-    ],
-    "B_tue_upper": [
-      "Bænk/DB press 4×6",
-      "Row 4×8",
-      "Pull-ups 3×max-2",
-      "OH press 3×8",
-      "Farmer's carry 3×40m",
-      "Pallof/side plank 3/side"
-    ],
-    "daily_ankle": [
-      "Single-leg calf raise 3×12",
-      "1-leg balance 2×60s",
-      "Banded inversion/eversion 2×15"
-    ],
-    "rule": "Man: rolig tur + ben om aftenen (6+ timer efter løbet). Tir: overkrop. Ons: tærskel, ingen styrke. Tor: rolig tur, ingen styrke. I ugerne med 38+ km lørdag (17–19): ben let, 2 sæt, ingen udfald."
-  },
-  "principles": [
-    "Planens tal er et loft, ikke et gulv",
-    "Rådet overstyrer planen",
-    "Mine dage er mine dage"
+  "laps": 4,
+  "lapKm": 21.2,
+  "cutoff": "16:00",
+  "start": "06:00",
+  "lapTargetsSub12": [
+   "2:40",
+   "2:50",
+   "3:10",
+   "3:20"
   ],
-  "events": [
-    {
-      "date": "2026-10-03",
-      "name": "Mammut March",
-      "km": 50,
-      "type": "walk",
-      "hours": 11.05,
-      "start": "",
-      "note": "Aarhus. Erstatter ugens lange tur – ingen tærskel i denne uge."
-    },
-    {
-      "date": "2026-10-25",
-      "name": "BakkeTrail",
-      "km": 25,
-      "type": "trail",
-      "note": "Eventyrsport BakkeTrail, Svanninge. Kort tærskel onsdag og kun 5 km lørdag i løbsugen."
-    }
+  "stopBudgetMinPerLap": 5
+ },
+ "week": {
+  "runDays": [
+   0,
+   2,
+   3,
+   5
   ],
-  "weeks": [
-    {
-      "n": 1,
-      "iso": 35,
-      "start": "2026-08-24",
-      "phase": "Rebuild",
-      "km": 22,
-      "days": [
-        5,
-        0,
-        4,
-        3,
-        0,
-        10,
-        0
-      ],
-      "session": "Kun roligt",
-      "focus": "RETURN WEEK. Everything easy, flat, soft surfaces where possible. Ankle rule all month: zero pain that changes your stride, and no swelling next morning.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 2,
-      "iso": 36,
-      "start": "2026-08-31",
-      "phase": "Rebuild",
-      "km": 26,
-      "days": [
-        6,
-        0,
-        4,
-        4,
-        0,
-        12,
-        0
-      ],
-      "session": "Stigninger 4×20s",
-      "focus": "Still rebuilding. Add 4 relaxed strides after one easy run. Daily single-leg calf raises + balance work start now (see Microcycle) — that's the ankle insurance.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 3,
-      "iso": 37,
-      "start": "2026-09-07",
-      "phase": "Rebuild",
-      "km": 30,
-      "days": [
-        6,
-        0,
-        5,
-        5,
-        0,
-        14,
-        0
-      ],
-      "session": "6×2 min tærskel",
-      "focus": "Back at your old baseline. First quality session — modest on purpose. Every easy run stays true Zone 2: conversational, nose-breathing. Sat 14k = one lap of 'Lerbjerg fra Svanninge' (Wikiloc, 14.6 km / 500 m+) — Z2, hike the climbs, note the lap time.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 4,
-      "iso": 38,
-      "start": "2026-09-14",
-      "phase": "Rebuild",
-      "km": 22,
-      "days": [
-        5,
-        0,
-        4,
-        3,
-        0,
-        10,
-        0
-      ],
-      "session": "Stigninger 6×20s",
-      "focus": "DELOAD. Absorb the return. Sleep +1h, mobility daily. If the ankle has been quiet for 4 weeks, the rebuild worked.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 5,
-      "iso": 39,
-      "start": "2026-09-21",
-      "phase": "Build",
-      "km": 33,
-      "days": [
-        7,
-        0,
-        5,
-        5,
-        0,
-        16,
-        0
-      ],
-      "session": "8×2 min tærskel",
-      "focus": "Volume climbs past the old normal. Fuel the long run with 40g carbs/hr — gut training starts now, not in January.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 6,
-      "iso": 40,
-      "start": "2026-09-28",
-      "phase": "Build",
-      "km": 38,
-      "days": [
-        8,
-        0,
-        6,
-        6,
-        0,
-        18,
-        0
-      ],
-      "session": "Kun roligt",
-      "focus": "Done: 51 km / 11:03 total (9:28 moving) / 652 m+ / HR 95 avg, no drift. Lesson: 1:35 of stops — Bornholm budget is ~20 min total.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 7,
-      "iso": 41,
-      "start": "2026-10-05",
-      "phase": "Build",
-      "km": 25,
-      "days": [
-        0,
-        0,
-        6,
-        5,
-        0,
-        14,
-        0
-      ],
-      "session": "Kun roligt",
-      "focus": "RECOVERY WEEK. Resting HR must be back near 49 by Thursday. Sat: first Svanninge — ONE lap of 'Lerbjerg fra Svanninge' (14.6 km / 500 m+) fully easy, hike every climb, poles from the first metre. If resting HR is still ≥52 on Thursday → 14 km flat in Odense instead. Wed PM legs: 2 light sets only.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 8,
-      "iso": 42,
-      "start": "2026-10-12",
-      "phase": "Build",
-      "km": 38,
-      "days": [
-        7,
-        0,
-        8,
-        6,
-        0,
-        17,
-        0
-      ],
-      "session": "8×2 min tærskel",
-      "focus": "Back into the build. Sat: Lerbjerg 1 lap + ~3 km out-and-back, poles all the way, 45–55 g carbs/hr. Wed PM legs: full session.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 9,
-      "iso": 43,
-      "start": "2026-10-19",
-      "phase": "Build",
-      "km": 48,
-      "days": [
-        6,
-        0,
-        7,
-        5,
-        0,
-        5,
-        25
-      ],
-      "session": "4×3 min tærskel",
-      "focus": "RACE WEEK: Eventyrsport BakkeTrail 25 km, Svanninge, SUN 25 Oct. Train the first 20 km (hike every climb, HR <140, 60 g carbs/hr, full race kit + poles), race the last 5 only if the legs say yes. Sat: 5 km shakeout. Wed PM legs: 2 sets, no heavy eccentric calf work.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 10,
-      "iso": 44,
-      "start": "2026-10-26",
-      "phase": "Build",
-      "km": 43,
-      "days": [
-        0,
-        0,
-        9,
-        8,
-        0,
-        26,
-        0
-      ],
-      "session": "25 min tempo",
-      "focus": "Closing the build block. Mon: REST after BakkeTrail. Long run 26k in Svanninge (~1.75 laps) — full fuelling rhythm, drink on a 20-min schedule.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 11,
-      "iso": 45,
-      "start": "2026-11-02",
-      "phase": "Ultra Prep",
-      "km": 56,
-      "days": [
-        6,
-        0,
-        5,
-        5,
-        0,
-        28,
-        12
-      ],
-      "session": "Bakker 8×90s",
-      "focus": "FIRST BACK-TO-BACK: Sat 28k + Sun 12k easy — running on tired legs is THE ultra skill. Power-hike the steep stuff on purpose.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 12,
-      "iso": 46,
-      "start": "2026-11-09",
-      "phase": "Ultra Prep",
-      "km": 61,
-      "days": [
-        7,
-        0,
-        5,
-        5,
-        0,
-        30,
-        14
-      ],
-      "session": "2×15 min tempo",
-      "focus": "Sat 30k / Sun 14k. It's dark by 16:30 now — do part of a weekend run with your headlamp. Race starts at 06:00 in the dark.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 13,
-      "iso": 47,
-      "start": "2026-11-16",
-      "phase": "Ultra Prep",
-      "km": 42,
-      "days": [
-        10,
-        0,
-        7,
-        7,
-        0,
-        18,
-        0
-      ],
-      "session": "Stigninger + 10 min tempo",
-      "focus": "DELOAD. Down week — recover hard so the December weekends land.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 14,
-      "iso": 48,
-      "start": "2026-11-23",
-      "phase": "Ultra Prep",
-      "km": 66,
-      "days": [
-        8,
-        0,
-        6,
-        5,
-        0,
-        32,
-        15
-      ],
-      "session": "6×3 min tærskel på bakker",
-      "focus": "Sat 32k / Sun 15k. Full winter kit test: layers, gloves, buff, headlamp. Learn what you sweat through and what you freeze in.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 15,
-      "iso": 49,
-      "start": "2026-11-30",
-      "phase": "Ultra Prep",
-      "km": 72,
-      "days": [
-        8,
-        0,
-        6,
-        7,
-        0,
-        35,
-        16
-      ],
-      "session": "Løbstempo 2×15 min",
-      "focus": "Sat 35k / Sun 16k. Practise eating with cold hands — gels get stiff, zips get hard. 60g carbs/hr minimum now.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 16,
-      "iso": 50,
-      "start": "2026-12-07",
-      "phase": "Ultra Prep",
-      "km": 47,
-      "days": [
-        10,
-        0,
-        8,
-        7,
-        0,
-        22,
-        0
-      ],
-      "session": "Stigninger + 2×10 min tempo",
-      "focus": "DELOAD before the two biggest weeks of the plan.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 17,
-      "iso": 51,
-      "start": "2026-12-14",
-      "phase": "Ultra Prep",
-      "km": 76,
-      "days": [
-        8,
-        0,
-        6,
-        6,
-        0,
-        38,
-        18
-      ],
-      "session": "3×10 min tærskel",
-      "focus": "Sat 38k / Sun 18k. Biggest training load of your life so far — protect sleep and eat at maintenance all week.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 18,
-      "iso": 52,
-      "start": "2026-12-21",
-      "phase": "Ultra Prep",
-      "km": 80,
-      "days": [
-        8,
-        0,
-        6,
-        6,
-        0,
-        40,
-        20
-      ],
-      "session": "2×20 min tempo",
-      "focus": "CHRISTMAS WEEK — use the holiday daylight: Sat 40k / Sun 20k, unhurried, daytime, fully fuelled. Peak weekly volume of the plan.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 19,
-      "iso": 53,
-      "start": "2026-12-28",
-      "phase": "Ultra Prep",
-      "km": 72,
-      "days": [
-        6,
-        0,
-        4,
-        5,
-        0,
-        42,
-        15
-      ],
-      "session": "Løbstempo 2×15 min",
-      "focus": "DRESS REHEARSAL weekend: Sat 42k = 3 laps of the Lerbjerg loop (~1,500 m+) at Svanninge Bakker in full race kit, race fuelling (60-90g/hr), hills, part in the dark. Sun 15k shuffle. After this, the hay is in the barn.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 20,
-      "iso": 1,
-      "start": "2027-01-04",
-      "phase": "Taper",
-      "km": 53,
-      "days": [
-        7,
-        0,
-        5,
-        5,
-        0,
-        26,
-        10
-      ],
-      "session": "2×12 min tempo",
-      "focus": "Step down begins. Sat 26k / Sun 10k — last meaningful weekend. Book ferry/accommodation logistics now, not race week.",
-      "deload": false,
-      "race": false
-    },
-    {
-      "n": 21,
-      "iso": 2,
-      "start": "2027-01-11",
-      "phase": "Taper",
-      "km": 44,
-      "days": [
-        10,
-        0,
-        7,
-        7,
-        0,
-        20,
-        0
-      ],
-      "session": "Løbstempo 2×10 min",
-      "focus": "Volume drops, legs sharpen. Test your complete race-day layering one more time on the Sat 20k.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 22,
-      "iso": 3,
-      "start": "2027-01-18",
-      "phase": "Taper",
-      "km": 31,
-      "days": [
-        7,
-        0,
-        5,
-        5,
-        0,
-        14,
-        0
-      ],
-      "session": "Åbnere 4×2 min",
-      "focus": "Deep taper. Carbs up, stress down, sleep banked. Lay out full kit + drop bag; charge headlamps, pack spare batteries.",
-      "deload": true,
-      "race": false
-    },
-    {
-      "n": 23,
-      "iso": 4,
-      "start": "2027-01-25",
-      "phase": "Taper",
-      "km": 98,
-      "days": [
-        4,
-        0,
-        4,
-        4,
-        3,
-        83,
-        0
-      ],
-      "session": "Åbnere 3×1 min",
-      "focus": "★ HAMMER TRAIL WINTER 50 MILES (Sat 06:00). Start absurdly easy in the dark, hike every climb, eat from minute 30 and never stop. Then 2-3 weeks off running.",
-      "deload": false,
-      "race": true
-    }
-  ]
+  "liftDays": [
+   1,
+   2
+  ],
+  "qualityDay": 2,
+  "longDay": 5,
+  "b2bDay": 6
+ },
+ "weeks": [
+  {
+   "week": 1,
+   "isoWeek": 35,
+   "start": "2026-08-24",
+   "phase": "Rebuild",
+   "km": 22,
+   "days": [
+    5,
+    0,
+    4,
+    3,
+    0,
+    10,
+    0
+   ],
+   "long": 10,
+   "quality": "Easy running only — no hard session this week.   RETURN WEEK. Everything easy, flat, soft surfaces where possible. Ankle rule all month: zero pain that changes your stride, and no swelling next morning.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 2,
+   "isoWeek": 36,
+   "start": "2026-08-31",
+   "phase": "Rebuild",
+   "km": 26,
+   "days": [
+    6,
+    0,
+    4,
+    4,
+    0,
+    12,
+    0
+   ],
+   "long": 12,
+   "quality": "Strides (Wed): Strides only — 4 reps of 20 sec.   Still rebuilding. Add 4 relaxed strides after one easy run. Daily single-leg calf raises + balance work start now (see Microcycle) — that's the ankle insurance.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 3,
+   "isoWeek": 37,
+   "start": "2026-09-07",
+   "phase": "Rebuild",
+   "km": 30,
+   "days": [
+    6,
+    0,
+    5,
+    5,
+    0,
+    14,
+    0
+   ],
+   "long": 14,
+   "quality": "Threshold (Wed): 6 reps of 2 min at threshold (Zone 4), 2 min jog.   Back at your old baseline. First quality session — modest on purpose. Every easy run stays true Zone 2: conversational, nose-breathing. Sat 14k = one lap of 'Lerbjerg fra Svanninge' (Wikiloc, 14.6 km / 500 m+) — Z2, hike the climbs, note the lap time.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 4,
+   "isoWeek": 38,
+   "start": "2026-09-14",
+   "phase": "Rebuild",
+   "km": 22,
+   "days": [
+    5,
+    0,
+    4,
+    3,
+    0,
+    10,
+    0
+   ],
+   "long": 10,
+   "quality": "Strides (Wed): Strides only — 6 reps of 20 sec.   DELOAD. Absorb the return. Sleep +1h, mobility daily. If the ankle has been quiet for 4 weeks, the rebuild worked.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 5,
+   "isoWeek": 39,
+   "start": "2026-09-21",
+   "phase": "Build",
+   "km": 33,
+   "days": [
+    7,
+    0,
+    5,
+    5,
+    0,
+    16,
+    0
+   ],
+   "long": 16,
+   "quality": "Threshold (Wed): 8 reps of 2 min at threshold (Zone 4).   Volume climbs past the old normal. Fuel the long run with 40g carbs/hr — gut training starts now, not in January.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 6,
+   "isoWeek": 40,
+   "start": "2026-09-28",
+   "phase": "Build",
+   "km": 38,
+   "days": [
+    8,
+    0,
+    6,
+    6,
+    0,
+    18,
+    0
+   ],
+   "long": 18,
+   "quality": "EVENT WEEK: Mammut March 50 km (Aarhus, Sat 3 Oct) replaced the long run — no threshold this week.   Done: 51 km / 11:03 total (9:28 moving) / 652 m+ / HR 95 avg, no drift. Lesson: 1:35 of stops — Bornholm budget is ~20 min total.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 7,
+   "isoWeek": 41,
+   "start": "2026-10-05",
+   "phase": "Build",
+   "km": 25,
+   "days": [
+    0,
+    0,
+    6,
+    5,
+    0,
+    14,
+    0
+   ],
+   "long": 14,
+   "quality": "No quality (Wed) — recovery after Mammut March.   RECOVERY WEEK. Resting HR must be back near 49 by Thursday. Sat: first Svanninge — ONE lap of 'Lerbjerg fra Svanninge' (14.6 km / 500 m+) fully easy, hike every climb, poles from the first metre. If resting HR is still ≥52 on Thursday → 14 km flat in Odense instead. Wed PM legs: 2 light sets only.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 8,
+   "isoWeek": 42,
+   "start": "2026-10-12",
+   "phase": "Build",
+   "km": 38,
+   "days": [
+    7,
+    0,
+    8,
+    6,
+    0,
+    17,
+    0
+   ],
+   "long": 17,
+   "quality": "Threshold (Wed): 8 × 2 min on 5–6% treadmill incline, HR 160–170, 2 min easy between.   Back into the build. Sat: Lerbjerg 1 lap + ~3 km out-and-back, poles all the way, 45–55 g carbs/hr. Wed PM legs: full session.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 9,
+   "isoWeek": 43,
+   "start": "2026-10-19",
+   "phase": "Build",
+   "km": 48,
+   "days": [
+    6,
+    0,
+    7,
+    5,
+    0,
+    5,
+    25
+   ],
+   "long": 25,
+   "quality": "Threshold (Wed): 4 × 3 min at threshold, 2 min jog — shortened, race on Sunday.   RACE WEEK: Eventyrsport BakkeTrail 25 km, Svanninge, SUN 25 Oct. Train the first 20 km (hike every climb, HR <140, 60 g carbs/hr, full race kit + poles), race the last 5 only if the legs say yes. Sat: 5 km shakeout. Wed PM legs: 2 sets, no heavy eccentric calf work.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 10,
+   "isoWeek": 44,
+   "start": "2026-10-26",
+   "phase": "Build",
+   "km": 43,
+   "days": [
+    0,
+    0,
+    9,
+    8,
+    0,
+    26,
+    0
+   ],
+   "long": 26,
+   "quality": "Tempo (Wed): 25 min tempo (Zone 3).   Closing the build block. Mon: REST after BakkeTrail. Long run 26k in Svanninge (~1.75 laps) — full fuelling rhythm, drink on a 20-min schedule.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 11,
+   "isoWeek": 45,
+   "start": "2026-11-02",
+   "phase": "Ultra Prep",
+   "km": 56,
+   "days": [
+    6,
+    0,
+    5,
+    5,
+    0,
+    28,
+    12
+   ],
+   "long": 28,
+   "quality": "Hills (Wed): Hill repeats 8 reps of 90 sec.   FIRST BACK-TO-BACK: Sat 28k + Sun 12k easy — running on tired legs is THE ultra skill. Power-hike the steep stuff on purpose.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 12,
+   "isoWeek": 46,
+   "start": "2026-11-09",
+   "phase": "Ultra Prep",
+   "km": 61,
+   "days": [
+    7,
+    0,
+    5,
+    5,
+    0,
+    30,
+    14
+   ],
+   "long": 30,
+   "quality": "Tempo (Wed): 2 reps of 15 min tempo (Zone 3).   Sat 30k / Sun 14k. It's dark by 16:30 now — do part of a weekend run with your headlamp. Race starts at 06:00 in the dark.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 13,
+   "isoWeek": 47,
+   "start": "2026-11-16",
+   "phase": "Ultra Prep",
+   "km": 42,
+   "days": [
+    10,
+    0,
+    7,
+    7,
+    0,
+    18,
+    0
+   ],
+   "long": 18,
+   "quality": "Tempo (Wed): Strides + 10 min tempo.   DELOAD. Down week — recover hard so the December weekends land.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 14,
+   "isoWeek": 48,
+   "start": "2026-11-23",
+   "phase": "Ultra Prep",
+   "km": 66,
+   "days": [
+    8,
+    0,
+    6,
+    5,
+    0,
+    32,
+    15
+   ],
+   "long": 32,
+   "quality": "Threshold (Wed): 6 reps of 3 min threshold on rolling hills.   Sat 32k / Sun 15k. Full winter kit test: layers, gloves, buff, headlamp. Learn what you sweat through and what you freeze in.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 15,
+   "isoWeek": 49,
+   "start": "2026-11-30",
+   "phase": "Ultra Prep",
+   "km": 72,
+   "days": [
+    8,
+    0,
+    6,
+    7,
+    0,
+    35,
+    16
+   ],
+   "long": 35,
+   "quality": "Race-pace (Wed): Race-pace 2 reps of 15 min.   Sat 35k / Sun 16k. Practise eating with cold hands — gels get stiff, zips get hard. 60g carbs/hr minimum now.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 16,
+   "isoWeek": 50,
+   "start": "2026-12-07",
+   "phase": "Ultra Prep",
+   "km": 47,
+   "days": [
+    10,
+    0,
+    8,
+    7,
+    0,
+    22,
+    0
+   ],
+   "long": 22,
+   "quality": "Tempo (Wed): Strides + 2 reps of 10 min tempo.   DELOAD before the two biggest weeks of the plan.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 17,
+   "isoWeek": 51,
+   "start": "2026-12-14",
+   "phase": "Ultra Prep",
+   "km": 76,
+   "days": [
+    8,
+    0,
+    6,
+    6,
+    0,
+    38,
+    18
+   ],
+   "long": 38,
+   "quality": "Threshold (Wed): 3 reps of 10 min threshold (Zone 4), 2 min jog.   Sat 38k / Sun 18k. Biggest training load of your life so far — protect sleep and eat at maintenance all week.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 18,
+   "isoWeek": 52,
+   "start": "2026-12-21",
+   "phase": "Ultra Prep",
+   "km": 80,
+   "days": [
+    8,
+    0,
+    6,
+    6,
+    0,
+    40,
+    20
+   ],
+   "long": 40,
+   "quality": "Tempo (Wed): 2 reps of 20 min tempo (Zone 3).   CHRISTMAS WEEK — use the holiday daylight: Sat 40k / Sun 20k, unhurried, daytime, fully fuelled. Peak weekly volume of the plan.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 19,
+   "isoWeek": 53,
+   "start": "2026-12-28",
+   "phase": "Ultra Prep",
+   "km": 72,
+   "days": [
+    6,
+    0,
+    4,
+    5,
+    0,
+    42,
+    15
+   ],
+   "long": 42,
+   "quality": "Race-pace (Wed): Race-pace 2 reps of 15 min.   DRESS REHEARSAL weekend: Sat 42k = 3 laps of the Lerbjerg loop (~1,500 m+) at Svanninge Bakker in full race kit, race fuelling (60-90g/hr), hills, part in the dark. Sun 15k shuffle. After this, the hay is in the barn.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 20,
+   "isoWeek": 1,
+   "start": "2027-01-04",
+   "phase": "Taper",
+   "km": 53,
+   "days": [
+    7,
+    0,
+    5,
+    5,
+    0,
+    26,
+    10
+   ],
+   "long": 26,
+   "quality": "Tempo (Wed): 2 reps of 12 min tempo (Zone 3).   Step down begins. Sat 26k / Sun 10k — last meaningful weekend. Book ferry/accommodation logistics now, not race week.",
+   "focus": null,
+   "deload": false,
+   "race": false
+  },
+  {
+   "week": 21,
+   "isoWeek": 2,
+   "start": "2027-01-11",
+   "phase": "Taper",
+   "km": 44,
+   "days": [
+    10,
+    0,
+    7,
+    7,
+    0,
+    20,
+    0
+   ],
+   "long": 20,
+   "quality": "Race-pace (Wed): Race-pace 2 reps of 10 min.   Volume drops, legs sharpen. Test your complete race-day layering one more time on the Sat 20k.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 22,
+   "isoWeek": 3,
+   "start": "2027-01-18",
+   "phase": "Taper",
+   "km": 31,
+   "days": [
+    7,
+    0,
+    5,
+    5,
+    0,
+    14,
+    0
+   ],
+   "long": 14,
+   "quality": "Strides (Wed): Openers 4 reps of 2 min at race effort.   Deep taper. Carbs up, stress down, sleep banked. Lay out full kit + drop bag; charge headlamps, pack spare batteries.",
+   "focus": null,
+   "deload": true,
+   "race": false
+  },
+  {
+   "week": 23,
+   "isoWeek": 4,
+   "start": "2027-01-25",
+   "phase": "Taper",
+   "km": 98,
+   "days": [
+    4,
+    0,
+    4,
+    4,
+    3,
+    83,
+    0
+   ],
+   "long": 83,
+   "quality": "Strides (Wed): Openers 3 reps of 1 min.   ★ HAMMER TRAIL WINTER 50 MILES (Sat 06:00). Start absurdly easy in the dark, hike every climb, eat from minute 30 and never stop. Then 2-3 weeks off running.",
+   "focus": null,
+   "deload": false,
+   "race": true
+  }
+ ],
+ "strength": {
+  "B_tue_upper": [
+   "Bænk/DB press 4×6",
+   "Row 4×8",
+   "Pull-ups 3×max-2",
+   "OH press 3×8",
+   "Farmer's carry 3×40m",
+   "Pallof/side plank 3/side"
+  ],
+  "A_wed_pm_lower": [
+   "Squat 4×5",
+   "RDL 3×6",
+   "Lunge/step-up 3×8/ben",
+   "Calf raise 4×10 + single-leg eccentric 3×8",
+   "Copenhagen plank 3×20s"
+  ],
+  "daily_ankle": [
+   "Single-leg calf raise 3×12",
+   "1-leg balance 2×60s",
+   "Banded inversion/eversion 2×15"
+  ],
+  "rule": "Tue PM upper. Wed: threshold AM, legs PM (6+ h later). Thu: easy run, no strength."
+ },
+ "planVersion": "2026-10-04 · v4 — weeks 7–10 rebuilt around Mammut March + BakkeTrail",
+ "events": [
+  {
+   "date": "2026-10-03",
+   "name": "Mammut March (Aarhus)",
+   "type": "walk",
+   "km": 50,
+   "replacesLongRun": true,
+   "status": "done",
+   "result": {
+    "km": 51.0,
+    "total": "11:03:26",
+    "moving": "9:28:31",
+    "ascent": 652,
+    "avgHR": 95
+   }
+  },
+  {
+   "date": "2026-10-25",
+   "name": "Eventyrsport BakkeTrail",
+   "type": "race",
+   "km": 25,
+   "venue": "Svanninge Bakker",
+   "mode": "training-race: train first 20 km, race last 5"
+  },
+  {
+   "date": "2027-01-30",
+   "name": "Hammer Trail Winter 50 miles",
+   "type": "A-race",
+   "km": 84.8,
+   "vert": 3384
+  }
+ ]
 }

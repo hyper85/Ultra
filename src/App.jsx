@@ -84,7 +84,7 @@ export function buildCoachPlan(p) {
   let recoverFrom = null;
   const rows = CP.weeks.map((w) => {
     const days = [...w.days];
-    const ev = eventsInWeek(CP.events, w.start);
+    const ev = eventsInWeek(CP.events.filter((e) => !e.main), w.start);
     for (const [i, e] of Object.entries(ev)) days[i] = e.kind === "walk" ? 0 : e.km || days[i];
     let session = w.session, focus = w.focus, deload = !!w.deload, recovery = null;
     if (recoverFrom) {
@@ -470,8 +470,9 @@ export default function App() {
   const plan = useMemo(() => (p.coachMode !== false ? buildCoachPlan(p) : buildPlan(p)), [p]);
   const CP = useMemo(() => activeCoachPlan(p), [p.coachPlan]); // eslint-disable-line react-hooks/exhaustive-deps
   const liftDays = plan.coach ? CP.week.liftDays : p.liftDays;
-  const liftName = (i) => { const k = liftDays.indexOf(i); return t(k === 0 ? "Styrke A" : k === 1 ? "Styrke B" : k === 2 ? "Styrke C" : "Styrke"); };
-  const liftShort = (i) => { const k = liftDays.indexOf(i); return k >= 0 && k < 3 ? "S" + "ABC"[k] : "S"; }; // "SA"/"SB" in the small week strip
+  const liftLetter = (i) => { if (plan.coach && CP.strength.byDay[i]) return CP.strength.byDay[i].key; const k = liftDays.indexOf(i); return k >= 0 && k < 3 ? "ABC"[k] : ""; };
+  const liftName = (i) => { const l = liftLetter(i); return t(l ? `Styrke ${l}` : "Styrke"); };
+  const liftShort = (i) => "S" + liftLetter(i); // "SA"/"SB" in the small week strip
   const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
   // Calendar days from today's date to the race date, not from the clock: counted from midnight, so the number only
@@ -479,7 +480,7 @@ export default function App() {
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - parseLocal(ymd(new Date()))) / 86400000));
   const todayKey = ymd(thisMonday());
   // The next event from the coach plan (today included), for the countdown on I dag.
-  const nextEvent = useMemo(() => { if (p.coachMode === false) return null; const today = ymd(new Date()); const e = activeCoachPlan(p).events.find((x) => x.date >= today); return e ? { ...e, days: Math.round((parseLocal(e.date) - parseLocal(today)) / 86400000) } : null; }, [p.coachPlan, p.coachMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nextEvent = useMemo(() => { if (p.coachMode === false) return null; const today = ymd(new Date()); const e = activeCoachPlan(p).events.find((x) => x.date >= today && !x.main); return e ? { ...e, days: Math.round((parseLocal(e.date) - parseLocal(today)) / 86400000) } : null; }, [p.coachPlan, p.coachMode]); // eslint-disable-line react-hooks/exhaustive-deps
   const lastPlanRow = plan.rows[plan.rows.length - 1];
   const curBase = plan.rows.find((r) => r.key === todayKey) || (todayKey > lastPlanRow.key ? lastPlanRow : plan.rows[0]);
   const todayStr = ymd(new Date());
@@ -610,7 +611,7 @@ export default function App() {
   // Used for the current week on Plan and for any week unfolded under "Alle uger".
   const renderGuide = (r) => (
     <div className="guide">
-      {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
+      {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
         : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
@@ -841,7 +842,12 @@ export default function App() {
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
   const strengthPlan = useMemo(() => {
-    if (plan.coach) { const st = CP.strength; const mk = (key, name, focus, list) => ({ key, name, focus, exercises: list.map((x) => ({ name: x, label: t(x) })) }); return { sessions: [mk("A", t("Styrke A"), t("Ben og hofte"), st.A), mk("B", t("Styrke B"), t("Overkrop og core"), st.B)], daily: st.daily.map((x) => t(x)), note: t("Trænerens styrkepas, som de er."), rule: st.rule ? t(st.rule) : "" }; }
+    if (plan.coach) {
+      // The coach's sessions in the order of the lift days, so sessionFor(day) finds the session named for that day.
+      const st = CP.strength; const mk = (x) => ({ key: x.key, name: t(`Styrke ${x.key}`), focus: x.upper ? t("Overkrop og core") : x.lower ? t("Ben og hofte") : "", exercises: x.list.map((e) => ({ name: e, label: t(e) })) });
+      const ordered = liftDays.map((d, i) => st.byDay[d] || st.sessions[i]).filter(Boolean);
+      return { sessions: ordered.map(mk), daily: st.daily.map((x) => t(x)), note: t("Trænerens styrkepas, som de er."), rule: st.rule ? t(st.rule) : "" };
+    }
     return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
   }, [plan.coach, CP, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Strength for any plan week: the coach's fixed sessions, or the app's program dosed for that week's phase.
@@ -1096,7 +1102,8 @@ export default function App() {
                 {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
                 {easy && <div className="today-sub">{describeEasy({ km: v, maxHR, easyPace: insights.summary.easyPace })}</div>}
                 {ev && <div className="today-sub"><b>{[ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null].filter(Boolean).join(" · ")}</b></div>}
-                {ev && <div className="today-sub">{ev.note || (ev.kind === "walk" ? t("Spis fra første time, drik før du er tørstig, og tjek fødderne ved hver post. Eventet erstatter planens tur i dag.") : t("Start roligt, gå de stejle stigninger, og spis fra minut 30. Eventet erstatter planens tur i dag."))}</div>}
+                {ev && ev.result && <div className="today-ran">✓ {t("Gennemført")}: {[ev.result.km ? `${ev.result.km} km` : null, ev.result.total || null, ev.result.ascent ? `${ev.result.ascent} m+` : null, ev.result.avgHR ? `${t("puls")} ${ev.result.avgHR}` : null].filter(Boolean).join(" · ")}</div>}
+                {ev && (ev.note || !ev.done) && <div className="today-sub">{ev.note || (ev.kind === "walk" ? t("Spis fra første time, drik før du er tørstig, og tjek fødderne ved hver post. Eventet erstatter planens tur i dag.") : t("Start roligt, gå de stejle stigninger, og spis fra minut 30. Eventet erstatter planens tur i dag."))}</div>}
                 {ev && (ev.hours || 0) > 6 && <div className="today-sub muted">{t("Over 6 timer: næste uge er sat til restitution.")}</div>}
                 {raceDay && <div className="today-sub">{t("Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.")}</div>}
                 {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, maxHR, phase: cur.phase })}</div>}
