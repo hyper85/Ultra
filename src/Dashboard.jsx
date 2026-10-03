@@ -1,5 +1,6 @@
 import { ymd, parseLocal, addDays, kind } from "./import.js";
 import { watchHistory } from "./insights.js";
+import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { t, tn, locale } from "./i18n.js";
 
 /* Overblik: the runner's numbers on one screen. Stat tiles first (what matters now), then the pictures: weekly km
@@ -64,6 +65,28 @@ const Tile = ({ label, value, unit, sub, cls = "" }) => (
   <div className={`tile ${cls}`}><small>{label}</small><b>{value}{unit && <span>{unit}</span>}</b>{sub && <small className="sub">{sub}</small>}</div>
 );
 
+
+/* Pace of easy runs over time: dots per run, a straight trend line; faster is up. */
+function PaceTrend({ ae }) {
+  const W = 360, H = 170, padL = 38, padB = 22, padT = 10, padR = 8; // narrow viewBox so the labels stay readable on a phone
+  const runs = ae.runs; const first = new Date(runs[0].day).getTime(); const last = new Date(runs[runs.length - 1].day).getTime();
+  const span = Math.max(1, (last - first) / 86400000);
+  const ps = runs.map((r) => r.pace); const lo = Math.min(...ps) - 0.1, hi = Math.max(...ps) + 0.1;
+  const x = (day) => padL + (W - padL - padR) * (((new Date(day).getTime() - first) / 86400000) / span);
+  const y = (pace) => padT + (H - padB - padT) * ((pace - lo) / Math.max(0.2, hi - lo)); // slower is lower on the chart
+  const ticks = [lo + 0.1, (lo + hi) / 2, hi - 0.1];
+  const tr = ae.trend; const ty = (d) => tr.a + tr.b * d;
+  return (
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Tempo på rolige ture over tid")}>
+      {ticks.map((v) => <g key={v}><line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} className="grid" /><text x={padL - 6} y={y(v) + 4} className="tick" textAnchor="end">{fmtPace(v)}</text></g>)}
+      {tr && <line x1={x(runs[0].day)} x2={x(runs[runs.length - 1].day)} y1={y(ty(0))} y2={y(ty(span))} className="line trend" />}
+      {runs.map((r) => <circle key={r.day + r.km} cx={x(r.day)} cy={y(r.pace)} r={4} className="pt ae"><title>{`${r.day} · ${r.km} km · ${fmtPace(r.pace)}/km · ${t("puls")} ${r.hr}`}</title></circle>)}
+      <text x={padL} y={H - 6} className="tick">{runs[0].day.slice(5)}</text>
+      <text x={W - padR} y={H - 6} className="tick" textAnchor="end">{runs[runs.length - 1].day.slice(5)}</text>
+    </svg>
+  );
+}
+
 export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, streak = 0, onShare, shareMsg, onGo }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
@@ -118,6 +141,19 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
       </div>
 
       <div className="dash-grid">
+        {(() => { const ae = aerobicEfficiency(acts); return (
+          <div className="panel">
+            <div className="row-between"><h2 style={{ margin: 0 }}>{t("Aerob effektivitet")}</h2><span className="muted">{t("rolige ture, puls {lo}–{hi}, min. {km} km", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</span></div>
+            {ae.enough ? <>
+              <div className="ae-compare">
+                <div><span className="muted">{t("Tempo ved puls 130, nu")}</span><b>{fmtPace(ae.nowPace)}<small>/km</small></b><small className="muted">{tn(ae.nNow, "1 tur, sidste 4 uger", "{n} ture, sidste 4 uger")}</small></div>
+                <div><span className="muted">{t("For 4 uger siden")}</span><b>{fmtPace(ae.thenPace)}<small>/km</small></b><small className="muted">{ae.nThen ? tn(ae.nThen, "1 tur, uge 5–8 tilbage", "{n} ture, uge 5–8 tilbage") : t("ingen ture")}</small></div>
+                <div className={ae.deltaSec == null ? "" : ae.deltaSec < 0 ? "good" : ae.deltaSec > 0 ? "bad" : ""}><span className="muted">{t("Forskel")}</span><b>{ae.deltaSec == null ? "–" : `${ae.deltaSec > 0 ? "+" : ""}${ae.deltaSec} s`}</b><small className="muted">{ae.deltaSec == null ? t("for få ture endnu") : ae.deltaSec < 0 ? t("hurtigere ved samme puls") : ae.deltaSec > 0 ? t("langsommere ved samme puls") : t("uændret")}</small></div>
+              </div>
+              <PaceTrend ae={ae} />
+              <p className="muted">{ae.trendPer4w != null ? (ae.trendPer4w < 0 ? t("Trend: {s} s/km hurtigere pr. 4 uger på rolige ture.", { s: -ae.trendPer4w }) : ae.trendPer4w > 0 ? t("Trend: {s} s/km langsommere pr. 4 uger. Træthed, varme eller mere trail kan forklare det.", { s: ae.trendPer4w }) : t("Trend: stabilt tempo.")) : ""} {t("Hver prik er en tur. Tempoet ved puls 130 er regnet om ud fra din egen sammenhæng mellem puls og tempo.")}</p>
+            </> : <p className="muted">{t("Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Log.", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</p>}
+          </div>); })()}
         <div className="panel">
           <div className="row-between"><h2 style={{ margin: 0 }}>{t("Km pr. uge")}</h2><span className="muted"><i className="sw plan" /> {t("plan")} <i className="sw ran" /> {t("løbet")}</span></div>
           {shown.length ? <Bars rows={shown} cur={cur.key} /> : <p className="muted">{t("Planen er ikke begyndt endnu.")}</p>}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ymd, parseLocal, mondayOf, addDays } from "./import.js";
-import coachPlan from "./data/coach-plan.json";
+import { activeCoachPlan } from "./coachplan.js";
 import { BODY, GEAR, pickLiftDays, buildStrength, gearLabel } from "./strength.js";
 import { weekTargets, bmrOf } from "./nutrition.js";
 import { RACES, vertFor, distanceKm, myPosition } from "./races.js";
@@ -8,7 +8,7 @@ import { t, locale } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
-const coachCard = () => {
+const coachCard = (coachPlan) => {
   const W = coachPlan.week, rows = coachPlan.weeks, today = ymd(mondayOf(new Date()));
   const now = rows.filter((w) => w.start <= today).length;
   return { key: "coach", name: "Trænerplan", topKm: Math.max(...rows.filter((w) => !w.race).map((w) => w.km)), longest: Math.max(...rows.filter((w) => !w.race).map((w) => w.days[W.longDay])),
@@ -120,7 +120,8 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, FAMILY, build
   const finish = (x) => { const { liftCount, ...rest } = x; return { ...rest, liftDays: liftDaysFor(x), onboarded: true }; };
   const choose = (m) => onDone({ ...finish(m.v), coachMode: false });
   // Same race as the coach's plan (or already on it): offer the coach's fixed weeks as the first choice.
-  const coach = d.raceDate === coachPlan.race.date || initial.coachMode !== false ? coachCard() : null;
+  const coachPlan = activeCoachPlan(initial);
+  const coach = d.raceDate === coachPlan.race.date || initial.coachMode !== false ? coachCard(coachPlan) : null;
   const chooseCoach = () => onDone({ ...finish(d), raceName: coachPlan.race.name, raceDate: coachPlan.race.date, raceKm: coachPlan.race.km, raceVert: coachPlan.race.vert, startDate: coachPlan.weeks[0].start, coachMode: true });
   const strengthPreview = useMemo(() => buildStrength({ body: d.body, gear: d.gear, phase: "Opbygning", count: d.liftCount ?? 2 }), [d.body, d.gear, d.liftCount]);
   const macroRows = useMemo(() => weekTargets({ bmr: bmrOf({ weight: d.weight || 80, height: d.height || 178, age: d.age || 40, sex: d.sex }), weight: d.weight || 80, body: d.body, goal: d.goal, diet: d.diet || "all" }), [d.weight, d.height, d.age, d.sex, d.body, d.goal, d.diet]);

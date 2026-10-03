@@ -7,10 +7,11 @@ import enApp from "./lang/en-app.js";
 import enScreens from "./lang/en-screens.js";
 import enEngine from "./lang/en-engine.js";
 import enRace from "./lang/en-race.js";
+import enCoach from "./lang/en-coach.js";
 
 export const LANGS = [["da", "Dansk"], ["en", "English"]];
 const KEY = "ultraplan-lang";
-const DICT = { en: { ...enEngine, ...enScreens, ...enApp, ...enRace } };
+const DICT = { en: { ...enEngine, ...enScreens, ...enApp, ...enRace, ...enCoach } };
 
 const detect = () => {
   try {
