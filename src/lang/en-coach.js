@@ -33,6 +33,7 @@ export default {
   "Restitution efter {name} · kun roligt": "Recovery after {name} · easy only",
   "Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.": "The week is cut from {from} to {km} km, easy runs only, no back-to-back. Check your legs before every session.",
   "restitution": "recovery",
+  "Gennemført": "Done",
   "Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.": "The coach planned this as a recovery week: {km} km, easy runs only. Check your legs before every session.",
   "{name} i dag": "{name} today",
   "{name} i morgen": "{name} tomorrow",
