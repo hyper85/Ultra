@@ -15,6 +15,12 @@ Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret s
 
 Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. En løbebåndstur fra Strava har 0 højdemeter (uret måler ikke stigning indendørs): tryk "↗ Stigning" ved turen på dagen og skriv båndets %. Det bliver stående ved næste synk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.
 
+## Trænerplanen (coach-plan.json)
+
+Appen bruger trænerens plan (planVersion v4). En ny version importeres under Mere → Trænerplan, som coach-plan.json eller som trænerens Excel-ark (kun Plan-fanen læses). En import skifter kun planens uger, dage, sessioner, fokus og events ud. Loggen, RPE, hvilepuls, søvn, vægt og data fra uret bliver stående. Tracker-fanen i Excel importeres aldrig: appen fører sin egen log.
+
+Events i planen (fx Mammut March, BakkeTrail) erstatter planens dag, og ugen efter et event over 6 timer bliver restitution. I dag viser nedtælling til næste event. Overblik viser aerob effektivitet (tempo ved puls 130 nu mod for 4 uger siden), "Send uge til træner" kopierer ugen som tekst, og Plan → Løbsdag har en løbsplan med omgange, klokkeslæt og cutoff.
+
 ## Kør lokalt
     npm install
     npm run dev

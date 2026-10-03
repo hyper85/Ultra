@@ -4,7 +4,39 @@ import { parseTime, fmtTime, fmtPace, paceToMin, predictFinish, splits, fuelling
 
 /* Løbsdag: goal time and prediction, pacing splits, fuelling and the kit list. Shown under Plan; opens from the race
    card on I dag. The kit ticks live on the device only (they are not training data). */
-export default function RaceDay({ p, easyPace, onGoal }) {
+/* Lap plan: laps with a target time each (stop budget included), clock time at every lap from the start time,
+   moving pace once the stop budget is taken out, and the margin to the cutoff. */
+const clock = (startHHMM, min) => { const [h, m] = String(startHHMM || "06:00").split(":").map(Number); const tot = h * 60 + m + Math.round(min); return `${String(Math.floor(tot / 60) % 24).padStart(2, "0")}:${String(tot % 60).padStart(2, "0")}`; };
+function LapPlan({ lp, raceVert }) {
+  let cum = 0, km = 0;
+  const vPer = raceVert ? Math.round(raceVert / lp.laps.length) : null;
+  const rows = lp.laps.map((l, i) => { const target = parseTime(l.target) || 0; cum += target; km += +l.km; const moving = Math.max(1, target - (lp.stopMin || 0)); return { n: i + 1, km: Math.round(km * 10) / 10, lapKm: +l.km, target, moving, pace: moving / +l.km, cum, at: clock(lp.start, cum) }; });
+  const total = rows.length ? rows[rows.length - 1].cum : 0;
+  const cutIdx = (lp.cutoffAfterLap || rows.length - 1) - 1;
+  const cutRow = rows[cutIdx];
+  const [ch, cm] = String(lp.cutoff || "").split(":").map(Number);
+  const [sh, sm] = String(lp.start || "06:00").split(":").map(Number);
+  const margin = cutRow && !isNaN(ch) ? ch * 60 + cm - (sh * 60 + sm + cutRow.cum) : null;
+  return (
+    <>
+      <h3 className="sub">{t("Løbsplan · {n} omgange · {time} i mål", { n: rows.length, time: fmtTime(total) })}</h3>
+      <p className="muted">{t("Start {start}. Måltiderne pr. omgang inkluderer et stopbudget på {stop} min ved depotet; løbetiden er resten.", { start: lp.start, stop: lp.stopMin || 0 })}{vPer ? ` ${t("Ca. {v} m+ pr. omgang.", { v: vPer })}` : ""} {t("min/km er tempoet i løbetiden.")}</p>
+      <div className="scroll"><table className="splits laps">
+        <thead><tr><th>{t("Omg.")}</th><th className="num">km</th><th className="num">{t("mål")}</th><th className="num hide-phone">{t("løbetid")}</th><th className="num">{t("min/km")}</th><th className="num">{t("klokken")}</th></tr></thead>
+        <tbody>{rows.map((r) => <tr key={r.n} className={r.n - 1 === cutIdx ? "cut" : ""}><td><b>{r.n}</b>{vPer ? <small className="muted hide-phone"> · {vPer} m+</small> : null}</td><td className="num">{r.km.toLocaleString()}</td><td className="num"><b>{fmtTime(r.target)}</b></td><td className="num muted hide-phone">{fmtTime(r.moving)}</td><td className="num">{fmtPace(r.pace)}</td><td className="num"><b>{r.at}</b></td></tr>)}</tbody>
+      </table></div>
+      {margin != null && <div className={`advice ${margin < 30 ? "warn" : ""}`}>{t("Cutoff {cutoff} for at gå ud på omgang {n}. Med planen er du der {at}, {m} før cutoff.", { cutoff: lp.cutoff, n: cutIdx + 2, at: cutRow.at, m: fmtTime(Math.abs(margin)) })}{margin < 0 ? ` ${t("Det er efter cutoff – sæt tempoet op eller skær ned på stop.")}` : ""}</div>}
+      <ul className="tips-list">
+        <li>{t("Omgang 1 føles for let. Det skal den: 2:40 er mere end nok, selv i mørke.")}</li>
+        <li>{t("Stopbudget {stop} min pr. omgang: fyld flasker, tag mad med, og gå videre. Spis mens du går.", { stop: lp.stopMin || 0 })}</li>
+        <li>{t("Er du bagud efter omgang 2, så hold tempoet og skær i stoppene – ikke i maden.")}</li>
+      </ul>
+    </>
+  );
+}
+
+export default function RaceDay({ p, easyPace, onGoal, lapPlan }) {
+  const [tab, setTab] = useState(lapPlan ? "laps" : "pace");
   const km = +p.raceKm > 0 ? +p.raceKm : 0;
   const vert = +p.raceVert || 0;
   const easyPaceMinKm = paceToMin(easyPace);
@@ -20,6 +52,13 @@ export default function RaceDay({ p, easyPace, onGoal }) {
   if (!km) return <p className="muted">{t("Skriv løbets distance under Mere → Løbet, så regner appen pacing, mad og pakkeliste ud.")}</p>;
   return (
     <div className="raceday">
+      <div className="seg" role="tablist">
+        {lapPlan && <button type="button" role="tab" aria-selected={tab === "laps"} className={tab === "laps" ? "on" : ""} onClick={() => setTab("laps")}>{t("Løbsplan")}</button>}
+        <button type="button" role="tab" aria-selected={tab === "pace"} className={tab === "pace" ? "on" : ""} onClick={() => setTab("pace")}>{t("Pacing og mad")}</button>
+        <button type="button" role="tab" aria-selected={tab === "kit"} className={tab === "kit" ? "on" : ""} onClick={() => setTab("kit")}>{t("Pakkeliste")}</button>
+      </div>
+      {tab === "laps" && lapPlan && <LapPlan lp={lapPlan} raceVert={vert} />}
+      {tab === "pace" && <>
       <div className="row2">
         <label>{t("Måltid (t:mm)")}<input type="text" inputMode="numeric" placeholder={predicted ? fmtTime(predicted) : "12:30"} value={p.raceGoal || ""} onChange={(e) => onGoal(e.target.value)} /></label>
         <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
@@ -42,6 +81,8 @@ export default function RaceDay({ p, easyPace, onGoal }) {
           <ul className="tips-list">{fuel.tips.map((x) => <li key={x}>{x}</li>)}</ul>
         </>
       )}
+      </>}
+      {tab === "kit" && <>
       <h3 className="sub">{t("Pakkeliste")} <span className="muted">· {t("{done} af {n}", { done, n: all.length })}</span></h3>
       <div className="progress"><span style={{ width: `${all.length ? Math.round((done / all.length) * 100) : 0}%` }} /></div>
       <div className="kit">
@@ -51,6 +92,7 @@ export default function RaceDay({ p, easyPace, onGoal }) {
           </div>
         ))}
       </div>
+      </>}
       <p className="foot">{t("Skøn ud fra distance, højdemeter og dit tempo. Løbets egne krav til udstyr går altid forud.")}</p>
     </div>
   );
