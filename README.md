@@ -9,7 +9,7 @@ Appen findes på dansk og engelsk. Vælg under Mere → Sprog, på login-siden e
 
 ## Løbsdag og kalender
 
-Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret start), mad og drikke undervejs (kulhydrat, væske, natrium pr. time og i alt) og en pakkeliste efter distance og årstid. Skriv din måltid, ellers bruges appens skøn ud fra dit rolige tempo. "Læg planen i din kalender" gemmer hele planen som en .ics-fil til Google/Apple/Outlook.
+Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret start), mad og drikke undervejs (kulhydrat, væske, natrium pr. time og i alt) og en pakkeliste efter distance og årstid. Skriv din måltid, ellers bruges appens skøn ud fra dit rolige tempo. "Læg planen i din kalender" gemmer hele planen som en .ics-fil til Google/Apple/Outlook: én aftale pr. dag med løb, styrke, events og løbet. Ugen i gang kommer med, som appen viser den – også når trænerrådet har skåret den ned. Filen er et øjebliksbillede, så hent den igen, når planen ændrer sig; hver dag har et fast id, så kalenderen opdaterer dagene i stedet for at lave dubletter.
 
 ## Løbebånd og højdemeter
 

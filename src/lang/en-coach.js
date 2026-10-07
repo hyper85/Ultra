@@ -48,6 +48,9 @@ export default {
   "Trænerråd: {reason} – rødt. Resten af ugen er skåret ned, så ugen ender på {km} km: ingen hård session, ingen back-to-back. Rolige ture under {hr} i puls.": "Coach advice: {reason} – red. The rest of the week is cut so it ends at {km} km: no hard session, no back-to-back. Easy runs below {hr} heart rate.",
   "Hvilepuls {hr} er {d} over din normal ({n}). Gult: hold igen med intensiteten, sov mere, og mål igen i morgen. Ved +7 skærer trænerrådet ugen ned.": "Resting HR {hr} is {d} above your normal ({n}). Yellow: hold back on intensity, sleep more, and measure again tomorrow. At +7 the coach advice cuts the week.",
   "Trænerråd": "Coach advice",
+  "ingen hård session": "no hard session",
+  "Restitution efter {name}: {km} km, kun rolige ture under {hr} i puls, ingen hård session og ingen back-to-back. {acwr}Mærk efter i benene før hvert pas. Er hvilepulsen 7 over din normal, skærer trænerrådet ugen mere ned.": "Recovery after {name}: {km} km, easy runs only below {hr} heart rate, no hard session and no back-to-back. {acwr}Check your legs before every session. If your resting HR is 7 above your normal, the coach advice cuts the week further.",
+  "ACWR {v} er høj efter eventet. Det er ventet, og ugen er allerede lagt an på det. ": "ACWR {v} is high after the event. That is expected, and the week is already planned for it. ",
   // send week to coach
   "Send uge til træner": "Send week to coach",
   "1 andet pas": "1 other session",
