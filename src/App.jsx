@@ -623,7 +623,7 @@ export default function App() {
     </div>
   );
   const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the race card on I dag
-  const exportICS = () => downloadICS(planToICS({ rows: plan.rows, liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
+  const exportICS = () => downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -820,12 +820,16 @@ export default function App() {
   const hrHigh = !!(hrNow && p.restHR && hrNow >= +p.restHR + 7);
   const hrWatch = !!(hrNow && p.restHR && !hrHigh && hrNow >= +p.restHR + 4);
   const todayIdx = curBase.key === todayKey ? (new Date().getDay() + 6) % 7 : 0;
-  const trigger = !!(curBase.km > 0 && !curBase.isRace && ((lastA != null && lastA > 1.5) || (curA != null && curA > 1.5) || overKm || hrHigh));
+  // A recovery week after a long event is already cut (by the coach, or by the app at 60 %). The event's load makes
+  // ACWR high on purpose, so only resting HR ≥ normal + 7 cuts such a week further – never ACWR or km a second time.
+  const recWeek = !!curBase.recovery;
+  const loadHigh = (lastA != null && lastA > 1.5) || (curA != null && curA > 1.5) || overKm;
+  const trigger = !!(curBase.km > 0 && !curBase.isRace && ((loadHigh && !recWeek) || hrHigh));
   const adjRow = useMemo(() => {
     if (!trigger) return null;
     const f = hrHigh ? 0.6 : 0.75;
     const ranSoFar = dayKm.slice(0, todayIdx).reduce((a, b) => a + b, 0);
-    const cap = lastRow ? Math.round(lastRow.km * f) : null;
+    const cap = lastRow && !recWeek ? Math.round(lastRow.km * f) : null;
     const b2b = curBase.sun > 0 && curBase.longDay != null ? (curBase.longDay + 1) % 7 : -1;
     const ev = curBase.events || {};
     let days = curBase.days.map((v, i) => (i < todayIdx || ev[i] ? v : i === b2b ? 0 : (v * f >= 4 ? Math.round(v * f) : 0)));
@@ -838,7 +842,7 @@ export default function App() {
     const reason = hrHigh ? t("hvilepuls {hr}", { hr: hrNow }) : curA != null && curA > 1.5 ? t("ACWR {v} denne uge", { v: curA.toFixed(2) }) : lastA != null && lastA > 1.5 ? `ACWR ${lastA.toFixed(2)}` : t("{km} km mod {plan} planlagt", { km: lastLog.km, plan: lastRow.km });
     return { ...curBase, days, km, target: curBase.km, lng: ev[curBase.longDay] ? 0 : days[curBase.longDay ?? 5] || 0, sun: 0, quality: "Rolig – ingen hård session", qDay: null,
       adjusted: { cap: cap ?? km, reason, acwr: curA != null && curA > 1.5 ? curA : lastA, original: curBase.days, originalKm: curBase.km, originalQuality: curBase.quality, from: todayIdx } };
-  }, [trigger, lastRow?.km, hrHigh, hrNow, lastA, curA, curBase, todayIdx, dayKm.join(","), lastLog?.km]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trigger, recWeek, lastRow?.km, hrHigh, hrNow, lastA, curA, curBase, todayIdx, dayKm.join(","), lastLog?.km]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
   const strengthPlan = useMemo(() => {
@@ -920,11 +924,12 @@ export default function App() {
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   const hrCap70 = Math.round(maxHR * 0.7);
-  let advice = t("Denne uge: {km} km, {hard}, lang tur {lng} km{longDay}. Rolige ture under {hr} i puls.", { km: cur.km, hard: cur.qDay != null ? t("hård session {day} ({quality})", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : t("ingen hård session – ingen dag med tid nok"), lng: cur.lng, longDay: cur.longDay != null ? ` ${dayLow(cur.longDay)}` : "", hr: hrCap70 });
+  let advice = t("Denne uge: {km} km, {hard}, lang tur {lng} km{longDay}. Rolige ture under {hr} i puls.", { km: cur.km, hard: cur.qDay != null ? t("hård session {day} ({quality})", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : plan.coach || cur.recovery || cur.deload ? t("ingen hård session") : t("ingen hård session – ingen dag med tid nok"), lng: cur.lng, longDay: cur.longDay != null ? ` ${dayLow(cur.longDay)}` : "", hr: hrCap70 });
   let warn = false;
   if (adjRow) { advice = t("Trænerråd: {reason} – rødt. Resten af ugen er skåret ned, så ugen ender på {km} km: ingen hård session, ingen back-to-back. Rolige ture under {hr} i puls.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
+  else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun rolige ture under {hr} i puls, ingen hård session og ingen back-to-back. {acwr}Mærk efter i benene før hvert pas. Er hvilepulsen 7 over din normal, skærer trænerrådet ugen mere ned.", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("ACWR {v} er høj efter eventet. Det er ventet, og ugen er allerede lagt an på det. ", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
   else if (cur.unplaced >= 3) { advice = t('Din hverdag giver plads til {km} af de {target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de {km} km – det er ikke en fejl at leve et normalt liv.', { km: cur.km, target: cur.target }); warn = true; }
-  if (lastIdx != null && !adjRow) {
+  if (lastIdx != null && !adjRow && !cur.recovery) {
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = t("ACWR sidste uge var {acwr} – rødt. Hold denne uge på max {km} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.", { acwr: a.toFixed(2), km: Math.round(plan.rows[lastIdx].km * 0.75) }); warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = t("Du løb {km} km mod {plan} planlagt. Planens tal er et loft. Ram ugens {week} km – og ikke mere.", { km: l.km, plan: plan.rows[lastIdx].km, week: cur.km }); warn = true; }
