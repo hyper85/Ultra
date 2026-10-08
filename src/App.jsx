@@ -40,6 +40,8 @@ const PH = {
 const thisMonday = () => mondayOf(new Date());
 const fmtPaceMin = (m) => { const mm = Math.floor(m); const ss = Math.round((m - mm) * 60); return ss === 60 ? `${mm + 1}:00` : `${mm}:${String(ss).padStart(2, "0")}`; };
 const fmtHours = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+// Quick RPE on the today card: five taps cover the scale; the day form still takes any value 1–10.
+const QUICK_RPE = [[2, "Meget let"], [4, "Let"], [6, "Moderat"], [8, "Hård"], [10, "Max"]];
 const fmt = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 // "12.–18. okt." when the week sits in one month, else "28. sep.–4. okt."
 const fmtRange = (a, b) => (a.getMonth() === b.getMonth() ? `${a.toLocaleDateString(locale(), { day: "numeric" })}–${fmt(b)}` : `${fmt(a)}–${fmt(b)}`);
@@ -250,6 +252,8 @@ export default function App() {
   const [importMsg, setImportMsg] = useState(null);
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState("today");
+  // "log" is part of Fremskridt: jump straight to the week table (Strava return, empty states, old links).
+  useEffect(() => { if (view === "log") requestAnimationFrame(() => document.getElementById("log")?.scrollIntoView({ block: "start" })); }, [view]);
   const [openMore, setOpenMore] = useState(null); // which "Mere" section to open when arriving from another screen
   const [ready, setReady] = useState(false);
   const fileRef = useRef(null);
@@ -601,6 +605,8 @@ export default function App() {
   const resetPlan = () => { if (!confirm(t("Gå tilbage til den indbyggede trænerplan? Loggen bliver stående."))) return; const { coachPlan: _c, ...rest } = p; setP(rest); setPlanMsg({ text: t("Den indbyggede plan bruges igen. Loggen er ikke rørt.") }); };
   const [incEdit, setIncEdit] = useState(null); // { id, value } while the incline of a stored run is being set
   const saveIncline = (id) => { const a = acts[id]; if (!a || !incEdit) return; const next = { ...acts, [id]: withIncline(a, incEdit.value) }; saveActs(next); applyActivities(next, p.includeHikes); setIncEdit(null); };
+  // Quick RPE: one tap sets how hard today's run(s) felt; the week's RPE and load follow (a typed week RPE still wins).
+  const setRpeFor = (list, n) => { const next = { ...acts }; for (const a of list) next[a.id] = { ...a, rpe: n }; saveActs(next); applyActivities(next, p.includeHikes); };
   const removeActivity = (id) => { const next = { ...acts }; delete next[id]; saveActs(next); applyActivities(next, p.includeHikes); };
 
   /* ---- day-by-day logging for the current week ---- */
@@ -1025,6 +1031,147 @@ export default function App() {
   if (!p.onboarded) return <Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} FAMILY={FAMILY_T} buildPlan={buildPlan}
     onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} />;
 
+  /* ---- the Log (Strava, files, the week table): shown inside Fremskridt, between the tiles and the charts ---- */
+  const renderLog = () => (
+  <div className="panel scroll" id="log">
+    <h2>{t("Log")}</h2>
+    {nActs === 0 && !Object.values(log).some((l) => l?.km) && (
+      <div className="empty">
+        <b>{t("Ingen ture endnu")}</b>
+        <span>{t("Log dagens tur på forsiden, eller hent dine ture fra Strava eller Garmin herunder. Så passer ugens tal og belastningen fra første dag.")}</span>
+        <button className="btn" type="button" onClick={() => setView("today")}>{t("Gå til i dag")}</button>
+      </div>
+    )}
+    <details className="import strava" open={!strava.connected || !!strava.msg}>
+      <summary><h3>Strava{strava.connected ? ` · ${strava.athlete || t("forbundet")}${strava.lastSync ? ` · ${t("synk")} ${new Date(strava.lastSync).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : ""}</h3></summary>
+      {!syncEnabled ? <p className="muted">{t("Strava kræver login, og login er ikke sat op i denne udgave.")}</p>
+        : !user ? <p className="muted">{t("Forbind Strava, så henter appen dine ture selv, hver gang du åbner den. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect. Log ind under Mere → Konto først.")}</p>
+        : strava.connected ? (
+          <>
+            <p className="muted">{t("Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du som rapporter herunder.")}</p>
+            <div className="import-row">
+              <button className="btn" type="button" disabled={strava.busy} onClick={() => runStravaSync()}>{strava.busy ? t("Henter…") : t("Hent nu")}</button>
+              <button className="btn ghost" type="button" disabled={strava.busy} onClick={disconnectStrava}>{t("Afbryd Strava")}</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">{t("Forbind Strava, så henter appen dine ture selv, hver gang du åbner den: løb, styrke, HIIT og cykling fra de sidste 120 dage og alt nyt fremover. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect (Indstillinger → Tilsluttede apps).")}</p>
+            <button className="btn strava-btn" type="button" disabled={strava.busy || strava.connected === null} onClick={connectStrava}>{strava.busy ? t("Et øjeblik…") : t("Forbind Strava")}</button>
+          </>
+        )}
+      {strava.msg && <div className={`advice ${strava.msg.warn ? "warn" : ""}`}>{strava.msg.text}</div>}
+    </details>
+    <details className="import" open={nActs === 0 || !!importMsg}>
+      <summary><h3>{t("Hent fra filer (Garmin, Strava, Excel)")}{nActs > 0 ? ` · ${t("{n} aktiviteter", { n: nActs })}` : ""}</h3></summary>
+      <p className="muted">{t('Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.')}</p>
+      <div className="import-row">
+        <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
+        {importing && <span className="muted">{t("Læser…")}</span>}
+        <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> {t("Tæl vandring og gang med")}</label>
+      </div>
+      {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}
+      {nActs > 0 && (
+        <div className="import-row muted">
+          <span>{t("{n} aktiviteter gemt på telefonen", { n: nActs })}{recentAvg != null ? ` · ${t("snit sidste 4 uger {km} km/uge", { km: recentAvg })}` : ""}</span>
+          {recentAvg != null && recentAvg !== p.currentKm && <button className="btn ghost" onClick={() => setP({ ...p, currentKm: recentAvg })}>{t("Brug {km} som km/uge nu", { km: recentAvg })}</button>}
+          <button className="btn ghost" onClick={clearImports}>{t("Fjern importerede")}</button>
+        </div>
+      )}
+      <div className="muted" style={{ margin: "6px 0 10px" }}>
+        {t("Baseline til ACWR: {n} af de 4 uger før planstart har rigtige tal{rest}.", { n: preLogged, rest: preLogged < 4 ? t("; resten antages til {km} km × RPE 5", { km: p.currentKm }) : "" })}
+        {preLogged < 4 && ` ${t("Hent dit Strava-arkiv eller Garmins CSV med de sidste uger, så bliver de første ACWR-tal ægte.")}`}
+      </div>
+      {nActs > 0 && (
+        <details className="actlist">
+          <summary>{t("Se de importerede ture ({n}) – tjek dem mod Garmin/Strava", { n: nActs })}</summary>
+          <div className="scroll">
+            <table>
+              <thead><tr><th>{t("Dato")}</th><th>{t("Type")}</th><th className="num">Km</th><th className="num">Min</th><th className="num">{t("Puls")}</th><th>{t("Tæller i uge")}</th><th>{t("Kilde")}</th><th></th></tr></thead>
+              <tbody>
+                {actList.slice(0, 300).map((x) => {
+                  const k = kind(x.type); const counts = k === "run" || (k === "hike" && p.includeHikes);
+                  const wk = ymd(mondayOf(parseLocal(x.day)));
+                  return (
+                    <tr key={x.id} style={counts ? undefined : { opacity: .45 }}>
+                      <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</span></td>
+                      <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
+                      <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{counts ? t("uge fra {date}", { date: fmt(parseLocal(wk)) }) : k === "hike" ? (x.min > 0 ? t("som gang · min × RPE") : t("nej (ingen minutter)")) : x.min > 0 ? t("som {type} · min × RPE", { type: xLabel(x.type).toLowerCase() }) : t("nej (ingen minutter)")}</td>
+                      <td className="muted">{t(x.source)}</td>
+                      <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>{t("Slet")}</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {actList.length > 300 && <p className="muted">{t("Viser de 300 nyeste af {n}.", { n: actList.length })}</p>}
+          </div>
+        </details>
+      )}
+      <details>
+        <summary>{t("Sådan finder du filerne")}</summary>
+        <ul>
+          <li><b>{t("Strava, alle ture på én gang:")}</b> {t('strava.com → Settings → My Account → "Download or Delete Your Account" → Request archive. Du får en zip på mail; pak den ud og vælg')} <code>activities.csv</code>.</li>
+          <li><b>{t("Strava, én tur:")}</b> {t("åbn turen → ⋯ → Export GPX.")}</li>
+          <li><b>{t("Garmin Connect, mange ture:")}</b> {t('connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.')}</li>
+          <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.")}</li>
+          <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
+          <li><b>{t("Garmin Connect, rapporter:")}</b> {t("Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.")}</li>
+          <li><b>{t("Hvilepuls fra en tabel:")}</b> {t('en CSV med en dato-kolonne og en kolonne "Resting" virker også.')}</li>
+        </ul>
+      </details>
+    </details>
+    {preRows.length > 0 && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? t("Skjul ugerne før planen") : t("Vis {n} uger før planen", { n: preRows.length })}</button>}
+    <table>
+      <thead><tr><th>{t("Uge")}</th><th className="num">{t("Plan")}</th><th>{t("Løbet km")}</th><th className="hide-phone">RPE</th><th className="hide-phone">{t("Hvilepuls")}</th><th className="hide-phone">{t("Vægt")}</th><th className="hide-phone">{t("Søvn t")}</th><th className="num hide-phone">{t("Belastning")}</th><th className="num">ACWR</th></tr></thead>
+      <tbody>
+        {[...(showPre ? preRows : []), ...planRows.filter((r) => r.key <= cur.key)].map((r) => {
+          const l = log[r.key] || {};
+          const a = acwrFor(r.key); const ld = loadOf(l);
+          const cell = (k) => (
+            <span className="cellwrap">
+              <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
+                onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
+              {((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) && <i className="tag" aria-label={t("importeret")}>⌚</i>}
+            </span>
+          );
+          const open = openWeek === r.key;
+          return (
+            <Fragment key={r.key}>
+            <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
+              <td style={{ whiteSpace: "nowrap" }}>
+                <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title={t("Vis dagene i ugen")} aria-expanded={open}>
+                  <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{t("{n} uger før", { n: -r.i })}</span> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
+                </button>
+                {r.key === todayKey && <> <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>{t("i gang")}</span></>}
+              </td>
+              <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title={t("Antaget: km/uge nu × RPE 5")}>~{p.currentKm}</span> : "") : r.km}</td>
+              <td>{cell("km")}</td><td className="hide-phone">{cell("rpe")}</td><td className="hide-phone">{cell("hr")}</td><td className="hide-phone">{cell("wt")}</td><td className="hide-phone">{cell("sleep")}</td>
+              <td className="num hide-phone">{ld ?? (r.pre && baseline ? <span className="muted" title={t("Antaget belastning")}>~{baseline}</span> : "")}</td>
+              <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
+            </tr>
+            {open && (
+              <tr className="dayrow"><td colSpan={9}>
+                <div className="phone-only weekfields">
+                  <label>RPE{cell("rpe")}</label><label>{t("Hvilepuls")}{cell("hr")}</label><label>{t("Vægt")}{cell("wt")}</label><label>{t("Søvn t")}{cell("sleep")}</label>
+                  <div className="muted" style={{ gridColumn: "1 / -1" }}>{t("Belastning {load} = km × RPE", { load: ld ?? (r.pre && baseline ? `~${baseline}` : "–") })}</div>
+                </div>
+                {renderDayGrid(r)}
+                {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min · tæller {load} i belastningen (min × RPE ÷ 12).", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
+                {!r.pre && <div className="import-row" style={{ marginTop: 8 }}><button type="button" className="btn ghost small" onClick={() => sendWeek(r)}>{t("Send uge til træner")}</button></div>}
+                {!r.pre && sendBox(r)}
+                {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
+              </td></tr>
+            )}
+            </Fragment>
+          );
+        })}
+      </tbody>
+    </table>
+    <p className="foot">{t("ACWR: grøn 0,8–1,3 · gul til 1,5 · rød over 1,5. ⌚ = fra uret · ~ = estimat. Kommende uger står under Plan.")}</p>
+  </div>
+  );
   return (
     <>
       <header className="topbar">
@@ -1037,12 +1184,11 @@ export default function App() {
         {[
           ["today", "I dag", <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>],
           ["plan", "Plan", <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>],
-          ["log", "Log", <svg viewBox="0 0 24 24"><path d="M4 12.5l4 4L20 5" /><path d="M4 19h16" opacity=".4" /></svg>],
-          ["overblik", "Overblik", <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>],
+          ["overblik", "Fremskridt", <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>],
           ["coach", "Træner", <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" opacity=".6" /></svg>],
           ["more", "Mere", <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="17" r="2" fill="currentColor" stroke="none" /></svg>],
         ].map(([k, l, ic]) => (
-          <button key={k} className={view === k ? "on" : ""} onClick={() => { setView(k); setOpenMore(null); window.scrollTo({ top: 0 }); }} aria-current={view === k ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{t(l)}</button>
+          <button key={k} className={view === k || (k === "overblik" && view === "log") ? "on" : ""} onClick={() => { setView(k); setOpenMore(null); window.scrollTo({ top: 0 }); }} aria-current={view === k || (k === "overblik" && view === "log") ? "page" : undefined}><span className="ic" aria-hidden="true">{ic}</span>{t(l)}</button>
         ))}
       </nav>
 
@@ -1060,6 +1206,8 @@ export default function App() {
           const todayNut = nutritionFor(dayTypeOf({ km: v, isLong: long, isHard: hard, isRace: raceDay, lift }));
           const ran = dayKm[ti]; const didOther = otherByDay[todayStr] || []; const didStrength = didOther.some((x) => actKind(x.type) === "strength");
           const done = v > 0 ? ran >= v * 0.9 : lift ? didStrength : didOther.length > 0;
+          const todayRuns = actsByDay[todayStr] || [];
+          const rpeNow = todayRuns.find((a) => a.rpe)?.rpe || null;
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
           if (afterRace) return (
@@ -1124,6 +1272,14 @@ export default function App() {
                 {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ {t("Logget")}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
+                {todayRuns.length > 0 && (
+                  <div className="quick-rpe">
+                    <span>{rpeNow ? t("Føltes som RPE {n}", { n: rpeNow }) : t("Hvor hård føltes turen?")}</span>
+                    <div className="rpe-chips" role="group" aria-label={t("Hvor hård føltes turen?")}>
+                      {QUICK_RPE.map(([n, label]) => <button key={n} type="button" className={rpeNow === n ? "on" : ""} aria-pressed={rpeNow === n} onClick={() => setRpeFor(todayRuns, n)}><b>{n}</b><small>{t(label)}</small></button>)}
+                    </div>
+                  </div>
+                )}
                 {didOther.length > 0 && <div className="today-ran">✓ {otherText(didOther)}{lift && !didStrength ? ` · ${t("styrken mangler stadig")}` : !lift && v > 0 && !(ran > 0) ? ` · ${t("i stedet for løbeturen")}` : ""}</div>}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, ev ? (ev.kind === "walk" ? "Walk" : "Run") : v > 0 || raceDay || ran > 0 ? "Run" : lift ? "Strength" : "Run")}>{ev && !(ran > 0) && !didOther.length ? t("Log {name}", { name: ev.name }) : ran > 0 && !(lift && !didStrength) ? t("Ret dagens tur") : lift && !(v > 0) ? (didStrength ? t("Ret dagens styrke") : t("Log styrke")) : v > 0 || raceDay ? t("Log dagens tur") : t("Log et pas alligevel")}</button>
                 {v > 0 && lift && !ev && !(ran > 0 && didStrength) && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Strength")}>{didStrength ? t("Ret styrken") : t("Log styrken")}</button>}
@@ -1384,7 +1540,7 @@ export default function App() {
         </aside>
         )}
 
-        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} />}
+        {(view === "overblik" || view === "log") && <Dashboard middle={renderLog()} plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} />}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">{t("Plan")}</h1>
@@ -1529,146 +1685,6 @@ export default function App() {
               </details>
             )}
 
-            {view === "log" && (
-              <div className="panel scroll">
-                <h1 className="screen-title" style={{ marginTop: 0 }}>{t("Log")}</h1>
-                {nActs === 0 && !Object.values(log).some((l) => l?.km) && (
-                  <div className="empty">
-                    <b>{t("Ingen ture endnu")}</b>
-                    <span>{t("Log dagens tur på forsiden, eller hent dine ture fra Strava eller Garmin herunder. Så passer ugens tal og belastningen fra første dag.")}</span>
-                    <button className="btn" type="button" onClick={() => setView("today")}>{t("Gå til i dag")}</button>
-                  </div>
-                )}
-                <details className="import strava" open={!strava.connected || !!strava.msg}>
-                  <summary><h3>Strava{strava.connected ? ` · ${strava.athlete || t("forbundet")}${strava.lastSync ? ` · ${t("synk")} ${new Date(strava.lastSync).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : ""}</h3></summary>
-                  {!syncEnabled ? <p className="muted">{t("Strava kræver login, og login er ikke sat op i denne udgave.")}</p>
-                    : !user ? <p className="muted">{t("Forbind Strava, så henter appen dine ture selv, hver gang du åbner den. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect. Log ind under Mere → Konto først.")}</p>
-                    : strava.connected ? (
-                      <>
-                        <p className="muted">{t("Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du som rapporter herunder.")}</p>
-                        <div className="import-row">
-                          <button className="btn" type="button" disabled={strava.busy} onClick={() => runStravaSync()}>{strava.busy ? t("Henter…") : t("Hent nu")}</button>
-                          <button className="btn ghost" type="button" disabled={strava.busy} onClick={disconnectStrava}>{t("Afbryd Strava")}</button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="muted">{t("Forbind Strava, så henter appen dine ture selv, hver gang du åbner den: løb, styrke, HIIT og cykling fra de sidste 120 dage og alt nyt fremover. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect (Indstillinger → Tilsluttede apps).")}</p>
-                        <button className="btn strava-btn" type="button" disabled={strava.busy || strava.connected === null} onClick={connectStrava}>{strava.busy ? t("Et øjeblik…") : t("Forbind Strava")}</button>
-                      </>
-                    )}
-                  {strava.msg && <div className={`advice ${strava.msg.warn ? "warn" : ""}`}>{strava.msg.text}</div>}
-                </details>
-                <details className="import" open={nActs === 0 || !!importMsg}>
-                  <summary><h3>{t("Hent fra filer (Garmin, Strava, Excel)")}{nActs > 0 ? ` · ${t("{n} aktiviteter", { n: nActs })}` : ""}</h3></summary>
-                  <p className="muted">{t('Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.')}</p>
-                  <div className="import-row">
-                    <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
-                    {importing && <span className="muted">{t("Læser…")}</span>}
-                    <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> {t("Tæl vandring og gang med")}</label>
-                  </div>
-                  {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}
-                  {nActs > 0 && (
-                    <div className="import-row muted">
-                      <span>{t("{n} aktiviteter gemt på telefonen", { n: nActs })}{recentAvg != null ? ` · ${t("snit sidste 4 uger {km} km/uge", { km: recentAvg })}` : ""}</span>
-                      {recentAvg != null && recentAvg !== p.currentKm && <button className="btn ghost" onClick={() => setP({ ...p, currentKm: recentAvg })}>{t("Brug {km} som km/uge nu", { km: recentAvg })}</button>}
-                      <button className="btn ghost" onClick={clearImports}>{t("Fjern importerede")}</button>
-                    </div>
-                  )}
-                  <div className="muted" style={{ margin: "6px 0 10px" }}>
-                    {t("Baseline til ACWR: {n} af de 4 uger før planstart har rigtige tal{rest}.", { n: preLogged, rest: preLogged < 4 ? t("; resten antages til {km} km × RPE 5", { km: p.currentKm }) : "" })}
-                    {preLogged < 4 && ` ${t("Hent dit Strava-arkiv eller Garmins CSV med de sidste uger, så bliver de første ACWR-tal ægte.")}`}
-                  </div>
-                  {nActs > 0 && (
-                    <details className="actlist">
-                      <summary>{t("Se de importerede ture ({n}) – tjek dem mod Garmin/Strava", { n: nActs })}</summary>
-                      <div className="scroll">
-                        <table>
-                          <thead><tr><th>{t("Dato")}</th><th>{t("Type")}</th><th className="num">Km</th><th className="num">Min</th><th className="num">{t("Puls")}</th><th>{t("Tæller i uge")}</th><th>{t("Kilde")}</th><th></th></tr></thead>
-                          <tbody>
-                            {actList.slice(0, 300).map((x) => {
-                              const k = kind(x.type); const counts = k === "run" || (k === "hike" && p.includeHikes);
-                              const wk = ymd(mondayOf(parseLocal(x.day)));
-                              return (
-                                <tr key={x.id} style={counts ? undefined : { opacity: .45 }}>
-                                  <td style={{ whiteSpace: "nowrap" }}>{fmt(parseLocal(x.day))} <span className="muted">{new Date(x.date).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</span></td>
-                                  <td>{x.type || "–"}{x.name ? <span className="muted"> · {x.name.slice(0, 30)}</span> : ""}</td>
-                                  <td className="num">{x.km}</td><td className="num">{x.min ?? ""}</td><td className="num">{x.hr ?? ""}</td>
-                                  <td style={{ whiteSpace: "nowrap" }}>{counts ? t("uge fra {date}", { date: fmt(parseLocal(wk)) }) : k === "hike" ? (x.min > 0 ? t("som gang · min × RPE") : t("nej (ingen minutter)")) : x.min > 0 ? t("som {type} · min × RPE", { type: xLabel(x.type).toLowerCase() }) : t("nej (ingen minutter)")}</td>
-                                  <td className="muted">{t(x.source)}</td>
-                                  <td><button type="button" className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => removeActivity(x.id)}>{t("Slet")}</button></td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                        {actList.length > 300 && <p className="muted">{t("Viser de 300 nyeste af {n}.", { n: actList.length })}</p>}
-                      </div>
-                    </details>
-                  )}
-                  <details>
-                    <summary>{t("Sådan finder du filerne")}</summary>
-                    <ul>
-                      <li><b>{t("Strava, alle ture på én gang:")}</b> {t('strava.com → Settings → My Account → "Download or Delete Your Account" → Request archive. Du får en zip på mail; pak den ud og vælg')} <code>activities.csv</code>.</li>
-                      <li><b>{t("Strava, én tur:")}</b> {t("åbn turen → ⋯ → Export GPX.")}</li>
-                      <li><b>{t("Garmin Connect, mange ture:")}</b> {t('connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.')}</li>
-                      <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.")}</li>
-                      <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
-                      <li><b>{t("Garmin Connect, rapporter:")}</b> {t("Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.")}</li>
-                      <li><b>{t("Hvilepuls fra en tabel:")}</b> {t('en CSV med en dato-kolonne og en kolonne "Resting" virker også.')}</li>
-                    </ul>
-                  </details>
-                </details>
-                {preRows.length > 0 && <button type="button" className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? t("Skjul ugerne før planen") : t("Vis {n} uger før planen", { n: preRows.length })}</button>}
-                <table>
-                  <thead><tr><th>{t("Uge")}</th><th className="num">{t("Plan")}</th><th>{t("Løbet km")}</th><th className="hide-phone">RPE</th><th className="hide-phone">{t("Hvilepuls")}</th><th className="hide-phone">{t("Vægt")}</th><th className="hide-phone">{t("Søvn t")}</th><th className="num hide-phone">{t("Belastning")}</th><th className="num">ACWR</th></tr></thead>
-                  <tbody>
-                    {[...(showPre ? preRows : []), ...planRows.filter((r) => r.key <= cur.key)].map((r) => {
-                      const l = log[r.key] || {};
-                      const a = acwrFor(r.key); const ld = loadOf(l);
-                      const cell = (k) => (
-                        <span className="cellwrap">
-                          <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
-                            onChange={(e) => saveLog({ ...log, [r.key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
-                          {((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) && <i className="tag" aria-label={t("importeret")}>⌚</i>}
-                        </span>
-                      );
-                      const open = openWeek === r.key;
-                      return (
-                        <Fragment key={r.key}>
-                        <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
-                          <td style={{ whiteSpace: "nowrap" }}>
-                            <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title={t("Vis dagene i ugen")} aria-expanded={open}>
-                              <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{t("{n} uger før", { n: -r.i })}</span> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
-                            </button>
-                            {r.key === todayKey && <> <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>{t("i gang")}</span></>}
-                          </td>
-                          <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title={t("Antaget: km/uge nu × RPE 5")}>~{p.currentKm}</span> : "") : r.km}</td>
-                          <td>{cell("km")}</td><td className="hide-phone">{cell("rpe")}</td><td className="hide-phone">{cell("hr")}</td><td className="hide-phone">{cell("wt")}</td><td className="hide-phone">{cell("sleep")}</td>
-                          <td className="num hide-phone">{ld ?? (r.pre && baseline ? <span className="muted" title={t("Antaget belastning")}>~{baseline}</span> : "")}</td>
-                          <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
-                        </tr>
-                        {open && (
-                          <tr className="dayrow"><td colSpan={9}>
-                            <div className="phone-only weekfields">
-                              <label>RPE{cell("rpe")}</label><label>{t("Hvilepuls")}{cell("hr")}</label><label>{t("Vægt")}{cell("wt")}</label><label>{t("Søvn t")}{cell("sleep")}</label>
-                              <div className="muted" style={{ gridColumn: "1 / -1" }}>{t("Belastning {load} = km × RPE", { load: ld ?? (r.pre && baseline ? `~${baseline}` : "–") })}</div>
-                            </div>
-                            {renderDayGrid(r)}
-                            {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min · tæller {load} i belastningen (min × RPE ÷ 12).", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
-                            {!r.pre && <div className="import-row" style={{ marginTop: 8 }}><button type="button" className="btn ghost small" onClick={() => sendWeek(r)}>{t("Send uge til træner")}</button></div>}
-                            {!r.pre && sendBox(r)}
-                            {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
-                          </td></tr>
-                        )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <p className="foot">{t("ACWR: grøn 0,8–1,3 · gul til 1,5 · rød over 1,5. ⌚ = fra uret · ~ = estimat. Kommende uger står under Plan.")}</p>
-              </div>
-            )}
           </div>
           {view === "more" && <p className="foot">{t("Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning.")}<br /><span style={{ opacity: .7 }}>Ultraplan {__APP_VERSION__}</span></p>}
         </section>
