@@ -424,7 +424,6 @@ export default {
   "lang": "long",
   "hård": "hard",
   "rolig": "easy",
-  "+ styrke": "+ strength",
   "Hård session {day} · {quality}": "Hard session {day} · {quality}",
   "Ingen hård session": "No hard session",
   "Lang tur {day} · {km} km": "Long run {day} · {km} km",
@@ -584,4 +583,5 @@ export default {
   "{km} km i snakketempo, puls under {hr}{pace}. Skal føles for langsomt.": "{km} km at a chatting pace, heart rate below {hr}{pace}. Should feel too slow.",
   " (ca. {pace}/km)": " (about {pace}/km)",
   "Jævn": "Moderate",
+  "pacing · mad · pakkeliste": "pacing · food · kit list",
 };

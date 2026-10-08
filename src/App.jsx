@@ -618,20 +618,20 @@ export default function App() {
   // How to run the week: the hard session with its zone, the long run, the easy runs with the runner's own pace.
   // Used for the current week on Plan and for any week unfolded under "Alle uger".
   const [guideFull, setGuideFull] = useState({}); // weeks whose how-to text is unfolded (titles always show)
-  const renderGuide = (r) => (
-    <div className={`guide ${guideFull[r.key] ? "" : "compact"}`}>
+  const renderGuide = (r) => { const full = !!guideFull[r.key]; return (
+    <div className={`guide ${full ? "" : "compact"}`}>
       {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
         : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
-        : <div><b>{t("Ingen hård session")}</b><p>{describeSession("Kun roligt", { maxHR, easyPace: insights.summary.easyPace }).text}</p></div>}
+        : null}
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p></div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
-      {!r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
-      {(() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+      {full && !r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
+      {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
       <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
     </div>
-  );
+  ); };
   const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the countdown in the top bar
   const goRaceDay = () => { setOpenRace(true); setView("plan"); setOpenMore(null); setTimeout(() => { try { document.getElementById("raceday")?.scrollIntoView({ block: "start" }); } catch { /* ignore */ } }, 60); };
   const exportICS = () => downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
@@ -1608,10 +1608,10 @@ export default function App() {
                 return (
                   <div key={i} role="button" tabIndex={0} title={tapTitle(cur.key, i)} onClick={() => openDay(cur.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(cur.key, i); } }}
                     className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] || other.length ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
-                    <small>{DAYS[i]}{d.time && v > 0 ? ` ${TIME_ICON[d.time]}` : ""}</small>
-                    <b>{v || (lift ? "S" : "–")}</b>
-                    <small>{cur.events?.[i] ? `★ ${cur.events[i].name}` : v ? (long ? t("lang") : hard ? t("hård") : b2b ? "B2B" : t("rolig")) : lift ? liftName(i) : t("Hvile")}</small>
-                    {v > 0 && lift && <small style={{ display: "block", color: "var(--violet)" }}>{t("+ styrke")}</small>}
+                    <small>{DAYS[i]}</small>
+                    <b>{v || (lift ? (plan.coach ? liftShort(i) : "S") : "–")}</b>
+                    <small>{cur.events?.[i] ? `★ ${cur.events[i].name}` : v ? (long ? t("lang") : hard ? t("hård") : b2b ? "B2B" : t("rolig")) : lift ? t("styrke") : t("Hvile")}</small>
+                    {v > 0 && lift && <small className="lift-tag" title={liftName(i)}>{plan.coach ? liftShort(i) : "S"}</small>}
                     {dayKm[i] > 0 && <small className="ran">✓ {dayKm[i]} km</small>}
                     {other.length > 0 && <small className="ran">✓ {otherText(other)}</small>}
                     {d.note && <small className="note">{d.note}</small>}
@@ -1622,6 +1622,51 @@ export default function App() {
             {dayEdit?.key === cur.key && renderDayForm(cur.days[dayEdit.i])}
             {renderGuide(cur)}
           </div>
+
+            <div className="panel weeks">
+              <h2>{t("Alle uger")}</h2>
+              {pastWeeks.length > 0 && <button type="button" className="linkbtn past-toggle" onClick={() => setShowPast((v) => !v)}>{showPast ? t("Skjul tidligere uger") : tn(pastWeeks.length, "Vis 1 tidligere uge", "Vis {n} tidligere uger")}</button>}
+              <div className="weeklist">
+                {[...(showPast ? pastWeeks : []), ...planRows.filter((r) => r.key >= cur.key)].map((r) => {
+                  const ran = log[r.key]?.km; const km = dayKmFor(r.key);
+                  const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
+                  const openP = openPlanWeek === r.key;
+                  const isCur = !r.pre && r.i === cur.i;
+                  const evs = Object.entries(r.events || {}).map(([d, e]) => `★ ${e.name} ${dayLow(+d)}`).join(" · ");
+                  const line2 = r.pre ? t("Før planen. Tallene er fra dit ur eller det, du har tastet.")
+                    : r.recovery ? [evs, t("Restitution efter {name} · kun roligt", { name: r.recovery.after })].filter(Boolean).join(" · ")
+                    : evs && !r.isRace ? [evs, r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : null, r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null].filter(Boolean).join(" · ")
+                    : r.isRace ? `★ ${p.raceName || t("Løbet")} · ${p.raceKm || r.lng} km`
+                    : [r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null].filter(Boolean).join(" · ");
+                  return (
+                    <div key={r.key} className={`wkcard ${openP ? "open" : ""} ${isCur ? "cur" : ""} ${r.pre ? "pre" : ""} ${r.key < todayKey && !isCur ? "past" : ""}`}>
+                      <button type="button" className="wkhead" onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP}>
+                        <span className="wknum">{r.pre ? <small>{t("{n} uger før", { n: -r.i })}</small> : <><b>{r.i}</b>{r.deload && !r.isRace ? <i title={t("let uge")}>●</i> : ""}{r.isRace ? <i className="star">★</i> : ""}</>}</span>
+                        <span className="wkmain">
+                          <span className="wktitle">{fmtRange(r.wkStart, addDays(r.wkStart, 6))}{r.pre ? "" : <> · <i className="phase-dot" style={{ background: PH[r.phase] }} title={t(r.phase)} />{r.recovery ? ` ${t("restitution")}` : ""}</>}</span>
+                          <span className="wksub">{line2}</span>
+                          {!r.pre && <span className="wkdays hide-phone">{DAYS.map((d, i) => { const v = r.days[i]; return <span key={i} className={v ? (i === r.longDay ? "long" : i === r.qDay ? "hard" : "run") : liftDays.includes(i) ? "lift" : ""}><small>{d}</small>{v || (liftDays.includes(i) ? "S" : "–")}{km[i] > 0 && <em className={v && km[i] >= v * 0.9 ? "ok" : ""}>{km[i]}</em>}</span>; })}</span>}
+                        </span>
+                        <span className="wkkm">
+                          {!r.pre && <b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}<small> km</small></b>}
+                          {ran > 0 && <span className={`ran ${ranCls}`}>✓ {ran} km</span>}
+                        </span>
+                        <span className="chev" aria-hidden="true">›</span>
+                      </button>
+                      {openP && (
+                        <div className="wkbody">
+                          {!r.pre && <div className="muted" style={{ marginBottom: 8 }}>{t(r.focus)}</div>}
+                          {renderDayGrid(r)}
+                          {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
+                          {!r.pre && renderGuide(r)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          
 
           <div className="panel">
             <h2>{t("Hele planen")}</h2>
@@ -1641,57 +1686,12 @@ export default function App() {
           </div>
 
           <details className="panel acc" id="raceday" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
-            <summary><h2>{t("Løbsdag")} <span className="muted">· {t("løbsplan, pacing og pakkeliste")}</span></h2><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Løbsdag")}</h2><span className="acc-sum">{t("pacing · mad · pakkeliste")}</span><span className="chev" aria-hidden="true">›</span></summary>
             <RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} />
           </details>
           </>)}
 
           <div className="stack">
-            {view === "plan" && (
-              <div className="panel">
-                <h2>{t("Alle uger")}</h2>
-                {pastWeeks.length > 0 && <button type="button" className="linkbtn past-toggle" onClick={() => setShowPast((v) => !v)}>{showPast ? t("Skjul tidligere uger") : tn(pastWeeks.length, "Vis 1 tidligere uge", "Vis {n} tidligere uger")}</button>}
-                <div className="weeklist">
-                  {[...(showPast ? pastWeeks : []), ...planRows.filter((r) => r.key >= cur.key)].map((r) => {
-                    const ran = log[r.key]?.km; const km = dayKmFor(r.key);
-                    const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
-                    const openP = openPlanWeek === r.key;
-                    const isCur = !r.pre && r.i === cur.i;
-                    const evs = Object.entries(r.events || {}).map(([d, e]) => `★ ${e.name} ${dayLow(+d)}`).join(" · ");
-                    const line2 = r.pre ? t("Før planen. Tallene er fra dit ur eller det, du har tastet.")
-                      : r.recovery ? [evs, t("Restitution efter {name} · kun roligt", { name: r.recovery.after })].filter(Boolean).join(" · ")
-                      : evs && !r.isRace ? [evs, r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : null, r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null].filter(Boolean).join(" · ")
-                      : r.isRace ? `★ ${p.raceName || t("Løbet")} · ${p.raceKm || r.lng} km`
-                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null].filter(Boolean).join(" · ");
-                    return (
-                      <div key={r.key} className={`wkcard ${openP ? "open" : ""} ${isCur ? "cur" : ""} ${r.pre ? "pre" : ""} ${r.key < todayKey && !isCur ? "past" : ""}`}>
-                        <button type="button" className="wkhead" onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP}>
-                          <span className="wknum">{r.pre ? <small>{t("{n} uger før", { n: -r.i })}</small> : <><b>{r.i}</b>{r.deload && !r.isRace ? <i title={t("let uge")}>●</i> : ""}{r.isRace ? <i className="star">★</i> : ""}</>}</span>
-                          <span className="wkmain">
-                            <span className="wktitle">{fmtRange(r.wkStart, addDays(r.wkStart, 6))}{r.pre ? "" : <> · <i className="phase-dot" style={{ background: PH[r.phase] }} />{t(r.phase)}{r.recovery ? ` · ${t("restitution")}` : r.deload && !r.isRace && r.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}{isCur ? ` · ${t("nu")}` : ""}</>}</span>
-                            <span className="wksub">{line2}</span>
-                            {!r.pre && <span className="wkdays hide-phone">{DAYS.map((d, i) => { const v = r.days[i]; return <span key={i} className={v ? (i === r.longDay ? "long" : i === r.qDay ? "hard" : "run") : liftDays.includes(i) ? "lift" : ""}><small>{d}</small>{v || (liftDays.includes(i) ? "S" : "–")}{km[i] > 0 && <em className={v && km[i] >= v * 0.9 ? "ok" : ""}>{km[i]}</em>}</span>; })}</span>}
-                          </span>
-                          <span className="wkkm">
-                            {!r.pre && <b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}<small> km</small></b>}
-                            {ran > 0 && <span className={`ran ${ranCls}`}>✓ {ran} km</span>}
-                          </span>
-                          <span className="chev" aria-hidden="true">›</span>
-                        </button>
-                        {openP && (
-                          <div className="wkbody">
-                            {!r.pre && <div className="muted" style={{ marginBottom: 8 }}>{t(r.focus)}</div>}
-                            {renderDayGrid(r)}
-                            {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
-                            {!r.pre && renderGuide(r)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {view === "more" && (
               <>

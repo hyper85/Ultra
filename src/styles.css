@@ -690,3 +690,15 @@ h1.today-date { font-weight: 600; margin: 0; }
 .rpe-chips button small { font-size: 12px; }
 .dayform-item.editing { border-left: 3px solid var(--orange); }
 .kost .row-between .muted { text-align: right; font-size: 13px; }
+
+/* ---- round 2: Plan ---- */
+.thisweek div small { font-size: 12px; }
+.thisweek .note { font-size: 11px; }
+.wkhead:focus-visible { outline-offset: -3px; }
+@media (min-width: 1000px) {
+  main[data-view="plan"] > section.stack > .panel:first-of-type { grid-row: auto; }
+  main[data-view="plan"] > section.stack > .panel.weeks { grid-row: span 2; }
+  main[data-view="plan"] > section.stack > #raceday { grid-column: 1 / -1; }
+}
+.thisweek .lift-tag { display: block; color: var(--violet); font-size: 12px; }
+@media (max-width: 379px) { .wktitle { white-space: normal; } }
