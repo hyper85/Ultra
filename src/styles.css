@@ -702,3 +702,7 @@ h1.today-date { font-weight: 600; margin: 0; }
 }
 .thisweek .lift-tag { display: block; color: var(--violet); font-size: 12px; }
 @media (max-width: 379px) { .wktitle { white-space: normal; } }
+
+/* ---- round 2: Fremskridt ---- */
+.dash-grid { gap: 14px; margin-top: 14px; }
+#konto { scroll-margin-top: 76px; }

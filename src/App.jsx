@@ -41,6 +41,7 @@ const thisMonday = () => mondayOf(new Date());
 const fmtPaceMin = (m) => { const mm = Math.floor(m); const ss = Math.round((m - mm) * 60); return ss === 60 ? `${mm + 1}:00` : `${mm}:${String(ss).padStart(2, "0")}`; };
 const fmtHours = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
 // Quick RPE on the today card: five taps cover the scale; the day form still takes any value 1–10.
+const LOG_FIELD = { km: "Løbet km", rpe: "RPE", hr: "Hvilepuls", wt: "Vægt", sleep: "Søvn t" }; // aria-labels for the log cells
 const QUICK_RPE = [[2, "Let"], [4, "Rolig"], [6, "Jævn"], [8, "Hård"], [10, "Max"]];
 const fmt = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 // "12.–18. okt." when the week sits in one month, else "28. sep.–4. okt."
@@ -824,7 +825,7 @@ export default function App() {
     if (readOnly) return <span className="cellval muted" title={t("Skrives på I dag")}>{l[k] == null || l[k] === "" ? "–" : l[k]}{tag}</span>;
     return (
       <span className="cellwrap">
-        <input type="number" inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
+        <input type="number" aria-label={`${LOG_FIELD[k] ? t(LOG_FIELD[k]) : k} · ${fmt(parseLocal(key))}`} inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
           onChange={(e) => saveLog({ ...log, [key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
         {tag}
       </span>
@@ -1052,7 +1053,7 @@ export default function App() {
   const renderLog = () => (
   <div className="panel scroll" id="log">
     <table>
-      <thead><tr><th>{t("Uge")}</th><th className="num">{t("Plan")}</th><th>{t("Løbet km")}</th><th className="hide-phone">RPE</th><th className="hide-phone">{t("Hvilepuls")}</th><th className="hide-phone">{t("Vægt")}</th><th className="hide-phone">{t("Søvn t")}</th><th className="num hide-phone">{t("Belastning")}</th><th className="num">ACWR</th></tr></thead>
+      <thead><tr><th scope="col">{t("Uge")}</th><th scope="col" className="num">{t("Plan")}</th><th scope="col">{t("Løbet km")}</th><th scope="col" className="hide-phone">RPE</th><th scope="col" className="hide-phone">{t("Hvilepuls")}</th><th scope="col" className="hide-phone">{t("Vægt")}</th><th scope="col" className="hide-phone">{t("Søvn t")}</th><th scope="col" className="num hide-phone">{t("Belastning")}</th><th scope="col" className="num">ACWR</th></tr></thead>
       <tbody>
         {[...planRows.filter((r) => r.key <= cur.key).reverse(), ...(showPre ? [...preRows].reverse() : [])].map((r) => {
           const l = log[r.key] || {};
@@ -1063,7 +1064,7 @@ export default function App() {
             <tr className={r.pre ? "pre" : ""} style={!r.pre && r.i === cur.i ? { background: "#1c1c1c" } : undefined}>
               <td style={{ whiteSpace: "nowrap" }}>
                 <button type="button" className={`wk ${open ? "on" : ""}`} onClick={() => setOpenWeek(open ? null : r.key)} title={t("Vis dagene i ugen")} aria-expanded={open}>
-                  <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{t("{n} uger før", { n: -r.i })}</span> : <b>{r.i}</b>} <span className="muted">{fmt(r.wkStart)}</span>
+                  <span className="chev">{open ? "▾" : "▸"}</span>{r.pre ? <span className="muted">{t("{n} uger før", { n: -r.i })}</span> : <b>{r.i}</b>} <span className="muted hide-phone">{fmt(r.wkStart)}</span>
                 </button>
                 {r.key === todayKey && <> <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>{t("i gang")}</span></>}
               </td>
@@ -1076,10 +1077,9 @@ export default function App() {
               <tr className="dayrow"><td colSpan={9}>
                 <div className="phone-only weekfields">
                   <label>RPE{logCell(r.key, "rpe", r.key === cur.key)}</label><label>{t("Hvilepuls")}{logCell(r.key, "hr", r.key === cur.key)}</label><label>{t("Søvn t")}{logCell(r.key, "sleep", r.key === cur.key)}</label><label>{t("Vægt")}{logCell(r.key, "wt", r.key === cur.key)}</label>
-                  <div className="muted" style={{ gridColumn: "1 / -1" }}>{t("Belastning {load} = km × RPE", { load: ld ?? (r.pre && baseline ? `~${baseline}` : "–") })}</div>
                 </div>
                 {renderDayGrid(r)}
-                {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min · tæller {load} i belastningen (min × RPE ÷ 12).", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
+                {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min.", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
                 {!r.pre && <div className="import-row" style={{ marginTop: 8 }}><button type="button" className="btn ghost small" onClick={() => sendWeek(r)}>{t("Send uge til træner")}</button></div>}
                 {!r.pre && sendBox(r)}
                 {dayEdit?.key === r.key && renderDayForm(r.pre ? null : r.days[dayEdit.i])}
@@ -1091,7 +1091,7 @@ export default function App() {
       </tbody>
     </table>
     {preRows.length > 0 && <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => setShowPre((v) => !v)}>{showPre ? t("Skjul ugerne før planen") : t("Vis {n} uger før planen", { n: preRows.length })}</button>}
-    <p className="foot">{t("ACWR: grøn 0,8–1,3 · gul til 1,5 · rød over 1,5. ⌚ = fra uret · ~ = estimat. Kommende uger står under Plan.")}</p>
+    <p className="foot">{t("⌚ = fra uret · ~ = estimat · kommende uger står under Plan.")}</p>
   </div>
   );
   // Fremskridt with no data yet: get data in (Strava or files) or log on I dag. Shown under the segment on both views.
@@ -1112,7 +1112,7 @@ export default function App() {
         <summary><h2>Strava</h2><span className="acc-sum">{!syncEnabled || !user ? t("Kræver login") : strava.connected ? `${strava.athlete || t("forbundet")}${strava.lastSync ? ` · ${t("synk")} ${new Date(strava.lastSync).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : t("Ikke forbundet")}</span><span className="chev" aria-hidden="true">›</span></summary>
         <div className="import">
           {!syncEnabled ? <p className="muted">{t("Strava kræver login, og login er ikke sat op i denne udgave.")}</p>
-            : !user ? <p className="muted">{t("Forbind Strava, så henter appen dine ture selv, hver gang du åbner den. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect. Log ind under Konto ovenfor først.")}</p>
+            : !user ? <><p className="muted">{t("Strava kræver login. Appen henter så dine ture selv, hver gang du åbner den.")}</p><button className="btn" type="button" onClick={() => setOpenMore("konto")}>{t("Log ind")}</button></>
             : strava.connected ? (
               <>
                 <p className="muted">{t("Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du som rapporter herunder.")}</p>
@@ -1134,9 +1134,9 @@ export default function App() {
       <details className="panel acc" id="files" open={openMore === "files"}>
         <summary><h2>{t("Hent fra filer")}</h2><span className="acc-sum">{nActs > 0 ? t("{n} aktiviteter", { n: nActs }) : t("Garmin, Strava, Excel")}</span><span className="chev" aria-hidden="true">›</span></summary>
         <div className="import">
-          <p className="muted">{t('Vælg en eller flere filer på én gang: CSV, Excel (.xlsx), GPX, TCX eller Stravas zip. Et regneark med kolonnerne Dato, Km og gerne Tid og RPE virker også. Løb lægges sammen pr. uge i kolonnen "Løbet km", og RPE gættes ud fra din puls, hvis feltet er tomt. Garmins rapporter (Sleep.csv, hvilepuls, vægt, VO2 max, HRV, stress, endurance score) lægges i loggen pr. uge og bruges af trænerrådet og AI-træneren. Rapporter om tempo, distance og tid springes over, for det kommer fra turene. Du kan altid rette tallene bagefter.')}</p>
+          <p className="muted">{t('CSV, Excel, GPX, TCX eller Stravas zip – flere filer ad gangen. Garmins rapporter (søvn, hvilepuls, vægt, VO2 max, HRV) lægges i loggen pr. uge.')}</p>
           <div className="import-row">
-            <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
+            <input ref={fileRef} aria-label={t("Vælg filer")} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
             {importing && <span className="muted">{t("Læser…")}</span>}
             <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> {t("Tæl vandring og gang med")}</label>
           </div>
@@ -1148,13 +1148,10 @@ export default function App() {
               <button className="btn ghost" onClick={clearImports}>{t("Fjern importerede")}</button>
             </div>
           )}
-          <div className="muted" style={{ margin: "6px 0 10px" }}>
-            {t("Baseline til ACWR: {n} af de 4 uger før planstart har rigtige tal{rest}.", { n: preLogged, rest: preLogged < 4 ? t("; resten antages til {km} km × RPE 5", { km: p.currentKm }) : "" })}
-            {preLogged < 4 && ` ${t("Hent dit Strava-arkiv eller Garmins CSV med de sidste uger, så bliver de første ACWR-tal ægte.")}`}
-          </div>
+          {preLogged < 4 && cur.i <= 4 && <div className="muted" style={{ margin: "6px 0 10px" }}>{t("ACWR-baseline: de 4 uger før planen antages til {km} km × RPE 5, indtil du henter eller taster dem.", { km: p.currentKm })}</div>}
           {nActs > 0 && (
             <details className="actlist">
-              <summary>{t("Se de importerede ture ({n}) – tjek dem mod Garmin/Strava", { n: nActs })}</summary>
+              <summary>{t("Importerede ture ({n})", { n: nActs })}</summary>
               <div className="scroll">
                 <table>
                   <thead><tr><th>{t("Dato")}</th><th>{t("Type")}</th><th className="num">Km</th><th className="num">Min</th><th className="num">{t("Puls")}</th><th>{t("Tæller i uge")}</th><th>{t("Kilde")}</th><th></th></tr></thead>
@@ -1189,6 +1186,7 @@ export default function App() {
               <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
               <li><b>{t("Garmin Connect, rapporter:")}</b> {t("Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.")}</li>
               <li><b>{t("Hvilepuls fra en tabel:")}</b> {t('en CSV med en dato-kolonne og en kolonne "Resting" virker også.')}</li>
+              <li><b>{t("Eget regneark:")}</b> {t("kolonnerne Dato, Km og gerne Tid og RPE. RPE gættes ud fra pulsen, hvis feltet er tomt; rapporter om tempo og distance springes over.")}</li>
             </ul>
           </details>
         </div>
@@ -1393,7 +1391,7 @@ export default function App() {
             </div>
             {coachErr && <div className="advice warn">{coachErr.text}</div>}
             <form className="chatform" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-              <input value={coachQ} onChange={(e) => setCoachQ(e.target.value)} placeholder={t("fx Skal jeg løbe, når jeg er forkølet?")} maxLength={800} disabled={coachBusy} />
+              <input aria-label={t("Spørg AI-træneren")} value={coachQ} onChange={(e) => setCoachQ(e.target.value)} placeholder={t("fx Skal jeg løbe, når jeg er forkølet?")} maxLength={800} disabled={coachBusy} />
               <button className="btn" type="submit" disabled={coachBusy || !coachQ.trim()}>{t("Send")}</button>
             </form>
             {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>{t("Ryd samtalen")}</button>}
@@ -1409,30 +1407,32 @@ export default function App() {
             <div><b>{t("Sprog")}</b><span className="muted">{t("Valget gemmes på denne enhed.")}</span></div>
             <LangSwitch />
           </div>
-          <details className="panel acc" open={syncEnabled && !user}>
-            <summary><h2>{t("Konto")}</h2>{user ? <span className="acc-sum">{user.email}</span> : null}<span className="chev" aria-hidden="true">›</span></summary>
-            {!syncEnabled ? (
-              <div className="muted">{t("Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.")}</div>
-            ) : user ? (
-              <>
-                <div>{t("Logget ind som")} <b>{user.email}</b></div>
-                <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || t("Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder.")}</div>
-                <button className="btn ghost" type="button" onClick={logout}>{t("Log ud")}</button>
-                <h3 className="sub">{t("Inviter en ven")}</h3>
-                <p className="muted">{t("Din ven får en mail med et link, der opretter kontoen. Ingen adgangskode, bare et tryk.")}</p>
-                <form className="chatform" onSubmit={invite}>
-                  <input type="email" required autoComplete="off" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t("ven@eksempel.dk")} disabled={inviting} />
-                  <button className="btn" type="submit" disabled={inviting || !inviteEmail.trim()}>{inviting ? t("Sender…") : t("Inviter")}</button>
-                </form>
-                {inviteMsg && <div className={`advice ${inviteMsg.warn ? "warn" : ""}`}>{inviteMsg.text}</div>}
-              </>
-            ) : (
-              <div>
-                <div className="muted" style={{ marginBottom: 6 }}>{t("Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.")}</div>
-                {loginForm}
-              </div>
-            )}
-          </details>
+          {syncEnabled && (
+            <details className="panel acc" id="konto" open={openMore === "konto" || (syncEnabled && !user)}>
+              <summary><h2>{t("Konto")}</h2>{user ? <span className="acc-sum">{user.email}</span> : null}<span className="chev" aria-hidden="true">›</span></summary>
+              {!syncEnabled ? (
+                <div className="muted">{t("Login er ikke sat op endnu. Alt gemmes lokalt på denne enhed. Se README for opsætning af Supabase.")}</div>
+              ) : user ? (
+                <>
+                  <div>{t("Logget ind som")} <b>{user.email}</b></div>
+                  <div className="muted" style={{ margin: "6px 0 10px" }}>{syncMsg || t("Dine indstillinger, log og ture gemmes i skyen og følger med på alle dine enheder.")}</div>
+                  <button className="btn ghost" type="button" onClick={logout}>{t("Log ud")}</button>
+                  <h3 className="sub">{t("Inviter en ven")}</h3>
+                  <p className="muted">{t("Din ven får en mail med et link, der opretter kontoen. Ingen adgangskode, bare et tryk.")}</p>
+                  <form className="chatform" onSubmit={invite}>
+                    <input type="email" required autoComplete="off" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t("ven@eksempel.dk")} disabled={inviting} />
+                    <button className="btn" type="submit" disabled={inviting || !inviteEmail.trim()}>{inviting ? t("Sender…") : t("Inviter")}</button>
+                  </form>
+                  {inviteMsg && <div className={`advice ${inviteMsg.warn ? "warn" : ""}`}>{inviteMsg.text}</div>}
+                </>
+              ) : (
+                <div>
+                  <div className="muted" style={{ marginBottom: 6 }}>{t("Log ind for at gemme indstillinger, log og ture, så de følger med på alle dine enheder.")}</div>
+                  {loginForm}
+                </div>
+              )}
+            </details>
+          )}
 
           <div className="group-label">{t("Din plan")}</div>
           <details className="panel acc">
