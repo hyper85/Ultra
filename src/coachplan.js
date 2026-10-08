@@ -63,6 +63,9 @@ export const normalizeEvent = (e, raceDate = "") => {
 
 // Hammer Trail Winter: 4 laps of 21.2 km. Targets for sub-12 include a 5-minute stop budget per lap; the cutoff
 // (16:00) applies to starting the last lap. Used when the plan file has no lap plan of its own.
+// The coach writes exercise names in English; the Danish screens show these. The sets stay as written.
+export const COACH_DA = { "single-leg calf raise": "Lægløft på ét ben", "1-leg balance": "Balance på ét ben", "banded inversion/eversion": "Fodled ud/ind med elastik", "bænk/db press": "Bænkpres/håndvægtpres", "row": "Roning", "pull-ups": "Pull-ups", "oh press": "Skulderpres", "farmer's carry": "Farmer's carry", "pallof/side plank": "Pallof press/sideplanke", "squat": "Squat", "rdl": "Rumænsk dødløft", "lunge/step-up": "Udfald/step-up", "calf raise": "Lægløft", "copenhagen plank": "Copenhagen-planke" };
+export const coachLabelDa = (e) => { const m = /^(.*?)(\s+\d.*)?$/.exec(String(e)); const name = (m?.[1] || "").trim(); const da = COACH_DA[name.toLowerCase()]; const rest = (m?.[2] || "").replace(/single-leg eccentric/i, "ét ben langsomt ned"); return da ? `${da}${rest}` : e; };
 export const HAMMER_LAPS = { start: "06:00", laps: [{ km: 21.2, target: "2:40" }, { km: 21.2, target: "2:50" }, { km: 21.2, target: "3:10" }, { km: 21.2, target: "3:20" }], stopMin: 5, cutoff: "16:00", cutoffAfterLap: 3 };
 
 export function normalizeCoachPlan(raw) {

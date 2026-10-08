@@ -713,3 +713,20 @@ h2.sub { font-size: 16px; font-weight: 700; margin: 14px 0 8px; text-transform: 
 .sched-row select { padding-right: 28px; }
 .sched-row.coach { grid-template-columns: 34px 1fr 1.4fr; }
 .sched-row.coach input { grid-column: auto; }
+
+/* ---- round 2: reachable, readable, consistent ---- */
+:root { --orange-btn: #d63f00; }   /* white text on this orange reads 4.6:1 (the brand orange is 3.4:1) */
+.btn { background: var(--orange-btn); }
+.btn.ghost { background: transparent; }
+.strava-btn { background: var(--orange-btn); }
+.linkbtn, button.wk { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 0; }
+.btn.small, .insight .btn, .finding .btn, .adj-badge .btn { min-height: 44px; }
+.langswitch button, .chips button { min-height: 44px; }
+.topbar-race, .brand { min-height: 44px; }
+.days button.on, .quick button.on, .langswitch button.on { background: #2a1a10; border: 1px solid var(--orange); color: var(--text); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+details:not(.acc) > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+details:not(.acc) > summary::-webkit-details-marker { display: none; }
+details:not(.acc) > summary::after { content: "›"; color: var(--muted); font-size: 18px; transition: transform .15s ease; }
+details:not(.acc)[open] > summary::after { transform: rotate(90deg); }
+.ob .sched-row select.wide { grid-column: 2 / 4; }

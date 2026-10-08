@@ -90,13 +90,9 @@ export default {
 
   // ---------- strength.js ----------
   "Holde vægten": "Keep my weight",
-  "Kroppen som den er. Kosten holder vægten stabil, styrken holder dig hel.": "The body as it is. The diet keeps your weight stable, the strength keeps you in one piece.",
   "Tabe mig": "Lose weight",
-  "Roligt underskud på ca. 300 kcal/dag, max 0,5 kg/uge, ekstra protein. Styrke i cirkler.": "A gentle deficit of about 300 kcal/day, max 0.5 kg/week, extra protein. Strength in circuits.",
   "Bygge muskler": "Build muscle",
-  "Lidt over behov på styrkedage, 3 styrkepas, flere sæt og gentagelser.": "Slightly above needs on strength days, 3 strength sessions, more sets and reps.",
   "Være fit": "Be fit",
-  "Stærk og udholdende. 2 styrkepas, vægten stabil, kosten følger arbejdet.": "Strong and enduring. 2 strength sessions, weight stable, the diet follows the work.",
   "Uden udstyr": "No equipment",
   "Krop, trappe, stol og gulv. Kan laves i stuen.": "Body, stairs, chair and floor. Can be done in the living room.",
   "Håndvægte eller elastik": "Dumbbells or a band",

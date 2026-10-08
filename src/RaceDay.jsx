@@ -20,7 +20,7 @@ function LapPlan({ lp, raceVert }) {
   return (
     <>
       <h3 className="sub">{t("Løbsplan · {n} omgange · {time} i mål", { n: rows.length, time: fmtTime(total) })}</h3>
-      <p className="muted">{t("Start {start}. Måltiderne pr. omgang inkluderer et stopbudget på {stop} min ved depotet; løbetiden er resten.", { start: lp.start, stop: lp.stopMin || 0 })}{vPer ? ` ${t("Ca. {v} m+ pr. omgang.", { v: vPer })}` : ""} {t("min/km er tempoet i løbetiden.")}</p>
+      <p className="muted">{t("Start {start}. Måltid pr. omgang inkl. {stop} min stop ved depotet.", { start: lp.start, stop: lp.stopMin || 0 })}{vPer ? ` ${t("Ca. {v} m+ pr. omgang.", { v: vPer })}` : ""}</p>
       <div className="scroll"><table className="splits laps">
         <thead><tr><th>{t("Omg.")}</th><th className="num">km</th><th className="num">{t("mål")}</th><th className="num hide-phone">{t("løbetid")}</th><th className="num">{t("min/km")}</th><th className="num">{t("klokken")}</th></tr></thead>
         <tbody>{rows.map((r) => <tr key={r.n} className={r.n - 1 === cutIdx ? "cut" : ""}><td><b>{r.n}</b>{vPer ? <small className="muted hide-phone"> · {vPer} m+</small> : null}</td><td className="num">{r.km.toLocaleString()}</td><td className="num"><b>{fmtTime(r.target)}</b></td><td className="num muted hide-phone">{fmtTime(r.moving)}</td><td className="num">{fmtPace(r.pace)}</td><td className="num"><b>{r.at}</b></td></tr>)}</tbody>
@@ -60,10 +60,10 @@ export default function RaceDay({ p, easyPace, onGoal, lapPlan }) {
       {tab === "laps" && lapPlan && <LapPlan lp={lapPlan} raceVert={vert} />}
       {tab === "pace" && <>
       <div className="row2">
-        <label>{t("Måltid (t:mm)")}<input type="text" inputMode="numeric" placeholder={predicted ? fmtTime(predicted) : "12:30"} value={p.raceGoal || ""} onChange={(e) => onGoal(e.target.value)} /></label>
+        <label>{t("Måltid (timer og minutter)")}<input type="text" inputMode="numeric" placeholder={predicted ? fmtTime(predicted) : "fx 1230"} value={p.raceGoal || ""} onChange={(e) => onGoal(e.target.value)} /></label>
         <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
       </div>
-      {p.raceGoal && !goalMin && <div className="advice warn">{t("Skriv tiden som timer:minutter, fx 12:30.")}</div>}
+      {p.raceGoal && !goalMin && <div className="advice warn">{t("Skriv tiden som timer og minutter, fx 1230.")}</div>}
       {rows.length > 0 && (
         <>
           <h3 className="sub">{t("Pacing · {time} i mål", { time: fmtTime(totalMin) })}</h3>

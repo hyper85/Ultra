@@ -10,7 +10,7 @@ import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
 import { shareWeek } from "./share.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
-import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan } from "./coachplan.js";
+import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
 import { buildInsights, coachContext } from "./insights.js";
 import { describeSession, describeLong, describeEasy, sessionName } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
@@ -877,9 +877,10 @@ export default function App() {
   const strengthPlan = useMemo(() => {
     if (plan.coach) {
       // The coach's sessions in the order of the lift days, so sessionFor(day) finds the session named for that day.
-      const st = CP.strength; const mk = (x) => ({ key: x.key, name: t(`Styrke ${x.key}`), focus: x.upper ? t("Overkrop og core") : x.lower ? t("Ben og hofte") : "", exercises: x.list.map((e) => ({ name: e, label: t(e) })) });
+      const st = CP.strength; const coachLabel = (e) => (getLang() === "da" ? coachLabelDa(e) : e);
+      const mk = (x) => ({ key: x.key, name: t(`Styrke ${x.key}`), focus: x.upper ? t("Overkrop og core") : x.lower ? t("Ben og hofte") : "", exercises: x.list.map((e) => ({ name: e, label: coachLabel(e) })) });
       const ordered = liftDays.map((d, i) => st.byDay[d] || st.sessions[i]).filter(Boolean);
-      return { sessions: ordered.map(mk), daily: st.daily.map((x) => t(x)), note: t("Trænerens styrkepas, som de er."), rule: st.rule ? t(st.rule) : "" };
+      return { sessions: ordered.map(mk), daily: st.daily.map(coachLabel), note: t("Trænerens styrkepas, som de er."), rule: st.rule ? t(st.rule) : "" };
     }
     return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
   }, [plan.coach, CP, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1038,7 +1039,7 @@ export default function App() {
       </div>
       <div className="panel landing-login">
         <h2>{t("Log ind")}</h2>
-        <p className="muted">{t("Skriv din e-mail, så sender vi en kode eller et link. Der er ingen adgangskode, og derfor heller ingen at glemme: bed bare om en ny kode. Har du ikke en konto, oprettes den automatisk.")}</p>
+        <p className="muted">{t("Skriv din e-mail, så sender vi en kode. Ingen adgangskode. Ny bruger? Kontoen oprettes automatisk.")}</p>
         {loginForm}
         <p className="foot">{t("Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.")}</p>
       </div>
@@ -1046,7 +1047,7 @@ export default function App() {
     </div>
   );
 
-  if (!p.onboarded) return <Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} FAMILY={FAMILY_T} buildPlan={buildPlan}
+  if (!p.onboarded) return <Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} buildPlan={buildPlan}
     onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} />;
 
   // Fremskridt → Log: the week table alone, newest first; pre-plan weeks behind a button below it.
