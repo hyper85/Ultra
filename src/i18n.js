@@ -3,15 +3,11 @@
    missing translation never breaks a screen. The choice lives on the device (localStorage) and is read at start-up;
    a fresh install follows the phone's language, an install that already has a profile keeps Danish. */
 import { useSyncExternalStore } from "react";
-import enApp from "./lang/en-app.js";
-import enScreens from "./lang/en-screens.js";
-import enEngine from "./lang/en-engine.js";
-import enRace from "./lang/en-race.js";
-import enCoach from "./lang/en-coach.js";
 
 export const LANGS = [["da", "Dansk"], ["en", "English"]];
 const KEY = "ultraplan-lang";
-const DICT = { en: { ...enEngine, ...enScreens, ...enApp, ...enRace, ...enCoach } };
+const DICT = { en: null }; // filled by ensureLang(): the English dictionary is its own chunk, loaded only when English is chosen
+export const ensureLang = async (l) => { if (l === "en" && !DICT.en) DICT.en = (await import("./lang/en.js")).default; };
 
 const detect = () => {
   try {
@@ -28,6 +24,7 @@ const listeners = new Set();
 export const getLang = () => current;
 export const setLang = (l) => {
   if (l !== "da" && l !== "en") return;
+  if (l === "en" && !DICT.en) { ensureLang(l).then(() => setLang(l)); return; } // switch once the words are here
   current = l;
   try { localStorage.setItem(KEY, l); } catch { /* ignore */ }
   try { document.documentElement.lang = l; } catch { /* ignore */ }

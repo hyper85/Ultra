@@ -5,6 +5,8 @@ import { BODY, GEAR, pickLiftDays } from "./strength.js";
 import { RACES, vertFor, distanceKm, myPosition } from "./races.js";
 import { t, locale } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
+import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
+export { INJURY, AREAS, DIETS, INTOL };
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
 const coachCard = (coachPlan) => {
@@ -29,20 +31,7 @@ const MODELS = [
   { key: "vol", name: "Volumen", dLevel: 0, dDays: 0, peakScale: 1.15, who: "Samme dage, højere top (115 %). Kræver disciplin med søvn og mad." },
 ];
 const PACE = { 1: 7.0, 2: 6.25, 3: 5.75, 4: 5.25 }; // min/km used only for the hours estimate
-export const INJURY = [
-  ["none", "Ingen skavanker", "Planen kører som normalt."],
-  ["sore", "Lidt ømhed, kan løbe", "3 uger uden bakker og intervaller."],
-  ["injured", "Skadet, kan ikke løbe lige nu", "4 ugers gå/løb-genopbygning først."],
-];
 // Stored in the profile as Danish strings (the plan engine reads them); shown through t().
-export const AREAS = ["Knæ", "Akillessene", "Læg", "Skinneben", "Fod", "Hofte / ryg", "Andet"];
-export const DIETS = [
-  ["all", "Spiser alt", "Kød, fisk, æg og mejeri er på menuen."],
-  ["veg", "Vegetarisk", "Ingen kød og fisk. Æg og mejeri ok."],
-  ["vegan", "Vegansk", "Kun plantebaseret."],
-  ["lowcarb", "Lavkulhydrat i hverdagen", "Få kulhydrater til daglig. Lange ture kræver stadig sukker."],
-];
-export const INTOL = ["Laktose", "Gluten", "Nødder"];
 // Practical food suggestions that follow the diet the user actually eats. Filtered on the Danish text (the
 // intolerance keys are Danish), translated on the way out; called at render time, so t() is current.
 export const dietTips = (diet = "all", intol = []) => {
