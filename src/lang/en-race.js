@@ -75,7 +75,6 @@ export default {
   "Læg planen i din kalender (.ics)": "Put the plan in your calendar (.ics)",
   "Løbsdag": "Race day",
   "pacing, mad og pakkeliste": "pacing, fuelling and kit list",
-  "Pacing, mad og pakkeliste til løbet": "Pacing, fuelling and kit list for the race",
   // hills / treadmill incline
   "Fladere end løbet: fint til rolige ture.": "Flatter than the race: fine for easy runs.",
   "Matcher løbets profil: mest specifik træning, du kan lave i Odense.": "Matches the race profile: the most specific training you can do on flat ground.",

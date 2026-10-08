@@ -49,7 +49,7 @@ export default {
   "Hvilepuls {hr} er {d} over din normal: hold igen og sov mere. Ved +7 skæres ugen ned.": "Resting HR {hr} is {d} above your normal: hold back and sleep more. At +7 the week is cut.",
   "Trænerråd": "Coach advice",
   "ingen hård session": "no hard session",
-  "Restitution efter {name}: {km} km, kun roligt, puls under {hr}. {acwr}": "Recovery after {name}: {km} km, easy only, heart rate below {hr}. {acwr}",
+  "Restitution efter {name}: {km} km, kun roligt. {acwr}": "Recovery after {name}: {km} km, easy only. {acwr}",
   "Høj ACWR ({v}) er ventet efter eventet.": "A high ACWR ({v}) is expected after the event.",
   // send week to coach
   "Send uge til træner": "Send week to coach",

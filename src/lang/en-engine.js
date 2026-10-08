@@ -45,8 +45,6 @@ export default {
   "{q}. 15 min rolig opvarmning, selve passet i puls 80–90 %{hr}, 10 min nedjog.": "{q}. 15 min easy warm-up, the session itself at heart rate 80–90 %{hr}, 10 min cool-down jog.",
   "Lang tur på {km} km: puls under {hr} det meste af vejen, gå stigningerne, {carbs} g kulhydrat i timen fra minut 30.{kit}": "Long run of {km} km: heart rate under {hr} most of the way, walk the climbs, {carbs} g carbs per hour from minute 30.{kit}",
   " Test kit, lygte og mad som på løbsdagen.": " Test kit, head torch and food as on race day.",
-  "{km} km i snakketempo, puls under {hr}{pace}. Det føles for langsomt. Det er meningen.": "{km} km at a conversational pace, heart rate under {hr}{pace}. It feels too slow. That is the point.",
-  " – for dig typisk omkring {pace}/km": " – for you typically around {pace}/km",
 
   // ---------- insights.js ----------
   "mandag": "Monday",

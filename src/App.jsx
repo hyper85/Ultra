@@ -41,7 +41,7 @@ const thisMonday = () => mondayOf(new Date());
 const fmtPaceMin = (m) => { const mm = Math.floor(m); const ss = Math.round((m - mm) * 60); return ss === 60 ? `${mm + 1}:00` : `${mm}:${String(ss).padStart(2, "0")}`; };
 const fmtHours = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
 // Quick RPE on the today card: five taps cover the scale; the day form still takes any value 1–10.
-const QUICK_RPE = [[2, "Meget let"], [4, "Let"], [6, "Moderat"], [8, "Hård"], [10, "Max"]];
+const QUICK_RPE = [[2, "Let"], [4, "Rolig"], [6, "Jævn"], [8, "Hård"], [10, "Max"]];
 const fmt = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 // "12.–18. okt." when the week sits in one month, else "28. sep.–4. okt."
 const fmtRange = (a, b) => (a.getMonth() === b.getMonth() ? `${a.toLocaleDateString(locale(), { day: "numeric" })}–${fmt(b)}` : `${fmt(a)}–${fmt(b)}`);
@@ -632,7 +632,8 @@ export default function App() {
       <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
     </div>
   );
-  const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the race card on I dag
+  const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the countdown in the top bar
+  const goRaceDay = () => { setOpenRace(true); setView("plan"); setOpenMore(null); setTimeout(() => { try { document.getElementById("raceday")?.scrollIntoView({ block: "start" }); } catch { /* ignore */ } }, 60); };
   const exportICS = () => downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
   const [showPast, setShowPast] = useState(false); // finished weeks in "Alle uger" (they are also in the Log)
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
@@ -645,9 +646,11 @@ export default function App() {
   const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
   // type: a named button ("Log dagens tur", "Log styrken") preselects its type; a tap on a day opens the chooser.
-  const openDay = (key, i, type = null) => {
+  const openDay = (key, i, type = null, edit = null) => {
     const closing = isEditing(key, i);
-    setDayEdit(closing ? null : { key, i }); setDayForm({ km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null);
+    const a = edit ? acts[edit] : null; // a typed session to correct: the form starts with its numbers and replaces it on save
+    setDayEdit(closing ? null : { key, i, replace: a ? a.id : null });
+    setDayForm(a ? { km: a.km || "", min: a.min || "", rpe: a.rpe || "", type: a.type, incline: a.incline || "" } : { km: "", min: "", rpe: "", type, incline: "" }); setDayMsg(null);
     if (!closing) setTimeout(() => { try { document.querySelector(".dayform")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch { /* ignore */ } }, 60);
   };
   const saveDay = (e) => {
@@ -655,7 +658,8 @@ export default function App() {
     const isRun = dayForm.type === "Run", isWalk = dayForm.type === "Walk";
     if (!dayEdit || !dayForm.type || (isRun ? !(+dayForm.km > 0) : !(+dayForm.min > 0))) return;
     const act = manualActivity({ day: ymd(addDays(parseLocal(dayEdit.key), dayEdit.i)), km: isRun || isWalk ? dayForm.km : 0, min: dayForm.min, rpe: dayForm.rpe, type: dayForm.type, incline: isRun ? dayForm.incline : 0 });
-    const { next, added } = mergeActivities(acts, [act]);
+    const base = dayEdit.replace && acts[dayEdit.replace] ? Object.fromEntries(Object.entries(acts).filter(([id]) => id !== dayEdit.replace)) : acts;
+    const { next, added } = mergeActivities(base, [act]);
     if (!added) { setDayMsg({ warn: true, text: isRun ? t("Der er allerede en tur den dag med omtrent samme distance. Slet den først, hvis den er forkert.") : t("Der er allerede et pas af den slags den dag med omtrent samme varighed. Slet det først, hvis det er forkert.") }); return; }
     saveActs(next); applyActivities(next, p.includeHikes);
     setDayForm({ km: "", min: "", rpe: "", type: null, incline: "" }); setDayMsg(null); setDayEdit(null); // saved: close the form, the day tile shows the result
@@ -698,7 +702,7 @@ export default function App() {
         <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
         {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
           <Fragment key={x.id}>
-          <div className="dayform-item"><span>✓ {x.km > 0 ? `${actKind(x.type) === "run" ? "" : `${xLabel(x.type)} `}${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
+          <div className={`dayform-item ${dayEdit.replace === x.id ? "editing" : ""}`}><span>{dayEdit.replace === x.id ? `✎ ${t("rettes")}: ` : "✓ "}{x.km > 0 ? `${actKind(x.type) === "run" ? "" : `${xLabel(x.type)} `}${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
             <span className="dayform-actions">
               {x.km > 0 && (!(x.vert > 0) || x.incline > 0) && <button type="button" className={`btn ghost ${x.treadmill && !x.incline ? "hint" : ""}`} onClick={() => setIncEdit(incEdit?.id === x.id ? null : { id: x.id, value: x.incline || "" })} title={t("Løbebånd · stigning %")}>{x.incline ? `↗ ${x.incline} %` : t("↗ Stigning")}</button>}
               <button type="button" className="btn ghost" onClick={() => removeActivity(x.id)}>{t("Slet")}</button>
@@ -738,10 +742,9 @@ export default function App() {
                 {(() => { const h = hillBenefit({ km: dayForm.km, incline: dayForm.incline, raceKm: p.raceKm, raceVert: p.raceVert }); return h ? <div className="incline-note"><b>{t("{vert} m+ · svarer til {ekm} km flad indsats", { vert: h.vert, ekm: h.ekm })}</b><span className="muted">{h.raceMPerKm ? `${t("{m} m/km mod løbets {race} m/km", { m: h.mPerKm, race: h.raceMPerKm })}. ` : ""}{h.verdict}</span></div> : null; })()}
               </div>
             )}
-            {dayForm.type === "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{p.includeHikes ? t('Gang tæller som km i ugen, fordi "Tæl vandring og gang med" er slået til under Mere → Hent fra filer.') : t("Gang tæller som tid på benene: minutter × RPE med halv vægt, ikke som løbe-km. 10 timer ved RPE 5 vejer som en lang tur på 50 km, så skær ned dagene efter.")}</div>}
-            {dayForm.type !== "Run" && dayForm.type !== "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{t("Tæller i ugens belastning som minutter × RPE med halv vægt i forhold til løb. En time HIIT ved RPE 8 vejer som 8 km rolig tur.")}</div>}
+            {dayForm.type === "Walk" && <div className="muted" style={{ marginBottom: 8 }}>{p.includeHikes ? t('Tæller som km i ugen.') : t("Tæller som tid på benene, ikke som løbe-km.")}</div>}
             <div className="dayform-row">
-              <button className="btn" type="submit">{dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
+              <button className="btn" type="submit">{dayEdit.replace ? t("Gem rettelse") : dayForm.type === "Run" ? t("Gem tur") : t("Gem {type}", { type: xLabel(dayForm.type).toLowerCase() })}</button>
               <button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button>
             </div>
           </>
@@ -911,7 +914,7 @@ export default function App() {
     const l = log[prev.key] || {}; const a = acwrFor(prev.key);
     if (!(l.km > 0) && !(l.xn > 0)) return null;
     const pct = prev.km ? Math.round(((l.km || 0) / prev.km) * 100) : null;
-    const verdict = pct == null ? "" : pct >= 85 && pct <= 120 ? t("Lige på planen. Bliv ved.") : pct > 120 ? t("Over planen. Planens tal er et loft, så hold igen i denne uge.") : pct >= 60 ? t("Lidt under planen. Det er fint, hvis kroppen havde brug for det.") : t("Langt under planen. Kig på, om dagene passer, eller om ugen bare var svær.");
+    const verdict = pct == null ? "" : pct >= 85 && pct <= 120 ? t("Lige på planen.") : pct > 120 ? t("Over planen – planens tal er et loft.") : pct >= 60 ? t("Lidt under planen, det er fint.") : t("Langt under planen – passer dagene?");
     return { i: prev.i, km: l.km || 0, plan: prev.km, pct, acwr: a?.v ?? null, xn: l.xn || 0, xmin: l.xmin || 0, sleep: l.sleep, verdict };
   }, [plan.rows, cur.key, log]); // eslint-disable-line react-hooks/exhaustive-deps
   /* ---- "Send uge til træner": a compact text of one week, copied to the clipboard ---- */
@@ -950,10 +953,10 @@ export default function App() {
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   const hrCap70 = Math.round(maxHR * 0.7);
-  let advice = t("Denne uge: {km} km, {hard}, lang tur {lng} km{longDay}. Rolige ture under {hr} i puls.", { km: cur.km, hard: cur.qDay != null ? t("hård session {day} ({quality})", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : plan.coach || cur.recovery || cur.deload ? t("ingen hård session") : t("ingen hård session – ingen dag med tid nok"), lng: cur.lng, longDay: cur.longDay != null ? ` ${dayLow(cur.longDay)}` : "", hr: hrCap70 });
+  let advice = [cur.qDay != null ? t("Hård session {day}: {quality}", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : t("Kun roligt"), cur.longDay != null && cur.lng > 0 ? t("lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) }) : null].filter(Boolean).join(" · ") + ".";
   let warn = false;
   if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
-  else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt, puls under {hr}. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
+  else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
   else if (cur.unplaced >= 3) { advice = t('Din hverdag giver plads til {km} af de {target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de {km} km – det er ikke en fejl at leve et normalt liv.', { km: cur.km, target: cur.target }); warn = true; }
   if (lastIdx != null && !adjRow && !cur.recovery) {
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
@@ -1197,7 +1200,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <button type="button" className="brand" onClick={() => { setView("today"); setOpenMore(null); window.scrollTo(0, 0); }} aria-label={t("Til forsiden")}>Ultraplan</button>
-          <button type="button" className="topbar-race" onClick={() => { setView("overblik"); setOpenMore(null); window.scrollTo(0, 0); }} title={t("Se dit overblik")}>{p.raceDate && ymd(new Date()) === p.raceDate ? <><b>★</b> {t("Løbsdag: {race}", { race: p.raceName || t("løbet") })}</> : <><b>{daysToRace}</b> {tn(daysToRace, "dag til {race}", "dage til {race}", { race: p.raceName || t("løbet") })}</>}</button>
+          <button type="button" className="topbar-race" onClick={goRaceDay} title={`${t("Løbsdag")} · ${t("løbsplan, pacing og pakkeliste")}${p.raceName ? ` · ${p.raceName}` : ""}`}>{p.raceDate && ymd(new Date()) === p.raceDate ? <><b>★</b> <span className="phone-only">{t("Løbsdag")}</span><span className="hide-phone">{t("Løbsdag: {race}", { race: p.raceName || t("løbet") })}</span></> : <><b>{daysToRace}</b> <span className="phone-only">{tn(daysToRace, "dag", "dage")}</span><span className="hide-phone">{tn(daysToRace, "dag til {race}", "dage til {race}", { race: p.raceName || t("løbet") })}</span></>}</button>
         </div>
       </header>
       <nav className="tabbar" aria-label={t("Hovedmenu")}>
@@ -1228,6 +1231,21 @@ export default function App() {
           const done = v > 0 ? ran >= v * 0.9 : lift ? didStrength : didOther.length > 0;
           const todayRuns = actsByDay[todayStr] || [];
           const rpeNow = todayRuns.find((a) => a.rpe)?.rpe || null;
+          const otherKm = didOther.reduce((s, a) => s + (a.km || 0), 0);
+          // What the big button does next. A session typed by hand can be corrected (the form replaces it); one from the
+          // watch cannot, so the button offers to add a session instead. On a run + strength day the missing one leads.
+          const typedMove = [...todayRuns, ...didOther].find((a) => a.source === "Manuel" && actKind(a.type) !== "strength") || null;
+          const typedStrength = didOther.find((a) => a.source === "Manuel" && actKind(a.type) === "strength") || null;
+          const moved = ran > 0 || didOther.some((a) => actKind(a.type) !== "strength");
+          const runAction = moved ? (typedMove ? { label: typedMove.type === "Walk" ? t("Ret dagens gang") : t("Ret dagens tur"), type: typedMove.type, edit: typedMove.id } : { label: t("Tilføj et pas"), type: null }) : { label: t("Log dagens tur"), type: "Run" };
+          const liftAction = didStrength ? (typedStrength ? { label: t("Ret styrken"), type: "Strength", edit: typedStrength.id } : null) : { label: t("Log styrken"), type: "Strength" };
+          let primary, secondary = null;
+          if (ev) primary = moved ? runAction : { label: t("Log {name}", { name: ev.name }), type: ev.kind === "walk" ? "Walk" : "Run" };
+          else if (raceDay) primary = runAction;
+          else if (v > 0 && lift) { if (moved && !didStrength) { primary = liftAction; secondary = runAction; } else { primary = runAction; secondary = liftAction; } }
+          else if (v > 0) primary = runAction;
+          else if (lift) primary = didStrength ? (typedStrength ? { label: t("Ret dagens styrke"), type: "Strength", edit: typedStrength.id } : { label: t("Tilføj et pas"), type: null }) : { label: t("Log styrke"), type: "Strength" };
+          else primary = moved || didOther.length ? runAction : { label: t("Log et pas"), type: null };
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
           if (afterRace) return (
@@ -1256,23 +1274,21 @@ export default function App() {
           return (
             <>
               <div className="today-head">
-                <div className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
+                <h1 className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</h1>
                 <div className="meta-chips">
-                  <span className="meta-chip">{t("uge {i} af {n}", { i: cur.i, n: plan.weeks })}</span>
-                  <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
-                  {streak >= 2 && <span className="meta-chip streak" title={t("Uger i træk med logget træning")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9z" /></svg>{t("{n} uger i træk", { n: streak })}</span>}
+                  <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })} · {t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
                   {nextEvent && <span className="meta-chip event">★ {nextEvent.date === todayStr ? t("{name} i dag", { name: nextEvent.name }) : tn(nextEvent.days, "{name} i morgen", "{name} om {n} dage", { name: nextEvent.name })}</span>}
                 </div>
               </div>
               {coachOfferBox}
               {lastWeek && ti <= 2 && (
                 <div className="advice recap">
-                  <b>{t("Sidste uge (uge {i}):", { i: lastWeek.i })}</b> {t("{km} af {plan} km", { km: lastWeek.km, plan: lastWeek.plan })}{lastWeek.pct != null ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${t("{n} andre pas, {min} min", { n: lastWeek.xn, min: lastWeek.xmin })}` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · ${t("søvn {h} t", { h: lastWeek.sleep })}` : ""}. {lastWeek.verdict}
+                  <b>{t("Sidste uge:")}</b> {t("{km} af {plan} km", { km: lastWeek.km, plan: lastWeek.plan })}{lastWeek.pct != null && (lastWeek.pct < 85 || lastWeek.pct > 120) ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${tn(lastWeek.xn, "1 andet pas", "{n} andre pas")} (${lastWeek.xmin} min)` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · ${t("søvn {h} t", { h: lastWeek.sleep })}` : ""}. {lastWeek.verdict}
                 </div>
               )}
               <section className={`panel today ${done ? "done" : ""} kind-${raceDay || ev ? "race" : long ? "long" : hard ? "hard" : b2b ? "b2b" : v > 0 ? "easy" : lift ? "lift" : "rest"}`}>
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
-                <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
+                <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{sessionName(cur.quality)}</b></div>}
                 {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
                 {easy && <div className="today-sub">{describeEasy({ km: v, maxHR, easyPace: insights.summary.easyPace })}</div>}
@@ -1283,10 +1299,9 @@ export default function App() {
                 {raceDay && <div className="today-sub">{t("Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.")}</div>}
                 {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, maxHR, phase: cur.phase })}</div>}
                 {b2b && <div className="today-sub">{t("Back-to-back på trætte ben. Puls under {hr}. {carbs} g kulhydrat/t.", { hr: hrCap, carbs })}</div>}
-                {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}{strengthPlan.note}</div><StrengthSession session={session} rest={session.rest} compact /></>}
+                {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
                 {!v && !raceDay && !ev && lift && !session && <div className="today-sub">{strengthPlan.note || t("Styrkedag. Kort og tungt, ingen løb.")}</div>}
                 {!v && !lift && !raceDay && !ev && <div className="today-sub">{t("Hviledag. Sov, spis, gå en tur.")}</div>}
-                {!raceDay && <div className="today-ankle">{t("Ankel i dag:")} {strengthPlan.daily.join(" · ")}</div>}
                 {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Justeret af trænerråd ({reason}).", { reason: adjRow.adjusted.reason })} {t("Original:")} {adjRow.adjusted.original[ti] || t("hvile")}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
                 {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
@@ -1301,9 +1316,8 @@ export default function App() {
                   </div>
                 )}
                 {didOther.length > 0 && <div className="today-ran">✓ {otherText(didOther)}{lift && !didStrength ? ` · ${t("styrken mangler stadig")}` : !lift && v > 0 && !(ran > 0) ? ` · ${t("i stedet for løbeturen")}` : ""}</div>}
-                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, ev ? (ev.kind === "walk" ? "Walk" : "Run") : v > 0 || raceDay || ran > 0 ? "Run" : lift ? "Strength" : "Run")}>{ev && !(ran > 0) && !didOther.length ? t("Log {name}", { name: ev.name }) : ran > 0 && !(lift && !didStrength) ? t("Ret dagens tur") : lift && !(v > 0) ? (didStrength ? t("Ret dagens styrke") : t("Log styrke")) : v > 0 || raceDay ? t("Log dagens tur") : t("Log et pas alligevel")}</button>
-                {v > 0 && lift && !ev && !(ran > 0 && didStrength) && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, "Strength")}>{didStrength ? t("Ret styrken") : t("Log styrken")}</button>}
-                {!lift && !(v > 0) && !raceDay && !ev && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti)}>{t("Log styrke, HIIT eller andet")}</button>}
+                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, primary.type, primary.edit)}>{primary.label}</button>
+                {secondary && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, secondary.type, secondary.edit)}>{secondary.label}</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               {shareMsg && <div className="advice">{shareMsg}</div>}
@@ -1313,7 +1327,7 @@ export default function App() {
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
-                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} role="button" tabIndex={0} title={tapTitle(cur.key, i)}>
+                    <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }} role="button" tabIndex={0} title={tapTitle(cur.key, i)}>
                       <small>{DAYS[i]}</small><b>{cur.events?.[i] ? "★" : w || (liftDays.includes(i) ? (plan.coach ? liftShort(i) : "S") : "–")}</b>{dayKm[i] > 0 ? <small className="ran">{dayKm[i]}</small> : (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).length > 0 ? <small className="ran">✓</small> : null}
                     </div>
                   ))}
@@ -1334,10 +1348,6 @@ export default function App() {
 
               <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
 
-              <section className="panel row-between" onClick={() => { setOpenRace(true); setView("plan"); }} role="button" tabIndex={0} style={{ cursor: "pointer" }} title={t("Pacing, mad og pakkeliste til løbet")}>
-                <div><div className="muted">{p.raceName || t("Dit løb")}</div><div><b>{p.raceKm} km</b> · {p.raceVert} m+ · {t("top {km} km/uge", { km: plan.peak })}</div><div className="race-card-link">{t("Pacing, mad og pakkeliste ›")}</div></div>
-                <div className="count small"><b>{daysToRace}</b><span>{daysToRace === 1 ? t("dag") : t("dage")}</span></div>
-              </section>
             </>
           );
         })()}
@@ -1630,7 +1640,7 @@ export default function App() {
             </div>
           </div>
 
-          <details className="panel acc" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
+          <details className="panel acc" id="raceday" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
             <summary><h2>{t("Løbsdag")} <span className="muted">· {t("løbsplan, pacing og pakkeliste")}</span></h2><span className="chev" aria-hidden="true">›</span></summary>
             <RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} />
           </details>
@@ -1690,7 +1700,6 @@ export default function App() {
                 <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
                 <table><tbody>{zones.map(([n, lo, hi, txt]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{txt}</td></tr>)}</tbody></table>
-                <p className="muted">{t("Rolige ture under {hr}. Det føles for langsomt. Det er meningen.", { hr: Math.round(maxHR * 0.7) })}</p>
               </details>
               </>
             )}
