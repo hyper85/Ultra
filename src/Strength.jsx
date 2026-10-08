@@ -28,17 +28,11 @@ export function NutritionCard({ targets, meals, title = t("Dagens kost"), open =
   if (!targets) return null;
   return (
     <section className="panel kost">
-      <div className="row-between"><h2 style={{ margin: 0 }}>{title}</h2><span className="muted">{dayTypeLabel(targets.dayType)}</span></div>
-      <div className="macros">
-        <div><b>{targets.kcal}</b><small>kcal</small></div>
-        <div><b>{targets.protein} g</b><small>{t("protein")}</small></div>
-        <div><b>{targets.carbs} g</b><small>{t("kulhydrat")}</small></div>
-        <div><b>{targets.fat} g</b><small>{t("fedt")}</small></div>
-      </div>
-      <p className="muted" style={{ margin: "8px 0 0" }}>{targets.note}</p>
+      <div className="row-between"><h2 style={{ margin: 0 }}>{title}</h2><span className="muted">{dayTypeLabel(targets.dayType)} · {targets.kcal} kcal · {targets.protein} g {t("protein")}</span></div>
       {meals && (
         <details className="meals" open={open}>
           <summary>{t("Forslag til dagens måltider")}</summary>
+          <p className="muted" style={{ margin: "8px 0 0" }}>{targets.kcal} kcal · {targets.protein} g {t("protein")} · {targets.carbs} g {t("kulhydrat")} · {targets.fat} g {t("fedt")}. {targets.note}</p>
           <ul>{meals.rows.map((m) => <li key={m.meal}><b>{m.meal}</b><span>{m.text}</span></li>)}</ul>
           <p className="muted">{meals.hint} {t("Tallene er et estimat. Vægten og energien i hverdagen afgør, om de passer.")}</p>
         </details>

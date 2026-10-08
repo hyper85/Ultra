@@ -125,31 +125,24 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
         <Tile label={t("Denne uge")} value={curLog.km || 0} unit={` / ${cur.km} km`} sub={pct != null ? t("{pct} % af planen · uge {i} af {n}", { pct, i: cur.i, n: plan.weeks }) : t("uge {i} af {n}", { i: cur.i, n: plan.weeks })} />
         <Tile label={t("Snit sidste 4 uger")} value={last4.length ? Math.round(mean(last4)) : "–"} unit={` ${t("km/uge")}`} sub={last4.length ? tn(last4.length, "1 uge med data", "{n} uger med data") : t("log en uge først")} />
         {(() => { const a = weekYoung && acwrLast ? acwrLast : acwr; const label = weekYoung && acwrLast ? t("ACWR, uge {i}", { i: lastDone.i }) : t("ACWR nu"); const verdict = a ? (a.v > 1.5 ? t("Rødt: skær ned, ingen hårde pas") : a.v > 1.3 ? t("Gult: hold igen") : a.v >= 0.8 ? t("Grønt: belastningen passer") : t("Lavt: der er plads")) + (a.est ? ` · ${t("estimat")}` : "") : t("kommer, når ugen har km og RPE"); return (
-          <Tile onClick={() => document.getElementById("chart-acwr")?.scrollIntoView({ behavior: "smooth", block: "start" })} title={t("Se grafen")} label={label} value={a ? r1(a.v).toFixed(2) : "–"} sub={weekYoung && acwrLast ? `${verdict} · ${t("denne uge er i gang")}${acwr ? ` (${t("{v} indtil nu", { v: r1(acwr.v).toFixed(2) })})` : ""}` : verdict} cls={acwrClass(a?.v)} />); })()}
+          <Tile onClick={loadRows.filter((r) => r.v != null).length >= 2 ? () => document.getElementById("chart-acwr")?.scrollIntoView({ behavior: "smooth", block: "start" }) : undefined} title={loadRows.filter((r) => r.v != null).length >= 2 ? t("Se grafen") : undefined} label={label} value={a ? a.v.toFixed(2) : "–"} sub={weekYoung && acwrLast ? `${verdict} · ${t("denne uge er i gang")}${acwr ? ` (${t("{v} indtil nu", { v: acwr.v.toFixed(2) })})` : ""}` : verdict} cls={acwrClass(a?.v)} />); })()}
         <Tile label={t("Længste tur, 4 uger")} value={longest ?? "–"} unit=" km" sub={recent.length ? tn(recent.length, "1 tur · {per} pr. uge", "{n} ture · {per} pr. uge", { per: r1(recent.length / 4) }) : t("ingen ture i loggen")} />
         {(() => { const v28 = recent.reduce((a, x) => a + (x.vert || 0), 0); const k28 = recent.reduce((a, x) => a + x.km, 0); const race = p.raceKm > 0 && p.raceVert > 0 ? Math.round(p.raceVert / p.raceKm) : null; const mine = k28 > 0 ? Math.round(v28 / k28) : null; return v28 > 0 ? <Tile label={t("Højdemeter, 4 uger")} value={v28} unit=" m+" sub={race ? t("{mine} m/km · løbet kræver {race} m/km", { mine, race }) : t("{mine} m/km", { mine })} cls={race && mine != null ? (mine >= race * 0.6 ? "good" : mine >= race * 0.3 ? "warn" : "bad") : ""} /> : null; })()}
-        <Tile label={t("Andre pas denne uge")} value={curLog.xn || 0} sub={curLog.xmin ? t("{min} min · styrke/HIIT/andet", { min: curLog.xmin }) : liftDays.length ? tn(liftDays.length, "1 styrkepas i planen", "{n} styrkepas i planen") : t("ingen")} />
         <Tile label={t("Planen indtil nu")} value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? t("{ran} af {plan} km i alt · uge for uge: {hit} på planen", { ran: Math.round(ranToDate), plan: Math.round(planKmToDate), hit }) + (over ? t(", {n} over", { n: over }) : "") + (under ? t(", {n} under", { n: under }) : "") : t("første uge er i gang")} cls={rated.length && hit === 0 && over > 0 ? "warn" : ""} />
-        {avg(sleep) != null && <Tile label={t("Søvn, snit 12 uger")} value={avg(sleep)} unit={t(" t")} sub={latest(sleep) != null ? t("seneste uge {n} t", { n: latest(sleep) }) : ""} cls={avg(sleep) < 6.5 ? "warn" : ""} />}
-        {latest(hr) != null && <Tile label={t("Hvilepuls")} value={latest(hr)} sub={avg(hr) != null ? t("snit {n}", { n: avg(hr) }) + (latest(hr) - avg(hr) >= 5 ? ` · ${t("høj: sov og skær ned")}` : "") : ""} cls={avg(hr) != null && latest(hr) - avg(hr) >= 5 ? "bad" : ""} />}
-        {fitness && <Tile label={t("Form for din alder")} value={`${fitness.percentile} %`} sub={t("bedre end ca. {pct} % · {cat}", { pct: fitness.percentile, cat: category.toLowerCase() })} cls={fitness.percentile >= 70 ? "good" : fitness.percentile >= 30 ? "" : "warn"} />}
-        {fitness && <Tile label={t("Fitnessalder")} value={fitness.fitnessAge} unit={` ${t("år")}`} sub={t("VO2 max {vo2}{est} · som en gennemsnitlig {age}-årig", { vo2: fitness.vo2, est, age: fitness.fitnessAge })} cls={fitness.ageDiff >= 5 ? "good" : fitness.ageDiff <= -5 ? "warn" : ""} />}
+        {fitness && <Tile label={t("Fitnessalder")} value={fitness.fitnessAge} unit={` ${t("år")}`} sub={t("VO2 max {vo2}{est} · {cat}, bedre end {pct} %", { vo2: fitness.vo2, est, cat: category.toLowerCase(), pct: fitness.percentile })} cls={fitness.percentile >= 50 ? "good" : ""} />}
         {latest(vo2) != null && !fitness?.measured && <Tile label="VO2 max" value={latest(vo2)} sub={t("fra dit ur")} />}
-        {latest(wt) != null && <Tile label={t("Vægt")} value={latest(wt)} unit=" kg" sub={p.weight ? t("profil {kg} kg", { kg: p.weight }) : ""} />}
       </div>
 
       <div className="dash-grid">
-        <div className="panel">
+        {shown.some((r) => r.ran > 0) && <div className="panel">
           <div className="row-between"><h2 style={{ margin: 0 }}>{t("Km pr. uge")}</h2><span className="muted"><i className="sw plan" /> {t("plan")} <i className="sw ran" /> {t("løbet")}</span></div>
-          {shown.length ? <Bars rows={shown} cur={cur.key} /> : <p className="muted">{t("Planen er ikke begyndt endnu.")}</p>}
-          <p className="muted">{t("● = let uge. Planens tal er et loft.")}</p>
-        </div>
-        <div className="panel" id="chart-acwr">
+          <Bars rows={shown} cur={cur.key} />
+        </div>}
+        {loadRows.filter((r) => r.v != null).length >= 2 && <div className="panel" id="chart-acwr">
           <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
-          {loadRows.filter((r) => r.v != null).length >= 2 ? <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} /> : <p className="muted">{t("ACWR tegnes, når mindst to uger har km og RPE.")}</p>}
-          <p className="muted">{t("Ugens belastning ÷ snittet af de 4 før. Over 1,5: skær ned.")}</p>
-        </div>
-        {(() => { const ae = aerobicEfficiency(acts); return (
+          <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} />
+        </div>}
+        {(() => { const ae = aerobicEfficiency(acts); if (!ae.enough) return null; return (
           <div className="panel">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Aerob effektivitet")}</h2><span className="muted">{t("rolige ture, puls {lo}–{hi}, min. {km} km", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</span></div>
             {ae.enough ? <>
@@ -160,37 +153,24 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
               </div>
               <PaceTrend ae={ae} />
               <p className="muted">{ae.trendPer4w != null ? (ae.trendPer4w < 0 ? t("Trend: {s} s/km hurtigere pr. 4 uger på rolige ture.", { s: -ae.trendPer4w }) : ae.trendPer4w > 0 ? t("Trend: {s} s/km langsommere pr. 4 uger. Træthed, varme eller mere trail kan forklare det.", { s: ae.trendPer4w }) : t("Trend: stabilt tempo.")) : ""}</p>
-            </> : <p className="muted">{t("Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Mere → Data.", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</p>}
+            </> : null}
           </div>); })()}
         {monthly.length >= 2 && (
           <div className="panel">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Måned for måned")}</h2><span className="muted">{t("{total} km i alt · længste {longest} km", { total: hist.km_i_alt, longest: hist.længste_tur_nogensinde_km })}</span></div>
             <Bars rows={monthly} height={130} />
-            <p className="muted">{t("Fra dit ur siden {since}. Bedste måned: {best}.", { since: hist.første_aktivitet ? parseLocal(hist.første_aktivitet).toLocaleDateString(locale(), { month: "long", year: "numeric" }) : t("starten"), best: hist.bedste_måned ? `${hist.bedste_måned.km} km` : "–" })}</p>
           </div>
         )}
         {sleep.filter((r) => r.v != null).length >= 3 && (
           <div className="panel">
             <h2 style={{ margin: 0 }}>{t("Søvn, timer pr. nat")}</h2>
             <Line rows={sleep} band={[7, 9]} color="sleep" cur={cur.key} />
-            <p className="muted">{t("Båndet er 7–9 timer. Under 6,5 i snit koster restitution, og trænerrådet skærer ned.")}</p>
           </div>
         )}
         {hr.filter((r) => r.v != null).length >= 3 && (
           <div className="panel">
             <h2 style={{ margin: 0 }}>{t("Hvilepuls")}</h2>
             <Line rows={hr} color="hr" cur={cur.key} />
-            <p className="muted">{t("7 slag over din normale er et stopsignal: sov, og skær 30–50 % af ugen.")}</p>
-          </div>
-        )}
-        {fitness && (
-          <div className="panel">
-            <div className="row-between"><h2 style={{ margin: 0 }}>{t("Din form i forhold til andre")}</h2><span className="muted">VO2 max {fitness.vo2}{est}</span></div>
-            <div className="scale">
-              {CATS.map((c) => <div key={c} className={`scale-seg ${fitness.category === c || fitness.category === t(c) ? "on" : ""}`}><small>{t(c)}</small></div>)}
-              <i className="scale-pin" style={{ left: `${fitness.percentile}%` }} title={`${fitness.percentile} %`} />
-            </div>
-            <p className="muted">{t("Din kondition ligger i gruppen")} <b>{category.toLowerCase()}</b> {t("for {sex} på {age} år: bedre end cirka {pct} % af dem.", { sex: fitness.sexUsed === "f" ? t("kvinder") : t("mænd"), age: p.age || t("din"), pct: fitness.percentile })}</p>
           </div>
         )}
       </div>

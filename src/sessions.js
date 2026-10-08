@@ -50,5 +50,5 @@ export function describeSession(quality, { maxHR, easyPace } = {}) {
 
 // Guidance for the two other kinds of days the plan has.
 export const describeLong = ({ km, carbs, maxHR, phase }) => t("Lang tur på {km} km: puls under {hr} det meste af vejen, gå stigningerne, {carbs} g kulhydrat i timen fra minut 30.{kit}", { km, hr: maxHR ? Math.round(maxHR * 0.75) : "75 %", carbs, kit: phase === "Ultra-prep" ? t(" Test kit, lygte og mad som på løbsdagen.") : "" });
-export const describeEasy = ({ km, maxHR, easyPace }) => t("{km} km i snakketempo, puls under {hr}{pace}. Det føles for langsomt. Det er meningen.", { km, hr: maxHR ? Math.round(maxHR * 0.7) : "70 %", pace: easyPace ? t(" – for dig typisk omkring {pace}/km", { pace: easyPace }) : "" });
+export const describeEasy = ({ km, maxHR, easyPace }) => t("{km} km i snakketempo, puls under {hr}{pace}. Skal føles for langsomt.", { km, hr: maxHR ? Math.round(maxHR * 0.7) : "70 %", pace: easyPace ? t(" (ca. {pace}/km)", { pace: easyPace }) : "" });
 export const fmtPace = (minKm) => { if (!(minKm > 0)) return null; const m = Math.floor(minKm), s = Math.round((minKm - m) * 60); return `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}`; };

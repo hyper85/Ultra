@@ -145,9 +145,9 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
 
   // The watch knows the base better than the questionnaire did: offer to use it.
   if (watch.uger_med_data >= 3 && watch.snit_km_sidste_4 != null && p.currentKm != null && Math.abs(watch.snit_km_sidste_4 - p.currentKm) >= Math.max(5, 0.15 * p.currentKm))
-    add("watch-base", "info", t("Dit ur siger {km} km/uge de sidste 4 uger, men planen regner med {base} km/uge som base.{tail}", { km: watch.snit_km_sidste_4, base: p.currentKm, tail: coach ? t(" Det påvirker ACWR-baselinen.") : t(" Planen og ACWR bliver mere præcise med det rigtige tal.") }),
+    add("watch-base", "info", t("Dit ur siger {km} km/uge de sidste 4 uger, planen regner med {base}.{tail}", { km: watch.snit_km_sidste_4, base: p.currentKm, tail: coach ? t(" Det påvirker ACWR-baselinen.") : t(" Planen og ACWR bliver mere præcise med det rigtige tal.") }),
       { label: t("Brug {km} km/uge som base", { km: watch.snit_km_sidste_4 }), patch: { currentKm: watch.snit_km_sidste_4 } });
-  if (n >= 3 && tendency === "on") add("on-plan", "good", t("Du rammer planen: {hit} af {n} uger inden for 85–120 % af det planlagte. Bliv ved – det er sådan ultraform bygges.", { hit, n }));
+  if (n >= 3 && tendency === "on" && hit / n >= 0.5) add("on-plan", "good", t("Du rammer planen: {hit} af {n} uger inden for 85–120 %.", { hit, n }));
   if (tendency === "under") add("under", "warn", t("Du løber typisk {pct} % af det planlagte ({n} uger). Enten er planen for stor til din hverdag, eller også mangler der dage. En lavere top holder du bedre end en plan, du springer over.", { pct: Math.round(med * 100), n }),
     coach ? null : { label: t("Sænk toppen 10 %"), patch: { peakScale: r1(Math.max(0.6, (p.peakScale || 1) - 0.1)) } });
   if (tendency === "over") add("over", "warn", t("Du løber typisk {pct} % af det planlagte ({n} uger). Planens tal er et loft. Er ACWR grøn uge efter uge, kan toppen hæves lidt – ellers er det her, skader kommer fra.", { pct: Math.round(med * 100), n }),
@@ -155,23 +155,23 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (skipped) {
     const to = usedFree && usedFree.i !== skipped.i ? usedFree : null;
     const fromAvail = p.sched?.A?.[skipped.i]?.avail || "normal";
-    add("skipped-day", "info", t("{day} bliver sprunget over: du løb {ran} af {planned} planlagte gange.{instead}{coach}", { day: day(skipped.i, true), ran: skipped.ranPlanned, planned: skipped.planned, instead: to ? t(" Til gengæld løber du tit {day} ({ran} af {free} uger), selv om der ikke stod noget.", { day: day(to.i), ran: to.ranFree, free: to.free }) : "", coach: coach ? t(" Sig det til din træner – i trænerplanen ligger dagene fast.") : "" }),
+    add("skipped-day", "info", t("{day} springes over ({ran} af {planned}).{instead}{coach}", { day: day(skipped.i, true), ran: skipped.ranPlanned, planned: skipped.planned, instead: to ? t(" Til gengæld løber du tit {day} ({ran} af {free}).", { day: day(to.i), ran: to.ranFree, free: to.free }) : "", coach: coach ? t(" Sig det til din træner – i trænerplanen ligger dagene fast.") : "" }),
       coach ? null : to ? { label: t("Flyt løb fra {from} til {to}", { from: day(skipped.i), to: day(to.i) }), patch: { sched: { ...(p.sched || {}), A: (p.sched?.A || []).map((d, j) => (j === skipped.i ? { ...d, avail: "none" } : j === to.i ? { ...d, avail: d.avail === "none" ? fromAvail : d.avail } : d)) } } }
         : { label: t("Slå {day} fra", { day: day(skipped.i) }), patch: { sched: { ...(p.sched || {}), A: (p.sched?.A || []).map((d, j) => (j === skipped.i ? { ...d, avail: "none" } : d)) } } });
   } else if (usedFree && !coach) {
     add("free-day", "info", t("Du løber tit {day} ({ran} af {free} uger), selv om dagen står som fri. Giv den tid i planen, så bruger den dagen rigtigt.", { day: day(usedFree.i), ran: usedFree.ranFree, free: usedFree.free }),
       { label: t("Åbn {day} i planen", { day: day(usedFree.i) }), patch: { sched: { ...(p.sched || {}), A: (p.sched?.A || []).map((d, j) => (j === usedFree.i ? { ...d, avail: "normal" } : d)) } } });
   }
-  if (longRate != null && longRate < 0.5) add("long-short", "warn", t("Den lange tur bliver kortere end planlagt i {short} af {n} uger. Det er den vigtigste tur i ultratræning. Kortere hverdagsture og en hel lang tur slår det modsatte.", { short: longWeeks.length - longDone, n: longWeeks.length }));
+  if (longRate != null && longRate < 0.5) add("long-short", "warn", t("Den lange tur blev kortere end planlagt i {short} af {n} uger. Det er den vigtigste tur – kort hverdagstur og hel lang tur slår det modsatte.", { short: longWeeks.length - longDone, n: longWeeks.length }));
   if (longRate != null && longRate >= 0.8 && n >= 4) add("long-ok", "good", t("Den lange tur bliver gennemført {done} af {n} gange. Det er dér, ultraformen kommer fra.", { done: longDone, n: longWeeks.length }));
-  if (easyAbove != null && easyAbove >= 0.5) add("easy-hard", "warn", t("{pct} % af dine rolige ture ligger over pulsloftet på {cap} (snit {hr}). Rolige ture skal føles for langsomme – ellers er du for træt til de hårde.", { pct: Math.round(easyAbove * 100), cap, hr: easyHR }));
-  if (easyAbove != null && easyAbove < 0.25) add("easy-ok", "good", t("Dine rolige ture er rolige (snit puls {hr}, loft {cap}). Det er den svære disciplin, og du har den.", { hr: easyHR, cap }));
+  if (easyAbove != null && easyAbove >= 0.5) add("easy-hard", "warn", t("{pct} % af dine rolige ture ligger over pulsloftet {cap} (snit {hr}). Rolige ture skal føles for langsomme.", { pct: Math.round(easyAbove * 100), cap, hr: easyHR }));
+  if (easyAbove != null && easyAbove < 0.25 && easyHR <= cap) add("easy-ok", "good", t("Dine rolige ture er rolige (snit puls {hr}, loft {cap}). Det er den svære disciplin, og du har den.", { hr: easyHR, cap }));
   if (efficiencyPct != null && efficiencyPct >= 3) add("fitter", "good", t("Formen stiger: {pct} % mere fart ved samme puls på de rolige ture sammenlignet med starten.", { pct: efficiencyPct }));
   if (efficiencyPct != null && efficiencyPct <= -5) add("slower", "info", t("{pct} % mindre fart ved samme puls end i starten. Varme, søvn eller for meget belastning? Hold igen en uge og se, om det retter sig.", { pct: Math.abs(efficiencyPct) }));
   if (restHRDelta != null && restHRDelta >= 5) add("resthr-high", "warn", t("Hvilepulsen har ligget {n} slag over din normal de sidste uger. Kroppen beder om søvn og mad før den beder om km.", { n: restHRDelta }));
   if (restHRDelta != null && restHRDelta <= -3) add("resthr-low", "good", t("Hvilepulsen er faldet {n} slag under din normal. Konditionen stiger.", { n: Math.abs(restHRDelta) }),
     { label: t("Sæt normal hvilepuls til {hr}", { hr: Math.round(p.restHR + restHRDelta) }), patch: { restHR: Math.round(p.restHR + restHRDelta) } });
-  if (runsPerWeek != null && p.maxRunDays && runsPerWeek <= p.maxRunDays - 1.5 && withActs.length >= 4) add("fewer-days", "info", t("Du løber i snit {n} dage om ugen, men planen regner med {max}. Færre, lidt længere ture passer måske bedre til dit liv.", { n: runsPerWeek, max: p.maxRunDays }),
+  if (runsPerWeek != null && p.maxRunDays && runsPerWeek <= p.maxRunDays - 1.5 && withActs.length >= 4) add("fewer-days", "info", t("Du løber {n} dage om ugen, planen regner med {max}. Færre, lidt længere ture passer måske bedre.", { n: runsPerWeek, max: p.maxRunDays }),
     coach ? null : { label: t("Sæt løbedage til {n}", { n: Math.max(2, Math.round(runsPerWeek)) }), patch: { maxRunDays: Math.max(2, Math.round(runsPerWeek)) } });
   // Sleep: the last 3 logged weeks with hours.
   const sleeps = weeks.slice(-3).map((w) => log[w.key]?.sleep).filter((x) => x > 0);
@@ -184,9 +184,8 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (vo2.length >= 3 && vo2.at(-1) - vo2[0] >= 1) add("vo2-up", "good", t("VO2 max fra uret er gået fra {from} til {to}. Motoren vokser.", { from: vo2[0], to: vo2.at(-1) }));
   if (vo2.length >= 3 && vo2[0] - vo2.at(-1) >= 2) add("vo2-down", "info", t("VO2 max fra uret er faldet fra {from} til {to}. Det følger tit lav volumen eller sygdom – ikke noget at jage, men værd at kende.", { from: vo2[0], to: vo2.at(-1) }));
   if (hrv.length >= 4) { const base = mean(hrv.slice(0, -1)); const last = hrv.at(-1); if (base > 0 && last < base * 0.85) add("hrv-low", "warn", t("HRV er {last} mod normalt {base}. Kroppen er under pres – sov, spis, og hold ugen rolig.", { last, base: Math.round(base) })); }
-  if (streak >= 4) add("streak", "good", t("{n} uger i træk med logget træning. Kontinuitet slår alt.", { n: streak }));
 
-  if (findings.length === 0) add("empty", "info", t("Appen kender dig ikke endnu. Log dine ture eller hent dem fra Garmin/Strava i et par uger, så begynder den at se mønstre: hvilke dage du faktisk løber, om planen passer til dig, og om de rolige ture er rolige nok."));
+  if (findings.length === 0) add("empty", "info", t("Appen kender dig ikke endnu. Log dine ture i et par uger, så dukker mønstrene op her."));
   const order = { warn: 0, info: 1, good: 2 };
   findings.sort((a, b) => order[a.level] - order[b.level]);
   const summary = { sleepAvg, easyPace, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,

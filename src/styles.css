@@ -662,7 +662,7 @@ details.acc > summary:hover h2 { color: var(--text); }
 /* quick RPE on the today card */
 .quick-rpe { margin: 12px 0 4px; text-align: left; }
 .quick-rpe > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; text-align: center; }
-.rpe-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.rpe-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .rpe-chips button { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 48px; padding: 6px 2px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px solid var(--line); color: var(--text); cursor: pointer; font: inherit; }
 .rpe-chips button b { font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 18px; line-height: 1; }
 .rpe-chips button small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -684,3 +684,32 @@ details.acc .import { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .cellval { display: inline-block; position: relative; padding: 6px 18px 6px 0; min-width: 2ch; font-variant-numeric: tabular-nums; }
 .cellval .tag { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); font-size: 11px; font-style: normal; }
 .weekfields .cellval { display: block; margin-top: 2px; }
+
+/* ---- round 2: I dag ---- */
+h1.today-date { font-weight: 600; margin: 0; }
+.rpe-chips button small { font-size: 12px; }
+.dayform-item.editing { border-left: 3px solid var(--orange); }
+.kost .row-between .muted { text-align: right; font-size: 13px; }
+
+/* ---- round 2: Plan ---- */
+.thisweek div small { font-size: 12px; }
+.thisweek .note { font-size: 11px; }
+.wkhead:focus-visible { outline-offset: -3px; }
+@media (min-width: 1000px) {
+  main[data-view="plan"] > section.stack > .panel:first-of-type { grid-row: auto; }
+  main[data-view="plan"] > section.stack > .panel.weeks { grid-row: span 2; }
+  main[data-view="plan"] > section.stack > #raceday { grid-column: 1 / -1; }
+}
+.thisweek .lift-tag { display: block; color: var(--violet); font-size: 12px; }
+@media (max-width: 379px) { .wktitle { white-space: normal; } }
+
+/* ---- round 2: Fremskridt ---- */
+.dash-grid { gap: 14px; margin-top: 14px; }
+#konto { scroll-margin-top: 76px; }
+
+/* ---- round 2: Træner and Mere ---- */
+h2.sub { font-size: 16px; font-weight: 700; margin: 14px 0 8px; text-transform: none; letter-spacing: 0; font-family: inherit; }
+.coach-grid > div > h2.sub:first-child { margin-top: 0; }
+.sched-row select { padding-right: 28px; }
+.sched-row.coach { grid-template-columns: 34px 1fr 1.4fr; }
+.sched-row.coach input { grid-column: auto; }
