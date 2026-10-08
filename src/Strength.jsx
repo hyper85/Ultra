@@ -23,8 +23,9 @@ export function StrengthSession({ session, rest, showHow = true, compact = false
   );
 }
 
-/* Today's nutrition: the numbers, the reason, and four meal ideas behind a tap. */
-export function NutritionCard({ targets, meals, title = t("Dagens kost"), open = false }) {
+/* Today's nutrition: the numbers, the reason, and the day's meals behind a tap. The ideas rotate with the date; the meal
+   before and after the session are tagged, long runs get a line for what to take along, and "Andre forslag" rolls new ones. */
+export function NutritionCard({ targets, meals, title = t("Dagens kost"), open = false, onMore }) {
   if (!targets) return null;
   return (
     <section className="panel kost">
@@ -33,7 +34,10 @@ export function NutritionCard({ targets, meals, title = t("Dagens kost"), open =
         <details className="meals" open={open}>
           <summary>{t("Forslag til dagens måltider")}</summary>
           <p className="muted" style={{ margin: "8px 0 0" }}>{targets.kcal} kcal · {targets.protein} g {t("protein")} · {targets.carbs} g {t("kulhydrat")} · {targets.fat} g {t("fedt")}. {targets.note}</p>
-          <ul>{meals.rows.map((m) => <li key={m.meal}><b>{m.meal}</b><span>{m.text}</span></li>)}</ul>
+          <ul>{meals.rows.map((m) => <li key={m.meal} className={m.tag ? "tagged" : ""}><b>{m.meal}{m.tag ? <em> · {m.tag}</em> : null}<small>~{m.protein} g {t("protein")}</small></b><span>{m.text}</span></li>)}</ul>
+          {(meals.fuel || meals.after) && <p className="fuel">{[meals.fuel, meals.after].filter(Boolean).join(" ")}</p>}
+          <p className="muted season">{meals.season}</p>
+          {onMore && <div className="panel-foot"><button type="button" className="linkbtn" onClick={onMore}>{t("Andre forslag")}</button></div>}
           <p className="muted">{meals.hint} {t("Tallene er et estimat. Vægten og energien i hverdagen afgør, om de passer.")}</p>
         </details>
       )}

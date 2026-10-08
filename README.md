@@ -121,7 +121,9 @@ genopbygning, tungt og kort i opbygning, vedligehold i ultra-prep, let i nedtrap
 muskler, får du et sæt mere og 8–12 gentagelser; vil du tabe dig, får du flere gentagelser og kortere pauser.
 
 Kosten følger dagen: "I dag" viser kcal, protein, kulhydrat og fedt for dagens type (lang tur, hård session, rolig
-tur, styrke, hvile) og fire måltidsforslag, der passer til din kost og dine intolerancer. Vægttab er max 0,5 kg/uge og
+tur, styrke, hvile) og fire måltidsforslag, der passer til din kost og dine intolerancer. Forslagene skifter fra dag til
+dag ("Andre forslag" giver nye), måltidet før og efter dagens pas er markeret, lange ture får en linje om mad og drikke
+undervejs, hvert måltid viser sin proteinmængde, og en linje nævner sæsonens grønt. Vægttab er max 0,5 kg/uge og
 aldrig under 1,15 × hvilestofskiftet. Hele ugens tal står under Mere → Kost, programmet under Mere → Styrke, og
 AI-træneren kender både kropsmål, styrkepas og dagens kosttal.
 
