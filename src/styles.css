@@ -730,3 +730,6 @@ details:not(.acc) > summary::-webkit-details-marker { display: none; }
 details:not(.acc) > summary::after { content: "›"; color: var(--muted); font-size: 18px; transition: transform .15s ease; }
 details:not(.acc)[open] > summary::after { transform: rotate(90deg); }
 .ob .sched-row select.wide { grid-column: 2 / 4; }
+h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--muted); margin: 0; }
+.ob .row-between .linkbtn { white-space: nowrap; flex: 0 0 auto; }
+.ob .row-between > span { flex: 1 1 auto; }
