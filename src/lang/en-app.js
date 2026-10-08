@@ -50,9 +50,6 @@ export default {
   "Lør": "Sat",
   "Søn": "Sun",
   "Ingen tid": "No time",
-  "Kort (≤ 45 min)": "Short (≤ 45 min)",
-  "Normal (1–1½ t)": "Normal (1–1½ h)",
-  "Lang (2 t+)": "Long (2 h+)",
   "Når det passer": "Whenever it fits",
   "Morgen": "Morning",
   "Middag": "Midday",
@@ -167,8 +164,7 @@ export default {
   "{n} indtastede pas erstattet af urets udgave.": "{n} typed sessions replaced by the watch's version.",
   "Strava: ingen nye, men {n} indtastede pas erstattet af urets udgave.": "Strava: nothing new, but {n} typed sessions replaced by the watch's version.",
   "Strava: ingen nye aktiviteter.": "Strava: no new activities.",
-  "Afbryd forbindelsen til Strava? Hentede ture bliver stående.": "Disconnect Strava? Fetched runs will stay.",
-  "Strava er afbrudt.": "Strava is disconnected.",
+  "Strava er afbrudt. Dine ture bliver stående.": "Strava is disconnected. Your runs stay.",
   "Strava-svaret passede ikke til denne enhed. Prøv igen.": "The Strava response did not match this device. Try again.",
 
   // ---- file import
@@ -301,16 +297,11 @@ export default {
 
   // ---- Coach screen
   "Det appen har lært om dig": "What the app has learned about you",
-  "Lad træneren forme planen": "Let the coach shape the plan",
-  "AI-træneren foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.": "The AI coach suggests peak, level, run days and long-run day from your numbers. Nothing changes until you tap Apply.",
-  "Trænerplanen har faste uger, så et forslag slår den fra.": "The coach plan has fixed weeks, so a proposal switches it off.",
   "Regner…": "Working…",
   "Foreslå plan ud fra mine tal": "Propose a plan from my numbers",
   "Træneren vil ikke ændre noget: tallene passer til din plan.": "The coach would not change anything: the numbers fit your plan.",
   "Anvend": "Apply",
   "Afvis": "Reject",
-  "Spørg træneren": "Ask the coach",
-  "Kender dine tal, aldrig dit navn eller din e-mail. Samtalen bliver på denne enhed.": "Knows your numbers, never your name or e-mail. The chat stays on this device.",
   "Tænker…": "Thinking…",
   "fx Skal jeg løbe, når jeg er forkølet?": "e.g. Should I run when I have a cold?",
   "Send": "Send",
@@ -334,14 +325,9 @@ export default {
   // ---- More: start
   "Start": "Start",
   "Trænerplan – brug trænerens uger som de er": "Coach plan – use the coach's weeks as they are",
-  "Trænerplanen har faste datoer: uge 1 starter 24. aug. 2026, løbet er 30. jan. 2027. Startdato og dage nedenfor bruges kun, når trænerplanen er slået fra.": "The coach plan has fixed dates: week 1 starts 24 Aug 2026, the race is 30 Jan 2027. The start date and days below are only used when the coach plan is switched off.",
-  "Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge": "Start date – pick any day, the plan begins on the Monday of that week",
   "Sidste uge": "Last week",
   "Denne uge": "This week",
   "Næste uge": "Next week",
-  "− 1 uge": "− 1 week",
-  "+ 1 uge": "+ 1 week",
-  "Planen starter mandag {date} og løber {n} uger frem til løbet.": "The plan starts Monday {date} and runs {n} weeks up to the race.",
 
   // ---- More: you
   "Dig": "You",
@@ -365,7 +351,6 @@ export default {
   "Krop": "Body",
   "Hvor": "Where",
   "Vælg": "Choose",
-  "Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige. \"Skadet\" giver 4 ugers genopbygning med gå/løb.": "Sex is used for calories and the heart-rate estimate. Fitness sets how steeply the plan may rise. \"Injured\" gives 4 weeks of rebuild with walk/run.",
 
   // ---- More: the race
   "Navn": "Name",
@@ -382,14 +367,12 @@ export default {
   "Første uge A starter mandag": "First week A starts Monday",
   "Uge {k}": "Week {k}",
   "nu": "now",
-  "Hvor meget tid har du hver dag, og hvad skal der ellers ske?": "How much time do you have each day, and what else is going on?",
   "fx hente børn 15.30": "e.g. pick up kids 15:30",
   "fx børn hos den anden": "e.g. kids at the other parent",
   "note": "note",
   "Styrkedage": "Strength days",
   "Hård dag (ønsket)": "Hard day (preferred)",
   "Lang tur (ønsket)": "Long run (preferred)",
-  "Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med \"Lang\", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.": "The plan only puts runs on days with time. Short days get at most 8 km, the long run lands on a day marked \"Long\", and the back-to-back run the day after in ultra prep comes on top. If the week has no room for all the km, you are told instead of getting an impossible programme.",
 
   // ---- More: strength
   "Hvad vil du med kroppen?": "What do you want for your body?",
@@ -399,8 +382,6 @@ export default {
   "Dosis følger fasen: nu {phase}{deload}.": "The dose follows the phase: now {phase}{deload}.",
   "let uge": "easy week",
   "Ankel · hver dag": "Ankle · every day",
-  "Mål:": "Goals:",
-  "spænde {target}.": "target {target}.",
 
   // ---- More: reset
   "Nulstil": "Reset",
@@ -450,17 +431,14 @@ export default {
   "Kost": "Nutrition",
   "Hvilestofskifte ≈": "Resting metabolism ≈",
   "Protein": "Protein",
-  "hver dag. Kulhydrat følger arbejdet.": "every day. Carbohydrate follows the work.",
-  "Mål: tid, lidt ekstra på kvalitetsdage.": "Goal: a time, a little extra on quality days.",
   "Dag": "Day",
   "Kulhydrat": "Carbs",
   "Fedt": "Fat",
-  "Dagens tal og fire måltidsforslag står på \"I dag\" og skifter med dagens type. Tallene er et estimat: vægten og energien i hverdagen afgør, om de passer.": "Today's numbers and four meal ideas are on \"Today\" and change with the type of day. The numbers are an estimate: your weight and everyday energy decide whether they fit.",
   "Protein fra": "Protein from",
   "På lange ture": "On long runs",
   "Bytte-tips": "Swap tips",
   "Tåler ikke": "Cannot tolerate",
-  "Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.": "On runs over 90 min: 40 g carbohydrate/h to begin with, 60–90 g/h in ultra prep. At most 0.5 kg weight loss/week – otherwise eat more.",
+  "Under ture over 90 min: 40–90 g kulhydrat i timen. Dagens tal står på I dag.": "On runs over 90 min: 40–90 g of carbohydrate per hour. Today's numbers are on Today.",
 
   // ---- Log screen
   "Ingen ture endnu": "No runs yet",
@@ -585,4 +563,17 @@ export default {
   "kolonnerne Dato, Km og gerne Tid og RPE. RPE gættes ud fra pulsen, hvis feltet er tomt; rapporter om tempo og distance springes over.": "the columns Date, Km and ideally Time and RPE. RPE is guessed from heart rate when the field is empty; reports about pace and distance are skipped.",
   "ACWR-baseline: de 4 uger før planen antages til {km} km × RPE 5, indtil du henter eller taster dem.": "ACWR baseline: the 4 weeks before the plan are assumed at {km} km × RPE 5 until you import or type them.",
   "Strava kræver login. Appen henter så dine ture selv, hver gang du åbner den.": "Strava requires login. The app then fetches your runs itself every time you open it.",
+  "Lad AI-træneren foreslå en plan": "Let the AI coach suggest a plan",
+  "Foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.": "Suggests peak, level, run days and long run from your numbers. Nothing changes until you tap Apply.",
+  "Dine tal, aldrig dit navn. Samtalen bliver på enheden.": "Your numbers, never your name. The chat stays on this device.",
+  "Uge 1 starter {start} · løbet {race}.": "Week 1 starts {start} · the race {race}.",
+  "Startdato (planen begynder mandag i den uge)": "Start date (the plan begins on the Monday of that week)",
+  "tid og noter pr. dag": "time and notes per day",
+  "Trænerplanen bestemmer dagene: styrke {lift} · hård {hard} · lang {long}.": "The coach plan sets the days: strength {lift} · hard {hard} · long {long}.",
+  "Tidspunkt og noter pr. dag:": "Time of day and notes per day:",
+  "Tid pr. dag: kort = under 45 min · normal = 1–1½ time · lang = 2 timer eller mere.": "Time per day: short = under 45 min · normal = 1–1½ hours · long = 2 hours or more.",
+  "tidspunkt": "time of day",
+  "Kort": "Short",
+  "Normal": "Normal",
+  "Lang": "Long",
 };

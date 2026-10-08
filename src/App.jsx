@@ -55,7 +55,7 @@ const isoWeek = (d) => {
 
 /* ================= everyday life ================= */
 // How much time a day realistically offers. Drives which days get sessions and how big they may be.
-export const AVAIL = [["none", "Ingen tid"], ["short", "Kort (≤ 45 min)"], ["normal", "Normal (1–1½ t)"], ["long", "Lang (2 t+)"]];
+export const AVAIL = [["none", "Ingen tid"], ["short", "Kort"], ["normal", "Normal"], ["long", "Lang"]];
 const AV = { none: 0, short: 1, normal: 2, long: 3 };
 export const TIMES = [["", "Når det passer"], ["morning", "Morgen"], ["noon", "Middag"], ["evening", "Aften"]];
 const TIME_ICON = { morning: "☀", noon: "◐", evening: "☾" };
@@ -252,7 +252,8 @@ export default function App() {
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const [importMsg, setImportMsg] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [view, setView] = useState("today");
+  const [view, setView] = useState(() => { try { return sessionStorage.getItem("ultraplan-view") || "today"; } catch { return "today"; } }); // kept per tab, so a language switch (which remounts the app) lands where you were
+  useEffect(() => { try { sessionStorage.setItem("ultraplan-view", view); } catch { /* ignore */ } }, [view]);
   const [openMore, setOpenMore] = useState(null); // which "Mere" section to open when arriving from another screen (strava | files | strength)
   // Arriving under Mere with a section to open (Strava return, deep links): scroll that section to the top.
   useEffect(() => { if (view === "more" && openMore) requestAnimationFrame(() => document.getElementById(openMore)?.scrollIntoView({ block: "start" })); }, [view, openMore]);
@@ -342,9 +343,8 @@ export default function App() {
     try { window.location.assign(await stravaConnectURL()); } catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
   };
   const disconnectStrava = async () => {
-    if (!confirm(t("Afbryd forbindelsen til Strava? Hentede ture bliver stående."))) return;
     setStrava((x) => ({ ...x, busy: true }));
-    try { await stravaDisconnect(); setStrava({ connected: false, athlete: null, lastSync: null, busy: false, msg: { text: t("Strava er afbrudt.") } }); }
+    try { await stravaDisconnect(); setStrava({ connected: false, athlete: null, lastSync: null, busy: false, msg: { text: t("Strava er afbrudt. Dine ture bliver stående.") } }); }
     catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
   };
   // Back from Strava (?code=…&state=…): exchange the code once the session is known, then sync.
@@ -1355,7 +1355,7 @@ export default function App() {
           <h1 className="screen-title">{t("Træner")}</h1>
           <div className="panel coach-grid">
             <div>
-            <h3 className="sub">{t("Det appen har lært om dig")}</h3>
+            <h2 className="sub">{t("Det appen har lært om dig")}</h2>
             <div className="findings">
               {(showAllFindings ? insights.findings : insights.findings.slice(0, 3)).map((f) => (
                 <div key={f.id} className={`finding ${f.level}`}>
@@ -1365,8 +1365,9 @@ export default function App() {
               ))}
             </div>
             {insights.findings.length > 3 && <button type="button" className="linkbtn" onClick={() => setShowAllFindings((v) => !v)}>{showAllFindings ? t("Vis færre") : t("Vis alle {n}", { n: insights.findings.length })}</button>}
-            <h3 className="sub">{t("Lad træneren forme planen")}</h3>
-            <p className="muted">{t("AI-træneren foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.")}{plan.coach ? ` ${t("Trænerplanen har faste uger, så et forslag slår den fra.")}` : ""}</p>
+            {!plan.coach && (<>
+            <h2 className="sub">{t("Lad AI-træneren foreslå en plan")}</h2>
+            <p className="muted">{t("Foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.")}</p>
             {!proposal && <button className="btn ghost" type="button" onClick={askForPlan} disabled={proposing || coachBusy}>{proposing ? t("Regner…") : t("Foreslå plan ud fra mine tal")}</button>}
             {proposal && (
               <div className="proposal">
@@ -1380,11 +1381,10 @@ export default function App() {
                 </div>
               </div>
             )}
+            </>)}
             </div>
             <div>
-            <h3 className="sub">{t("Spørg træneren")}</h3>
-            <p className="muted">{t("Kender dine tal, aldrig dit navn eller din e-mail. Samtalen bliver på denne enhed.")}</p>
-            {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))} disabled={coachBusy}>{t(q)}</button>)}</div>}
+            <h2 className="sub">{t("Spørg AI-træneren")}</h2>
             <div className={`chat ${chat.length || coachBusy ? "" : "empty"}`} ref={chatRef} aria-live="polite">
               {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
               {coachBusy && <div className="msg assistant muted">{t("Tænker…")}</div>}
@@ -1394,6 +1394,8 @@ export default function App() {
               <input aria-label={t("Spørg AI-træneren")} value={coachQ} onChange={(e) => setCoachQ(e.target.value)} placeholder={t("fx Skal jeg løbe, når jeg er forkølet?")} maxLength={800} disabled={coachBusy} />
               <button className="btn" type="submit" disabled={coachBusy || !coachQ.trim()}>{t("Send")}</button>
             </form>
+            {!coachBusy && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))}>{t(q)}</button>)}</div>}
+            <p className="foot" style={{ marginTop: 10 }}>{t("Dine tal, aldrig dit navn. Samtalen bliver på enheden.")}</p>
             {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>{t("Ryd samtalen")}</button>}
             </div>
           </div>
@@ -1438,20 +1440,15 @@ export default function App() {
           <details className="panel acc">
             <summary><h2>{t("Start")}</h2><span className="acc-sum">{plan.coach ? t("trænerplan") : fmt(startD)}</span><span className="chev" aria-hidden="true">›</span></summary>
             <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={p.coachMode !== false} onChange={(e) => setP({ ...p, coachMode: e.target.checked })} /> {t("Trænerplan – brug trænerens uger som de er")}</label>
-            {plan.coach && <div className="muted" style={{ margin: "6px 0 10px" }}>{t("Trænerplanen har faste datoer: uge 1 starter 24. aug. 2026, løbet er 30. jan. 2027. Startdato og dage nedenfor bruges kun, når trænerplanen er slået fra.")}</div>}
-            <label>{t("Startdato – vælg en hvilken som helst dag, planen begynder mandag i den uge")}
+            {plan.coach ? <div className="muted" style={{ margin: "6px 0 4px" }}>{t("Uge 1 starter {start} · løbet {race}.", { start: fmt(plan.rows[0].wkStart), race: p.raceDate ? fmt(parseLocal(p.raceDate)) : "–" })}</div> : <>
+            <label>{t("Startdato (planen begynder mandag i den uge)")}
               <input type="date" value={p.startDate} max={p.raceDate} onChange={(e) => setStart(e.target.value)} />
             </label>
             <div className="quick">
-              <button onClick={() => setStart(ymd(addDays(thisMonday(), -7)))}>{t("Sidste uge")}</button>
               <button className={p.startDate === todayKey ? "on" : ""} onClick={() => setStart(todayKey)}>{t("Denne uge")}</button>
               <button onClick={() => setStart(ymd(addDays(thisMonday(), 7)))}>{t("Næste uge")}</button>
             </div>
-            <div className="quick">
-              <button onClick={() => shiftStart(-1)}>{t("− 1 uge")}</button>
-              <button onClick={() => shiftStart(1)}>{t("+ 1 uge")}</button>
-            </div>
-            <div className="muted">{t("Planen starter mandag {date} og løber {n} uger frem til løbet.", { date: fmt(startD), n: plan.weeks })}</div>
+            </>}
           </details>
 
           <details className="panel acc" open={!!planMsg}>
@@ -1459,10 +1456,8 @@ export default function App() {
             <dl className="plan-meta">
               <div><dt>{t("Version")}</dt><dd>{CP.version || t("indbygget (ingen version)")}</dd></div>
               <div><dt>{t("Importeret")}</dt><dd>{p.coachPlan?.importedAt ? `${new Date(p.coachPlan.importedAt).toLocaleString(locale(), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} · ${p.coachPlan.fileName || ""}` : t("ikke importeret – appens egen fil")}</dd></div>
-              <div><dt>{t("Indhold")}</dt><dd>{t("{w} uger fra {start}", { w: CP.weeks.length, start: CP.weeks[0] ? fmt(parseLocal(CP.weeks[0].start)) : "–" })}{CP.events.length ? ` · ${tn(CP.events.length, "1 event", "{n} events")}` : ""}</dd></div>
             </dl>
-            {CP.events.length > 0 && <ul className="event-list">{CP.events.map((e) => <li key={e.date + e.name}><b>★ {e.name}</b> <span className="muted">{fmt(parseLocal(e.date))}{e.km ? ` · ${e.km} km` : ""}{e.hours ? ` · ${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : ""}</span></li>)}</ul>}
-            <p className="muted">{t("Importér trænerens coach-plan.json eller Excel-ark. Kun planens uger, dage, sessioner, fokus og events skiftes ud. Log, RPE, hvilepuls, søvn, vægt og data fra uret bliver stående.")}</p>
+            <p className="muted">{t("Importér trænerens coach-plan.json eller Excel. Kun planens uger skiftes ud – loggen røres ikke.")}</p>
             <div className="import-row">
               <input ref={planFileRef} type="file" accept=".json,.xlsx,.xlsm,application/json" onChange={importPlan} aria-label={t("Importér trænerplan")} />
               {p.coachPlan && <button className="btn ghost" type="button" onClick={resetPlan}>{t("Brug den indbyggede plan")}</button>}
@@ -1472,12 +1467,12 @@ export default function App() {
           <details className="panel acc">
             <summary><h2>{t("Dig")}</h2><span className="acc-sum">{[p.age ? t("{n} år", { n: p.age }) : null, p.weight ? `${p.weight} kg` : null, p.restHR ? t("hvilepuls {n}", { n: p.restHR }) : null].filter(Boolean).join(" · ")}</span><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
-              <label>{t("Alder")}<input type="number" value={p.age} onChange={set("age")} /></label>
-              <label>{t("Vægt (kg)")}<input type="number" value={p.weight} onChange={set("weight")} /></label>
-              <label>{t("Højde (cm)")}<input type="number" value={p.height} onChange={set("height")} /></label>
-              <label>{t("Hvilepuls")}<input type="number" value={p.restHR} onChange={set("restHR")} /></label>
-              <label>{t("Makspuls")}<input type="number" value={p.maxHR || ""} onChange={set("maxHR")} placeholder={t("tom = estimat")} /></label>
-              <label>{t("Km/uge nu")}<input type="number" value={p.currentKm} onChange={set("currentKm")} /></label>
+              <label>{t("Alder")}<input type="number" inputMode="numeric" value={p.age} onChange={set("age")} /></label>
+              <label>{t("Vægt (kg)")}<input type="number" inputMode="decimal" value={p.weight} onChange={set("weight")} /></label>
+              <label>{t("Højde (cm)")}<input type="number" inputMode="numeric" value={p.height} onChange={set("height")} /></label>
+              <label>{t("Hvilepuls")}<input type="number" inputMode="numeric" value={p.restHR} onChange={set("restHR")} /></label>
+              <label>{t("Makspuls")}<input type="number" inputMode="numeric" value={p.maxHR || ""} onChange={set("maxHR")} placeholder={t("tom = estimat")} /></label>
+              <label>{t("Km/uge nu")}<input type="number" inputMode="numeric" value={p.currentKm} onChange={set("currentKm")} /></label>
             </div>
             <div className="row2">
               <label>{t("Køn")}<select value={p.sex} onChange={(e) => setP({ ...p, sex: e.target.value })}><option value="m">{t("Mand")}</option><option value="f">{t("Kvinde")}</option><option value="x">{t("Andet")}</option></select></label>
@@ -1494,7 +1489,6 @@ export default function App() {
               <label>{t("Krop")}<select value={p.injury || "none"} onChange={(e) => setP({ ...p, injury: e.target.value })}>{INJURY.map(([k, n]) => <option key={k} value={k}>{t(n)}</option>)}</select></label>
               {(p.injury || "none") !== "none" && <label>{t("Hvor")}<select value={p.injuryArea || ""} onChange={(e) => setP({ ...p, injuryArea: e.target.value })}><option value="">{t("Vælg")}</option>{AREAS.map((x) => <option key={x} value={x}>{t(x)}</option>)}</select></label>}
             </div>
-            <div className="muted" style={{ marginTop: 6 }}>{t('Køn bruges til kalorier og pulsestimat. Form styrer hvor stejlt planen må stige. "Skadet" giver 4 ugers genopbygning med gå/løb.')}</div>
           </details>
 
           <details className="panel acc">
@@ -1502,45 +1496,46 @@ export default function App() {
             <label>{t("Navn")}<input value={p.raceName} onChange={set("raceName")} /></label>
             <div className="row2">
               <label>{t("Løbsdato")}<input type="date" value={p.raceDate} min={p.startDate} onChange={set("raceDate")} /></label>
-              <label>{t("Distance (km)")}<input type="number" value={p.raceKm} onChange={set("raceKm")} /></label>
-              <label>{t("Højdemeter")}<input type="number" value={p.raceVert} onChange={set("raceVert")} /></label>
+              <label>{t("Distance (km)")}<input type="number" inputMode="decimal" value={p.raceKm} onChange={set("raceKm")} /></label>
+              <label>{t("Højdemeter")}<input type="number" inputMode="numeric" value={p.raceVert} onChange={set("raceVert")} /></label>
             </div>
           </details>
 
           <details className="panel acc">
-            <summary><h2>{t("Din hverdag")}</h2><span className="acc-sum">{t("{n} løbedage", { n: p.maxRunDays })}</span><span className="chev" aria-hidden="true">›</span></summary>
-            <div className="row2">
-              <label>{t("Familie")}<select value={p.family} onChange={(e) => setP({ ...p, family: e.target.value, altWeeks: e.target.value === "kids" ? p.altWeeks : false })}>{FAMILY_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <summary><h2>{t("Din hverdag")}</h2><span className="acc-sum">{plan.coach ? t("tid og noter pr. dag") : t("{n} løbedage", { n: p.maxRunDays })}</span><span className="chev" aria-hidden="true">›</span></summary>
+            {!plan.coach && <div className="row2">
               <label>{t("Løbedage om ugen (inkl. lang tur)")}<select value={p.maxRunDays} onChange={(e) => setP({ ...p, maxRunDays: +e.target.value })}>{[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t("{n} dage", { n })}</option>)}</select></label>
-            </div>
-            {p.family === "kids" && (
+            </div>}
+            {plan.coach && <div className="muted" style={{ marginTop: 10 }}>{t("Trænerplanen bestemmer dagene: styrke {lift} · hård {hard} · lang {long}.", { lift: liftDays.map((i) => dayLow(i)).join(" + "), hard: dayLow(CP.week.qualityDay), long: dayLow(CP.week.longDay) })}</div>}
+            {(
               <div style={{ marginTop: 8 }}>
                 <label className="check"><input type="checkbox" checked={!!p.altWeeks} onChange={(e) => setP({ ...p, altWeeks: e.target.checked })} /> {t("Deleordning – ugerne skifter (uge A / uge B)")}</label>
                 {p.altWeeks && <label style={{ marginTop: 6 }}>{t("Første uge A starter mandag")}<input type="date" value={p.altStart} onChange={(e) => { if (e.target.value) setP({ ...p, altStart: ymd(mondayOf(parseLocal(e.target.value))) }); }} /></label>}
               </div>
             )}
             {p.altWeeks && <div className="tabs" style={{ margin: "10px 0 6px" }}>{["A", "B"].map((k) => <button key={k} className={schedTab === k ? "on" : ""} onClick={() => setSchedTab(k)}>{t("Uge {k}", { k })}{k === curSchedLabel ? ` · ${t("nu")}` : ""}</button>)}</div>}
-            <div className="muted" style={{ margin: "8px 0 4px" }}>{t("Hvor meget tid har du hver dag, og hvad skal der ellers ske?")}</div>
+            <div className="muted" style={{ margin: "8px 0 4px" }}>{plan.coach ? t("Tidspunkt og noter pr. dag:") : t("Tid pr. dag: kort = under 45 min · normal = 1–1½ time · lang = 2 timer eller mere.")}</div>
             <div className="sched">
               {DAYS.map((d, i) => {
                 const row = sched[i] || day("none");
                 return (
-                  <div key={d} className={`sched-row ${row.avail === "none" ? "off" : ""}`}>
+                  <div key={d} className={`sched-row ${!plan.coach && row.avail === "none" ? "off" : ""} ${plan.coach ? "coach" : ""}`}>
                     <b>{d}</b>
-                    <select value={row.avail} onChange={(e) => setDay(i, { avail: e.target.value })}>{AVAIL_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-                    <select value={row.time} onChange={(e) => setDay(i, { time: e.target.value })} disabled={row.avail === "none"}>{TIMES_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-                    <input value={row.note} placeholder={i === 2 ? t("fx hente børn 15.30") : i === 5 ? t("fx børn hos den anden") : t("note")} maxLength={40} onChange={(e) => setDay(i, { note: e.target.value })} />
+                    {!plan.coach && <select aria-label={`${d} – ${t("tid")}`} value={row.avail} onChange={(e) => setDay(i, { avail: e.target.value })}>{AVAIL_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}
+                    <select aria-label={`${d} – ${t("tidspunkt")}`} value={row.time} onChange={(e) => setDay(i, { time: e.target.value })} disabled={!plan.coach && row.avail === "none"}>{TIMES_T.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                    <input aria-label={`${d} – ${t("note")}`} value={row.note} placeholder={i === 2 ? t("fx hente børn 15.30") : i === 5 ? t("fx børn hos den anden") : t("note")} maxLength={40} onChange={(e) => setDay(i, { note: e.target.value })} />
                   </div>
                 );
               })}
             </div>
+            {!plan.coach && <>
             <label>{t("Styrkedage")}</label>
-            <div className="days">{DAYS.map((d, i) => <button key={d} className={p.liftDays.includes(i) ? "on" : ""} onClick={() => toggle("liftDays", i)}>{d}</button>)}</div>
+            <div className="days">{DAYS.map((d, i) => <button key={d} className={p.liftDays.includes(i) ? "on" : ""} aria-pressed={p.liftDays.includes(i)} onClick={() => toggle("liftDays", i)}>{d}</button>)}</div>
             <div className="row2">
               <label>{t("Hård dag (ønsket)")}<select value={p.qualityDay} onChange={(e) => setP({ ...p, qualityDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 2}>{d}</option>)}</select></label>
               <label>{t("Lang tur (ønsket)")}<select value={p.longDay} onChange={(e) => setP({ ...p, longDay: +e.target.value })}>{DAYS.map((d, i) => <option key={d} value={i} disabled={(AV[sched[i]?.avail] ?? 0) < 3}>{d}</option>)}</select></label>
             </div>
-            <div className="muted" style={{ marginTop: 6 }}>{t('Planen lægger kun løb på dage med tid. Korte dage får max 8 km, den lange tur lander på en dag med "Lang", og back-to-back-turen dagen efter i ultra-prep kommer oveni. Har ugen ikke plads til alle km, får du besked i stedet for et umuligt program.')}</div>
+            </>}
           </details>
           <details className="panel acc" id="strength" open={openMore === "strength"}>
             <summary><h2>{t("Styrke")}</h2><span className="acc-sum">{liftDays.length ? liftDays.map((i) => DAYS[i]).join(" + ") : t("ingen")}</span><span className="chev" aria-hidden="true">›</span></summary>
@@ -1555,10 +1550,9 @@ export default function App() {
                 </div>
               </>
             )}
-            <p className="muted">{strengthPlan.note}{strengthPlan.rule ? ` ${strengthPlan.rule}` : ""}{!plan.coach ? ` ${t("Dosis følger fasen: nu {phase}{deload}.", { phase: t(cur.phase).toLowerCase(), deload: cur.deload ? `, ${t("let uge")}` : "" })}` : ""}</p>
+            <p className="muted">{strengthPlan.note}{!plan.coach ? ` ${t("Dosis følger fasen: nu {phase}{deload}.", { phase: t(cur.phase).toLowerCase(), deload: cur.deload ? `, ${t("let uge")}` : "" })}` : ""}</p>
             {strengthPlan.sessions.map((x, i) => <StrengthSession key={x.key} session={{ ...x, name: `${x.name}${liftDays[i] != null ? " · " + dayLow(liftDays[i]) : ""}` }} rest={x.rest} />)}
             <div className="tips"><div><b>{t("Ankel · hver dag")}</b><span>{strengthPlan.daily.join(" · ")}</span></div></div>
-            {plan.coach && <div className="muted" style={{ marginBottom: 14 }}>{t("Mål:")} {Object.entries(CP.race.goals || {}).map(([k, v]) => `${k} ${v}`).join(" · ")} · {t("spænde {target}.", { target: CP.race.target })}</div>}
           </details>
           <div className="group-label">{t("Data")}</div>
           {renderSources()}
@@ -1707,21 +1701,13 @@ export default function App() {
             {view === "more" && (
               <details className="panel acc">
                 <summary><h2>{t("Kost")}</h2><span className="acc-sum">{t(DIETS.find(([k]) => k === (p.diet || "all"))?.[1] || "")}</span><span className="chev" aria-hidden="true">›</span></summary>
-                <p>{t("Hvilestofskifte ≈")} <b>{bmr} kcal</b>. {t("Protein")} <b>{proteinG(p.weight, p.body)} g</b> {t("hver dag. Kulhydrat følger arbejdet.")} {t(BODY.find(([k]) => k === (p.body || "keep"))?.[2])}{p.goal === "perform" ? ` ${t("Mål: tid, lidt ekstra på kvalitetsdage.")}` : ""}</p>
-                <div className="chips" style={{ marginTop: 0 }}>{BODY.map(([k, n]) => <button key={k} type="button" className={(p.body || "keep") === k ? "on" : ""} onClick={() => setP({ ...p, body: k })}>{t(n)}</button>)}</div>
-                <div className="scroll" style={{ marginTop: 10 }}><table className="macro-table"><thead><tr><th>{t("Dag")}</th><th className="num">kcal</th><th className="num">{t("Protein")}</th><th className="num">{t("Kulhydrat")}</th><th className="num">{t("Fedt")}</th></tr></thead><tbody>{macroRows.map((r) => <tr key={r.key}><td>{r.label}</td><td className="num"><b>{r.kcal}</b></td><td className="num">{r.protein} g</td><td className="num">{r.carbs} g</td><td className="num">{r.fat} g</td></tr>)}</tbody></table></div>
-                <p className="muted">{t('Dagens tal og fire måltidsforslag står på "I dag" og skifter med dagens type. Tallene er et estimat: vægten og energien i hverdagen afgør, om de passer.')}</p>
-                {(() => { const tips = dietTips(p.diet || "all", p.intol || []); return (
-                  <div className="tips">
-                    <div><b>{t("Protein fra")}</b><span>{tips.protein.join(" · ")}</span></div>
-                    <div><b>{t("På lange ture")}</b><span>{tips.fuel.join(" · ")}</span></div>
-                    {tips.swaps.length > 0 && <div><b>{t("Bytte-tips")}</b><span>{tips.swaps.join(" ")}</span></div>}
-                  </div>); })()}
+                <div className="chips" style={{ marginTop: 12 }}>{BODY.map(([k, n]) => <button key={k} type="button" className={(p.body || "keep") === k ? "on" : ""} aria-pressed={(p.body || "keep") === k} onClick={() => setP({ ...p, body: k })}>{t(n)}</button>)}</div>
+                <div className="muted" style={{ margin: "6px 0 4px" }}>{t(BODY.find(([k]) => k === (p.body || "keep"))?.[2])}</div>
                 <div className="row2" style={{ marginTop: 10 }}>
                   <label>{t("Kost")}<select value={p.diet || "all"} onChange={(e) => setP({ ...p, diet: e.target.value })}>{DIETS.map(([k, n]) => <option key={k} value={k}>{t(n)}</option>)}</select></label>
                   <label>{t("Tåler ikke")}<div className="chips" style={{ marginTop: 6 }}>{INTOL.map((x) => <button key={x} type="button" className={(p.intol || []).includes(x) ? "on" : ""} onClick={() => setP({ ...p, intol: (p.intol || []).includes(x) ? p.intol.filter((y) => y !== x) : [...(p.intol || []), x] })}>{t(x)}</button>)}</div></label>
                 </div>
-                <p className="muted">{t("Under ture over 90 min: 40 g kulhydrat/t i starten, 60–90 g/t i ultra-prep. Max 0,5 kg vægttab/uge – ellers spis mere.")}</p>
+                <p className="muted">{t("Under ture over 90 min: 40–90 g kulhydrat i timen. Dagens tal står på I dag.")}</p>
               </details>
             )}
 

@@ -706,3 +706,10 @@ h1.today-date { font-weight: 600; margin: 0; }
 /* ---- round 2: Fremskridt ---- */
 .dash-grid { gap: 14px; margin-top: 14px; }
 #konto { scroll-margin-top: 76px; }
+
+/* ---- round 2: Træner and Mere ---- */
+h2.sub { font-size: 16px; font-weight: 700; margin: 14px 0 8px; text-transform: none; letter-spacing: 0; font-family: inherit; }
+.coach-grid > div > h2.sub:first-child { margin-top: 0; }
+.sched-row select { padding-right: 28px; }
+.sched-row.coach { grid-template-columns: 34px 1fr 1.4fr; }
+.sched-row.coach input { grid-column: auto; }
