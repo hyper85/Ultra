@@ -92,12 +92,12 @@ løbsuge), og i starten af en ny uge en opsummering af sidste uge (km mod planen
 sætnings dom. Overblik viser "Form for din alder" og "Fitnessalder": VO2 max fra Garmins rapport, ellers anslået fra
 hvile- og makspuls med alderskorrektion, sat mod Cooper Institutes normer for alder og køn. Tallet er et estimat.
 
-Overblik: tryk på fanen Overblik (eller "Overblik ›" på "I dag") for en side med dine tal: denne uge mod planen,
+Fremskridt → Overblik: tryk på fanen Fremskridt for en side med dine tal: denne uge mod planen,
 snit sidste 4 uger, ACWR nu, længste tur, andre pas, hvor meget af planen du har ramt, og søvn, hvilepuls, VO2 max og
 vægt, når loggen har dem. Under tallene: km pr. uge mod planen, ACWR over tid med det grønne bånd, måned for måned fra
 uret, søvn og hvilepuls som kurver, og de mønstre appen har fundet. Logoet øverst fører altid til forsiden.
 
-Strava-forbindelse: under Log → Strava trykker du "Forbind Strava" (kræver login). Derefter henter appen dine ture
+Strava-forbindelse: under Mere → Data → Strava trykker du "Forbind Strava" (kræver login). Derefter henter appen dine ture
 selv, hver gang du åbner den: de sidste 120 dage første gang, og alt nyt siden sidst bagefter, gennem den samme
 dublet-tjek som filimport. Garmin sender automatisk til Strava, når de er koblet sammen i Garmin Connect
 (Indstillinger → Tilsluttede apps → Strava). Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du stadig
@@ -130,7 +130,7 @@ og "I dag" og "Plan" skriver "· trænerplan". Spørgeskemaet og et anvendt AI-f
 stedet en plan fra din startdato. Sker det for trænerens løb, siger appen det med rødt på "I dag" og "Plan", og ét tryk
 på "Brug trænerplanen" skifter tilbage; i spørgeskemaets sidste trin ligger trænerplanen som første kort.
 
-Under Log → Hent kan du vælge alle filerne på én gang, også Garmins rapporter (Rapporter → vælg rapport → 1 år →
+Under Mere → Data → Hent fra filer kan du vælge alle filerne på én gang, også Garmins rapporter (Rapporter → vælg rapport → 1 år →
 Eksportér). Appen forstår daglige, ugentlige og månedlige rækker og lægger tallene i loggen pr. uge:
 
 | Rapport | Bliver til |
@@ -148,7 +148,7 @@ Excel virker også (.xlsx): en Garmin-fil du har åbnet og gemt i Excel, eller d
 gerne Tid og RPE. Hvert ark i arbejdsbogen læses for sig og behandles som en CSV-fil; ark med noter springes over.
 Datoer og tider læses som Excel viser dem. Gamle .xls-filer skal først gemmes som .xlsx.
 
-Har du hentet dine ture fra Garmin eller Strava (Log → Hent), kan træneren også forme planen: "Foreslå plan ud fra
+Har du hentet dine ture fra Garmin eller Strava (Mere → Data → Hent fra filer), kan træneren også forme planen: "Foreslå plan ud fra
 mine tal" sender de sidste 12 uger fra uret (km, ture, længste tur, puls, tempo) med, og AI-træneren foreslår top,
 niveau, løbedage, lang tur-dag og base. Appen viser forskellen, bygger selv planen af tallene, og intet ændres,
 før du trykker Anvend.

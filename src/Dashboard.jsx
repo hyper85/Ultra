@@ -3,9 +3,10 @@ import { watchHistory } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { t, tn, locale } from "./i18n.js";
 
-/* Overblik: the runner's numbers on one screen. Stat tiles first (what matters now), then the pictures: weekly km
-   against the plan, load and ACWR over time, months from the watch, and sleep / resting heart rate when the log has
-   them. Inline SVG, one accent for "you", muted for the plan, the app's green/amber/red for the ACWR states. */
+/* Fremskridt → Overblik: the runner's numbers on one screen (App.jsx renders the title and the Overblik · Log segment
+   above). One grid of stat tiles (the ACWR tile scrolls to its chart), then the pictures: weekly km against the plan,
+   ACWR over time, pace on easy runs, months from the watch, and sleep / resting heart rate when the log has them.
+   Inline SVG, one accent for "you", muted for the plan, the app's green/amber/red for the ACWR states. */
 
 const r1 = (x) => Math.round(x * 10) / 10;
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -61,8 +62,8 @@ function Line({ rows, height = 130, band, color = "accent", format = (v) => v, c
   );
 }
 
-const Tile = ({ label, value, unit, sub, cls = "" }) => (
-  <div className={`tile ${cls}`}><small>{label}</small><b>{value}{unit && <span>{unit}</span>}</b>{sub && <small className="sub">{sub}</small>}</div>
+const Tile = ({ label, value, unit, sub, cls = "", onClick, title }) => (
+  <div className={`tile ${cls}`} title={title} {...(onClick ? { role: "button", tabIndex: 0, onClick, onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {})}><small>{label}</small><b>{value}{unit && <span>{unit}</span>}</b>{sub && <small className="sub">{sub}</small>}</div>
 );
 
 
@@ -87,7 +88,7 @@ function PaceTrend({ ae }) {
   );
 }
 
-export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, middle = null }) {
+export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
   const curLog = log[cur.key] || {};
@@ -119,17 +120,13 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
   const est = fitness?.measured ? "" : ` ${t("(anslået)")}`;
   const category = fitness ? t(fitness.category) : "";
   return (
-    <section className="stack dash">
-      <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
+    <>
       <div className="tiles">
         <Tile label={t("Denne uge")} value={curLog.km || 0} unit={` / ${cur.km} km`} sub={pct != null ? t("{pct} % af planen · uge {i} af {n}", { pct, i: cur.i, n: plan.weeks }) : t("uge {i} af {n}", { i: cur.i, n: plan.weeks })} />
         <Tile label={t("Snit sidste 4 uger")} value={last4.length ? Math.round(mean(last4)) : "–"} unit={` ${t("km/uge")}`} sub={last4.length ? tn(last4.length, "1 uge med data", "{n} uger med data") : t("log en uge først")} />
         {(() => { const a = weekYoung && acwrLast ? acwrLast : acwr; const label = weekYoung && acwrLast ? t("ACWR, uge {i}", { i: lastDone.i }) : t("ACWR nu"); const verdict = a ? (a.v > 1.5 ? t("Rødt: skær ned, ingen hårde pas") : a.v > 1.3 ? t("Gult: hold igen") : a.v >= 0.8 ? t("Grønt: belastningen passer") : t("Lavt: der er plads")) + (a.est ? ` · ${t("estimat")}` : "") : t("kommer, når ugen har km og RPE"); return (
-          <Tile label={label} value={a ? r1(a.v).toFixed(2) : "–"} sub={weekYoung && acwrLast ? `${verdict} · ${t("denne uge er i gang")}${acwr ? ` (${t("{v} indtil nu", { v: r1(acwr.v).toFixed(2) })})` : ""}` : verdict} cls={acwrClass(a?.v)} />); })()}
+          <Tile onClick={() => document.getElementById("chart-acwr")?.scrollIntoView({ behavior: "smooth", block: "start" })} title={t("Se grafen")} label={label} value={a ? r1(a.v).toFixed(2) : "–"} sub={weekYoung && acwrLast ? `${verdict} · ${t("denne uge er i gang")}${acwr ? ` (${t("{v} indtil nu", { v: r1(acwr.v).toFixed(2) })})` : ""}` : verdict} cls={acwrClass(a?.v)} />); })()}
         <Tile label={t("Længste tur, 4 uger")} value={longest ?? "–"} unit=" km" sub={recent.length ? tn(recent.length, "1 tur · {per} pr. uge", "{n} ture · {per} pr. uge", { per: r1(recent.length / 4) }) : t("ingen ture i loggen")} />
-      </div>
-      {middle}
-      <div className="tiles">
         {(() => { const v28 = recent.reduce((a, x) => a + (x.vert || 0), 0); const k28 = recent.reduce((a, x) => a + x.km, 0); const race = p.raceKm > 0 && p.raceVert > 0 ? Math.round(p.raceVert / p.raceKm) : null; const mine = k28 > 0 ? Math.round(v28 / k28) : null; return v28 > 0 ? <Tile label={t("Højdemeter, 4 uger")} value={v28} unit=" m+" sub={race ? t("{mine} m/km · løbet kræver {race} m/km", { mine, race }) : t("{mine} m/km", { mine })} cls={race && mine != null ? (mine >= race * 0.6 ? "good" : mine >= race * 0.3 ? "warn" : "bad") : ""} /> : null; })()}
         <Tile label={t("Andre pas denne uge")} value={curLog.xn || 0} sub={curLog.xmin ? t("{min} min · styrke/HIIT/andet", { min: curLog.xmin }) : liftDays.length ? tn(liftDays.length, "1 styrkepas i planen", "{n} styrkepas i planen") : t("ingen")} />
         <Tile label={t("Planen indtil nu")} value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? t("{ran} af {plan} km i alt · uge for uge: {hit} på planen", { ran: Math.round(ranToDate), plan: Math.round(planKmToDate), hit }) + (over ? t(", {n} over", { n: over }) : "") + (under ? t(", {n} under", { n: under }) : "") : t("første uge er i gang")} cls={rated.length && hit === 0 && over > 0 ? "warn" : ""} />
@@ -142,6 +139,16 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
       </div>
 
       <div className="dash-grid">
+        <div className="panel">
+          <div className="row-between"><h2 style={{ margin: 0 }}>{t("Km pr. uge")}</h2><span className="muted"><i className="sw plan" /> {t("plan")} <i className="sw ran" /> {t("løbet")}</span></div>
+          {shown.length ? <Bars rows={shown} cur={cur.key} /> : <p className="muted">{t("Planen er ikke begyndt endnu.")}</p>}
+          <p className="muted">{t("● = let uge. Planens tal er et loft.")}</p>
+        </div>
+        <div className="panel" id="chart-acwr">
+          <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
+          {loadRows.filter((r) => r.v != null).length >= 2 ? <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} /> : <p className="muted">{t("ACWR tegnes, når mindst to uger har km og RPE.")}</p>}
+          <p className="muted">{t("Ugens belastning ÷ snittet af de 4 før. Over 1,5: skær ned.")}</p>
+        </div>
         {(() => { const ae = aerobicEfficiency(acts); return (
           <div className="panel">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Aerob effektivitet")}</h2><span className="muted">{t("rolige ture, puls {lo}–{hi}, min. {km} km", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</span></div>
@@ -153,18 +160,8 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
               </div>
               <PaceTrend ae={ae} />
               <p className="muted">{ae.trendPer4w != null ? (ae.trendPer4w < 0 ? t("Trend: {s} s/km hurtigere pr. 4 uger på rolige ture.", { s: -ae.trendPer4w }) : ae.trendPer4w > 0 ? t("Trend: {s} s/km langsommere pr. 4 uger. Træthed, varme eller mere trail kan forklare det.", { s: ae.trendPer4w }) : t("Trend: stabilt tempo.")) : ""}</p>
-            </> : <p className="muted">{t("Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Log.", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</p>}
+            </> : <p className="muted">{t("Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Mere → Data.", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</p>}
           </div>); })()}
-        <div className="panel">
-          <div className="row-between"><h2 style={{ margin: 0 }}>{t("Km pr. uge")}</h2><span className="muted"><i className="sw plan" /> {t("plan")} <i className="sw ran" /> {t("løbet")}</span></div>
-          {shown.length ? <Bars rows={shown} cur={cur.key} /> : <p className="muted">{t("Planen er ikke begyndt endnu.")}</p>}
-          <p className="muted">{t("● = let uge. Planens tal er et loft.")}</p>
-        </div>
-        <div className="panel">
-          <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
-          {loadRows.filter((r) => r.v != null).length >= 2 ? <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} /> : <p className="muted">{t("ACWR tegnes, når mindst to uger har km og RPE.")}</p>}
-          <p className="muted">{t("Ugens belastning ÷ snittet af de 4 før. Over 1,5: skær ned.")}</p>
-        </div>
         {monthly.length >= 2 && (
           <div className="panel">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Måned for måned")}</h2><span className="muted">{t("{total} km i alt · længste {longest} km", { total: hist.km_i_alt, longest: hist.længste_tur_nogensinde_km })}</span></div>
@@ -197,6 +194,6 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
           </div>
         )}
       </div>
-    </section>
+    </>
   );
 }

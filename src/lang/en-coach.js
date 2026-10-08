@@ -78,7 +78,7 @@ export default {
   "Trend: {s} s/km hurtigere pr. 4 uger på rolige ture.": "Trend: {s} s/km faster per 4 weeks on easy runs.",
   "Trend: {s} s/km langsommere pr. 4 uger. Træthed, varme eller mere trail kan forklare det.": "Trend: {s} s/km slower per 4 weeks. Fatigue, heat or more trail can explain it.",
   "Trend: stabilt tempo.": "Trend: steady pace.",
-  "Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Log.": "Needs at least 3 easy runs with heart rate from the watch (average HR {lo}–{hi}, at least {km} km). Connect Strava or import your runs under Log.",
+  "Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Mere → Data.": "Needs at least 3 easy runs with heart rate from the watch (average HR {lo}–{hi}, at least {km} km). Connect Strava or import your runs under More → Data.",
   // lap plan
   "Løbsplan": "Race plan",
   "Pacing og mad": "Pacing and food",
