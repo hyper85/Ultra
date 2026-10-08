@@ -233,7 +233,7 @@ export default {
   "Hent Strava eller Garmin, eller tast turen på dagen. Ugens km og ACWR-belastning passer, også før ugen er slut.": "Fetch Strava or Garmin, or type in the run on the day. The week's km and ACWR load are right, even before the week is over.",
   "Ærlige tal.": "Honest numbers.",
   "Planens tal er et loft, ikke et gulv. Bliver belastningen for høj, siger appen det.": "The plan's numbers are a ceiling, not a floor. If the load gets too high, the app says so.",
-  "Skriv din e-mail, så sender vi en kode eller et link. Der er ingen adgangskode, og derfor heller ingen at glemme: bed bare om en ny kode. Har du ikke en konto, oprettes den automatisk.": "Enter your email and we will send a code or a link. There is no password, so none to forget: just ask for a new code. If you do not have an account, one is created automatically.",
+  "Skriv din e-mail, så sender vi en kode. Ingen adgangskode. Ny bruger? Kontoen oprettes automatisk.": "Type your e-mail and we send a code. No password. New here? The account is created automatically.",
   "Dine data gemmes i din konto og følger med på alle enheder. Ikke lægefaglig rådgivning.": "Your data is saved in your account and follows you on every device. Not medical advice.",
 
   // ---- top bar and tab bar
@@ -360,7 +360,6 @@ export default {
 
   // ---- More: your week (everyday life)
   "Din hverdag": "Your week",
-  "Familie": "Family",
   "Løbedage om ugen (inkl. lang tur)": "Run days per week (incl. long run)",
   "{n} dage": "{n} days",
   "Deleordning – ugerne skifter (uge A / uge B)": "Shared custody – the weeks alternate (week A / week B)",
@@ -429,14 +428,9 @@ export default {
   "(estimat – skriv din målte ind)": "(estimate – enter your measured one)",
   "Hvilepuls {hr}.": "Resting HR {hr}.",
   "Kost": "Nutrition",
-  "Hvilestofskifte ≈": "Resting metabolism ≈",
   "Protein": "Protein",
   "Dag": "Day",
   "Kulhydrat": "Carbs",
-  "Fedt": "Fat",
-  "Protein fra": "Protein from",
-  "På lange ture": "On long runs",
-  "Bytte-tips": "Swap tips",
   "Tåler ikke": "Cannot tolerate",
   "Under ture over 90 min: 40–90 g kulhydrat i timen. Dagens tal står på I dag.": "On runs over 90 min: 40–90 g of carbohydrate per hour. Today's numbers are on Today.",
 
@@ -576,4 +570,21 @@ export default {
   "Kort": "Short",
   "Normal": "Normal",
   "Lang": "Long",
+  "Uden målt makspuls bruger vi {hr}.": "Without a measured max heart rate we use {hr}.",
+  "Km om ugen lige nu (snit af de sidste 4 uger)": "Km per week right now (average of the last 4 weeks)",
+  "fx 30": "e.g. 30",
+  "Start ca. {start} km/uge, top ca. {peak} km/uge.": "Start at about {start} km/week, peak at about {peak} km/week.",
+  "De første 4 uger er rolig genopbygning.": "The first 4 weeks are an easy rebuild.",
+  "Mål for kroppen": "Goal for your body",
+  "Skavanker lige nu": "Niggles right now",
+  "Planen kører som normalt.": "The plan runs as normal.",
+  "3 uger uden bakker og intervaller.": "3 weeks without hills and intervals.",
+  "4 ugers gå/løb-genopbygning først.": "4 weeks of walk/run rebuilding first.",
+  "Vægten stabil, kroppen hel.": "Weight steady, body in one piece.",
+  "Ca. 300 kcal under behov, max 0,5 kg/uge.": "About 300 kcal below needs, max 0.5 kg/week.",
+  "3 styrkepas, lidt over behov på styrkedage.": "3 strength sessions, a little above needs on strength days.",
+  "2 styrkepas, vægten stabil.": "2 strength sessions, weight steady.",
+  "Sæt mindst én dag til \"Lang\" – det er dagen til den lange tur.": "Set at least one day to \"Long\" – that is the day for the long run.",
+  "Vælg den plan, du kan holde i {n} uger.": "Pick the plan you can keep up for {n} weeks.",
+  "Kost og styrke følger med: dagens tal på I dag, alt under Mere.": "Nutrition and strength come with it: today's numbers on Today, everything under More.",
 };

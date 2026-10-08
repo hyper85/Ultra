@@ -8,10 +8,10 @@
 import { t } from "./i18n.js";
 
 export const BODY = [
-  ["keep", "Holde vægten", "Kroppen som den er. Kosten holder vægten stabil, styrken holder dig hel."],
-  ["lean", "Tabe mig", "Roligt underskud på ca. 300 kcal/dag, max 0,5 kg/uge, ekstra protein. Styrke i cirkler."],
-  ["muscle", "Bygge muskler", "Lidt over behov på styrkedage, 3 styrkepas, flere sæt og gentagelser."],
-  ["fit", "Være fit", "Stærk og udholdende. 2 styrkepas, vægten stabil, kosten følger arbejdet."],
+  ["keep", "Holde vægten", "Vægten stabil, kroppen hel."],
+  ["lean", "Tabe mig", "Ca. 300 kcal under behov, max 0,5 kg/uge."],
+  ["muscle", "Bygge muskler", "3 styrkepas, lidt over behov på styrkedage."],
+  ["fit", "Være fit", "2 styrkepas, vægten stabil."],
 ];
 export const GEAR = [
   ["none", "Uden udstyr", "Krop, trappe, stol og gulv. Kan laves i stuen."],

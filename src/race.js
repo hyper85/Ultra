@@ -6,7 +6,9 @@ import { t } from "./i18n.js";
 // "12:30", "1:05:00" or "12h30" -> minutes; null when it is not a time.
 export const parseTime = (s) => {
   if (!s) return null;
-  const m = /^\s*(\d{1,2})\s*[:h.]\s*(\d{1,2})(?:\s*[:m]\s*(\d{1,2}))?\s*$/i.exec(String(s));
+  const raw = String(s).trim();
+  const bare = /^(\d{1,2})(\d{2})$/.exec(raw); // "1230" or "930" from a numeric keypad
+  const m = bare ? [raw, bare[1], bare[2]] : /^\s*(\d{1,2})\s*[:h.,]\s*(\d{1,2})(?:\s*[:m]\s*(\d{1,2}))?\s*$/i.exec(raw);
   if (!m) return null;
   const min = +m[1] * 60 + +m[2] + (m[3] ? +m[3] / 60 : 0);
   return min > 0 && +m[2] < 60 ? min : null;

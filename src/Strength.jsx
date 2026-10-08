@@ -13,7 +13,7 @@ export function StrengthSession({ session, rest, showHow = true, compact = false
           <div className="ex" key={i}>
             <Figure pattern={e.pattern} name={e.name} size={compact ? 40 : 52} />
             <div>
-              <b>{e.name}</b>{e.sets ? <span className="ex-dose"> {e.sets}×{e.reps}</span> : null}
+              <b>{e.label || e.name}</b>{e.sets ? <span className="ex-dose"> {e.sets}×{e.reps}</span> : null}
               {showHow && e.how && <details className="ex-how"><summary>{t("Sådan")}</summary><p>{e.how}</p></details>}
             </div>
           </div>

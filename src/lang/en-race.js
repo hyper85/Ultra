@@ -48,11 +48,11 @@ export default {
   "Pacing-plan skrevet på armen eller i lommen": "Pacing plan written on your arm or in a pocket",
   // RaceDay.jsx
   "Skriv løbets distance under Mere → Løbet, så regner appen pacing, mad og pakkeliste ud.": "Enter the race distance under More → Race and the app works out pacing, fuelling and the kit list.",
-  "Måltid (t:mm)": "Goal time (h:mm)",
+  "Måltid (timer og minutter)": "Goal time (hours and minutes)",
   "Appens skøn": "The app's estimate",
   "ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+": "from your easy pace {pace}/km, {km} km and {vert} m of climb",
   "ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)": "from your level, {km} km and {vert} m of climb (log easy runs and the estimate becomes your own)",
-  "Skriv tiden som timer:minutter, fx 12:30.": "Write the time as hours:minutes, e.g. 12:30.",
+  "Skriv tiden som timer og minutter, fx 1230.": "Write the time as hours and minutes, e.g. 1230.",
   "Pacing · {time} i mål": "Pacing · {time} finish",
   "Kontrolleret start og et lille planlagt fald: de sidste kilometer er altid langsommere. Tempoet er inkl. gang på stigningerne.": "Controlled start and a small planned fade: the last kilometres are always slower. Pace includes walking the climbs.",
   "min/km": "min/km",
