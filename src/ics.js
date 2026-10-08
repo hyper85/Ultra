@@ -14,13 +14,14 @@ const hours = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60
    dayFor(key, i) -> "YYYY-MM-DD".
    One event per day with a fixed UID (the date), and SEQUENCE/LAST-MODIFIED from the export time, so importing a new
    file updates the days already in the calendar instead of adding them twice. A day the coach advice has turned into
-   rest is exported as rest, so the old run does not linger. */
+   rest is exported as rest, so the old run does not linger. Days are "busy" (TRANSP:OPAQUE + the Outlook flag): Outlook mobile
+   draws a free all-day event as a thin bar without its title, so the plan is only readable as busy. */
 export function planToICS({ rows, liftDays = [], liftName = () => t("Styrke"), race = {}, dayFor }) {
   const ev = [];
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
   const seq = Math.floor(now.getTime() / 60000); // minutes since 1970: a later export always has a higher sequence
-  const add = (day, summary, desc) => ev.push(["BEGIN:VEVENT", `UID:ultraplan-${dt(day)}@ultraplan`, `SEQUENCE:${seq}`, `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`, `DTSTART;VALUE=DATE:${dt(day)}`, `DTEND;VALUE=DATE:${dt(next(day))}`, `SUMMARY:${esc(summary)}`, desc ? `DESCRIPTION:${esc(desc)}` : null, "TRANSP:TRANSPARENT", "END:VEVENT"].filter(Boolean).map(fold).join("\r\n"));
+  const add = (day, summary, desc) => ev.push(["BEGIN:VEVENT", `UID:ultraplan-${dt(day)}@ultraplan`, `SEQUENCE:${seq}`, `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`, `DTSTART;VALUE=DATE:${dt(day)}`, `DTEND;VALUE=DATE:${dt(next(day))}`, `SUMMARY:${esc(summary)}`, desc ? `DESCRIPTION:${esc(desc)}` : null, "TRANSP:OPAQUE", "X-MICROSOFT-CDO-BUSYSTATUS:BUSY", "END:VEVENT"].filter(Boolean).map(fold).join("\r\n"));
   for (const r of rows) {
     const week = t("Uge {i} af {n} · {phase}", { i: r.i, n: rows.length, phase: t(r.phase) }) + (r.recovery ? ` · ${t("restitution")}` : r.deload ? ` · ${t("let uge")}` : "");
     const notes = [
