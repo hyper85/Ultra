@@ -45,12 +45,12 @@ export default {
   "løbsplan, pacing og pakkeliste": "race plan, pacing and kit list",
   // coach advice
   "ACWR {v} denne uge": "ACWR {v} this week",
-  "Trænerråd: {reason} – rødt. Resten af ugen er skåret ned, så ugen ender på {km} km: ingen hård session, ingen back-to-back. Rolige ture under {hr} i puls.": "Coach advice: {reason} – red. The rest of the week is cut so it ends at {km} km: no hard session, no back-to-back. Easy runs below {hr} heart rate.",
-  "Hvilepuls {hr} er {d} over din normal ({n}). Gult: hold igen med intensiteten, sov mere, og mål igen i morgen. Ved +7 skærer trænerrådet ugen ned.": "Resting HR {hr} is {d} above your normal ({n}). Yellow: hold back on intensity, sleep more, and measure again tomorrow. At +7 the coach advice cuts the week.",
+  "Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.": "Coach advice ({reason}): the week is cut to {km} km. Easy only, heart rate below {hr}.",
+  "Hvilepuls {hr} er {d} over din normal: hold igen og sov mere. Ved +7 skæres ugen ned.": "Resting HR {hr} is {d} above your normal: hold back and sleep more. At +7 the week is cut.",
   "Trænerråd": "Coach advice",
   "ingen hård session": "no hard session",
-  "Restitution efter {name}: {km} km, kun rolige ture under {hr} i puls, ingen hård session og ingen back-to-back. {acwr}Mærk efter i benene før hvert pas. Er hvilepulsen 7 over din normal, skærer trænerrådet ugen mere ned.": "Recovery after {name}: {km} km, easy runs only below {hr} heart rate, no hard session and no back-to-back. {acwr}Check your legs before every session. If your resting HR is 7 above your normal, the coach advice cuts the week further.",
-  "ACWR {v} er høj efter eventet. Det er ventet, og ugen er allerede lagt an på det. ": "ACWR {v} is high after the event. That is expected, and the week is already planned for it. ",
+  "Restitution efter {name}: {km} km, kun roligt, puls under {hr}. {acwr}": "Recovery after {name}: {km} km, easy only, heart rate below {hr}. {acwr}",
+  "Høj ACWR ({v}) er ventet efter eventet.": "A high ACWR ({v}) is expected after the event.",
   // send week to coach
   "Send uge til træner": "Send week to coach",
   "1 andet pas": "1 other session",
@@ -78,7 +78,6 @@ export default {
   "Trend: {s} s/km hurtigere pr. 4 uger på rolige ture.": "Trend: {s} s/km faster per 4 weeks on easy runs.",
   "Trend: {s} s/km langsommere pr. 4 uger. Træthed, varme eller mere trail kan forklare det.": "Trend: {s} s/km slower per 4 weeks. Fatigue, heat or more trail can explain it.",
   "Trend: stabilt tempo.": "Trend: steady pace.",
-  "Hver prik er en tur. Tempoet ved puls 130 er regnet om ud fra din egen sammenhæng mellem puls og tempo.": "Each dot is a run. Pace at HR 130 is converted using your own relation between heart rate and pace.",
   "Kræver mindst 3 rolige ture med puls fra uret (snitpuls {lo}–{hi}, mindst {km} km). Forbind Strava eller hent dine ture under Log.": "Needs at least 3 easy runs with heart rate from the watch (average HR {lo}–{hi}, at least {km} km). Connect Strava or import your runs under Log.",
   // lap plan
   "Løbsplan": "Race plan",
