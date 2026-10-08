@@ -768,7 +768,7 @@ export default function App() {
               onClick={() => openDay(r.key, i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDay(r.key, i); } }} title={other.length ? otherText(other) : tapTitle(r.key, i)}>
               <small>{n}</small>
               <b>{km[i] > 0 ? km[i] : other.length ? "✓" : "–"}{km[i] > 0 && (actsByDay[ymd(addDays(parseLocal(r.key), i))] || []).some((x) => x.vert > 0) ? <i className="vert">↗</i> : null}</b>
-              <small className={r.events?.[i] ? "event" : liftDays.includes(i) && !r.pre && !(other.length && !(km[i] > 0)) ? "lift" : "muted"}>{r.events?.[i] && !(km[i] > 0) && !other.length ? `★ ${r.events[i].name}` : other.length && !(km[i] > 0) ? xLabel(other[0].type).toLowerCase() : planKm != null ? (planKm ? (liftDays.includes(i) && !r.isRace ? t("plan {km} + S", { km: planKm }) : t("plan {km}", { km: planKm })) : liftDays.includes(i) && !r.isRace ? liftName(i).charAt(0).toLowerCase() + liftName(i).slice(1) : t("hvile")) : "\u00a0"}</small>
+              <small className={r.events?.[i] ? "event" : other.length || (liftDays.includes(i) && !r.pre) ? "lift" : "muted"}>{r.events?.[i] && !(km[i] > 0) && !other.length ? `★ ${r.events[i].name}` : other.length ? `${km[i] > 0 ? "✓ " : ""}${xLabel(other[0].type).toLowerCase()}` : planKm != null ? (planKm ? (liftDays.includes(i) && !r.isRace ? t("plan {km} + S", { km: planKm }) : t("plan {km}", { km: planKm })) : liftDays.includes(i) && !r.isRace ? liftName(i).charAt(0).toLowerCase() + liftName(i).slice(1) : t("hvile")) : "\u00a0"}</small>
             </div>
           );
         })}
@@ -1332,7 +1332,7 @@ export default function App() {
                 <div className="thisweek mini">
                   {cur.days.map((w, i) => (
                     <div key={i} className={`${dayKm[i] > 0 && w > 0 && dayKm[i] >= w * 0.9 ? "done" : dayKm[i] > 0 ? "part" : ""} ${i === ti ? "now" : ""} ${isEditing(cur.key, i) && i !== ti ? "edit" : ""}`} onClick={() => (i === ti ? openDay(cur.key, ti) : openDay(cur.key, i))} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }} role="button" tabIndex={0} title={tapTitle(cur.key, i)}>
-                      <small>{DAYS[i]}</small><b>{cur.events?.[i] ? "★" : w || (liftDays.includes(i) ? (plan.coach ? liftShort(i) : "S") : "–")}</b>{dayKm[i] > 0 ? <small className="ran">{dayKm[i]}</small> : (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).length > 0 ? <small className="ran">✓</small> : null}
+                      <small>{DAYS[i]}</small><b>{cur.events?.[i] ? "★" : w || (liftDays.includes(i) ? (plan.coach ? liftShort(i) : "S") : "–")}</b>{(() => { const other = (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).length > 0; return dayKm[i] > 0 ? <small className="ran">{dayKm[i]}{other ? " ✓" : ""}</small> : other ? <small className="ran">✓</small> : null; })()}
                     </div>
                   ))}
                 </div>

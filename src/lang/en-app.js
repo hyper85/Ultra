@@ -548,7 +548,7 @@ export default {
   "Rolig": "Steady",
   "{km} km i snakketempo, puls under {hr}{pace}. Skal føles for langsomt.": "{km} km at a chatting pace, heart rate below {hr}{pace}. Should feel too slow.",
   " (ca. {pace}/km)": " (about {pace}/km)",
-  "Jævn": "Moderate",
+  "Jævn": "Medium",
   "pacing · mad · pakkeliste": "pacing · food · kit list",
   "VO2 max {vo2}{est} · {cat}, bedre end {pct} %": "VO2 max {vo2}{est} · {cat}, better than {pct} %",
   "Spørg AI-træneren": "Ask the AI coach",
