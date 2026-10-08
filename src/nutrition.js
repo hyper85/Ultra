@@ -4,6 +4,7 @@
    Numbers are estimates: the runner's own scale and energy decide, and the app says so.
    DAY_TYPES and MEALS are Danish; every label, note, meal and hint returned by the functions is translated. */
 import { t, getLang } from "./i18n.js";
+import { MEALS } from "./meals.js";
 
 // Mifflin-St Jeor resting metabolism.
 export const bmrOf = ({ weight = 80, height = 178, age = 40, sex = "m" }) => Math.round(10 * weight + 6.25 * height - 5 * age + (sex === "f" ? -161 : 5));
@@ -45,44 +46,17 @@ export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", d
 // Weekly overview: one row per day type the plan uses.
 export const weekTargets = (args) => DAY_TYPES.map(([k, label]) => ({ key: k, label: t(label), ...dayTargets({ ...args, dayType: k }) }));
 
-// Meal ideas. Two variants per meal: "carb" for the days with work, "protein" for the calm ones.
-const MEALS = {
-  all: {
-    morgenmad: { carb: "Havregrød med banan, rosiner og skyr", protein: "Æggemad på rugbrød med skyr og bær" },
-    frokost: { carb: "Rugbrød med kylling, kartoffelsalat og grønt", protein: "Stor salat med kylling eller tun, æg og olivenolie" },
-    aftensmad: { carb: "Pasta eller ris med laks eller kylling og masser af grønt", protein: "Fisk eller kød med ovnbagte grøntsager og en lille portion kartofler" },
-    mellem: { carb: "Banan, dadler eller en skål müsli med mælk", protein: "Skyr med bær, eller et par æg" },
-  },
-  veg: {
-    morgenmad: { carb: "Havregrød med banan, rosiner og skyr", protein: "Æg med rugbrød, hytteost og tomat" },
-    frokost: { carb: "Rugbrød med æg, hummus og salat, og et stykke frugt", protein: "Salat med linser, feta, æg og olivenolie" },
-    aftensmad: { carb: "Pasta med tomatsauce, bønner og ost, eller ris med tofu og grønt", protein: "Tofu eller tempeh med ovnbagte grøntsager og kikærter" },
-    mellem: { carb: "Banan, dadler eller müsli med mælk", protein: "Skyr eller kvark med bær, eller hytteost" },
-  },
-  vegan: {
-    morgenmad: { carb: "Havregrød på havredrik med banan, rosiner og sirup", protein: "Sojaskyr med müsli, frø og bær" },
-    frokost: { carb: "Rugbrød med hummus og grønt, plus frugt", protein: "Salat med linser, edamame, kikærter og tahin" },
-    aftensmad: { carb: "Ris eller pasta med tofu, bønner og grønt", protein: "Tempeh eller seitan med ovnbagte grøntsager og en lille portion kartofler" },
-    mellem: { carb: "Banan, dadler eller tørret mango", protein: "Sojaskyr, edamame eller en shake på ærteprotein" },
-  },
-  lowcarb: {
-    morgenmad: { carb: "Havregrød med banan, kun i dag: turen kræver det", protein: "Æg og bacon eller skyr med frø og bær" },
-    frokost: { carb: "Rugbrød med kylling og en banan til turen", protein: "Salat med kylling, æg, avocado og olivenolie" },
-    aftensmad: { carb: "Kød eller fisk med ris eller kartofler, mere end du plejer", protein: "Kød eller fisk med grønt i olie eller smør" },
-    mellem: { carb: "Dadler eller en gel til turen", protein: "Ost, nødder eller et par æg" },
-  },
-};
 // Swaps for intolerances, on the text in the language it is shown in (the English meals use the English words).
 const SWAPS = {
   da: {
-    Laktose: [[/\bskyr\b/gi, "laktosefri skyr"], [/\bmælk\b/gi, "havredrik"], [/hytteost/gi, "laktosefri hytteost"], [/\bost\b/gi, "laktosefri ost"], [/kvark/gi, "sojaskyr"]],
-    Gluten: [[/rugbrød/gi, "glutenfrit brød"], [/havregrød/gi, "glutenfri havregrød"], [/pasta/gi, "risnudler"], [/seitan/gi, "tofu"]],
-    Nødder: [[/nødder/gi, "græskarkerner"]],
+    Laktose: [[/chokolademælk/gi, "kakao på havredrik"], [/\bskyr\b/gi, "laktosefri skyr"], [/\bmælk\b/gi, "havredrik"], [/hytteost/gi, "laktosefri hytteost"], [/\bost\b/gi, "laktosefri ost"], [/kvark/gi, "sojaskyr"]],
+    Gluten: [[/rugbrød/gi, "glutenfrit brød"], [/havregrød/gi, "glutenfri havregrød"], [/havregryn/gi, "glutenfri havregryn"], [/pastasalat/gi, "risnudelsalat"], [/pasta/gi, "risnudler"], [/(?<!ris)nudler/gi, "risnudler"], [/lasagne/gi, "glutenfri lasagne"], [/pandekager/gi, "glutenfri pandekager"], [/rosinbolle/gi, "glutenfri bolle"], [/sandwich/gi, "glutenfri sandwich"], [/müsli/gi, "glutenfri müsli"], [/\bwrap\b/gi, "majstortilla"], [/seitan/gi, "tofu"]],
+    Nødder: [[/peanutbutter/gi, "solsikkesmør"], [/peanutsauce/gi, "sesamsauce"], [/nødder/gi, "græskarkerner"]],
   },
   en: {
-    Laktose: [[/\bskyr\b/gi, "lactose-free skyr"], [/\bmilk\b/gi, "oat drink"], [/cottage cheese/gi, "lactose-free cottage cheese"], [/(?<!cottage )\bcheese\b/gi, "lactose-free cheese"], [/quark/gi, "soy skyr"]],
-    Gluten: [[/rye bread/gi, "gluten-free bread"], [/oat porridge/gi, "gluten-free oat porridge"], [/pasta/gi, "rice noodles"], [/seitan/gi, "tofu"]],
-    Nødder: [[/\bnuts\b/gi, "pumpkin seeds"]],
+    Laktose: [[/chocolate milk/gi, "cocoa on oat drink"], [/\bskyr\b/gi, "lactose-free skyr"], [/\bmilk\b/gi, "oat drink"], [/cottage cheese/gi, "lactose-free cottage cheese"], [/(?<!cottage )\bcheese\b/gi, "lactose-free cheese"], [/quark/gi, "soy skyr"]],
+    Gluten: [[/rye bread/gi, "gluten-free bread"], [/oat porridge/gi, "gluten-free oat porridge"], [/\boats\b/gi, "gluten-free oats"], [/pasta salad/gi, "rice-noodle salad"], [/pasta/gi, "rice noodles"], [/(?<!rice )noodles/gi, "rice noodles"], [/lasagne/gi, "gluten-free lasagne"], [/pancakes/gi, "gluten-free pancakes"], [/raisin bun/gi, "gluten-free bun"], [/sandwich/gi, "gluten-free sandwich"], [/muesli/gi, "gluten-free muesli"], [/\bwrap\b/gi, "corn tortilla"], [/seitan/gi, "tofu"]],
+    Nødder: [[/peanut butter/gi, "sunflower-seed butter"], [/peanut sauce/gi, "sesame sauce"], [/\bnuts\b/gi, "pumpkin seeds"]],
   },
 };
 const swap = (text, intol = []) => {
@@ -92,13 +66,41 @@ const swap = (text, intol = []) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-/* mealIdeas({ diet, intol, dayType, body }) -> [{ meal, text }] plus a one-line hint. */
-export function mealIdeas({ diet = "all", intol = [], dayType = "rest", body = "keep" } = {}) {
+// What is in season in Denmark, by month: one line under the meals, so the plate follows the year.
+const SEASON = [
+  [[12, 1, 2], "Sæsonens grønt: grønkål, rosenkål, rødbeder, porrer og æbler."],
+  [[3, 4, 5], "Sæsonens grønt: asparges, radiser, spinat, nye kartofler og rabarber."],
+  [[6, 7, 8], "Sæsonens grønt: jordbær, ærter, tomater, agurk og nye kartofler."],
+  [[9, 10, 11], "Sæsonens grønt: græskar, æbler, kål, rodfrugter og svampe."],
+];
+const seasonLine = (date) => t(SEASON.find(([m]) => m.includes(date.getMonth() + 1))[1]);
+const dayOfYear = (d) => Math.floor((d - new Date(d.getFullYear(), 0, 1)) / 86400000);
+
+const SLOTS = [["morgenmad", "Morgenmad", 0.25], ["frokost", "Frokost", 0.3], ["aftensmad", "Aftensmad", 0.3], ["mellem", "Mellemmåltid", 0.15]];
+// Which meal comes right before and right after a session at that time of day.
+const AROUND = { morning: ["morgenmad", "frokost"], noon: ["morgenmad", "frokost"], evening: ["mellem", "aftensmad"] };
+
+/* mealIdeas({ diet, intol, dayType, body, time, km, carbsPerHour, protein, weight, date, shift })
+   -> { rows: [{ meal, tag, text, protein }], fuel, season, hint }.
+   The day of the year (plus `shift`, the "other ideas" button) picks one of four ideas per meal, so the card changes
+   every day. A session with a time of day tags the meal before it (carbohydrate) and the one after (protein and
+   carbohydrate within the hour); `fuel` is the line for what to take during a long run. */
+export function mealIdeas({ diet = "all", intol = [], dayType = "rest", body = "keep", time = "", km = 0, carbsPerHour = "40–60", protein = 160, weight = 80, date = new Date(), shift = 0 } = {}) {
   const lib = MEALS[diet] || MEALS.all;
-  const variant = dayType === "long" || dayType === "quality" ? "carb" : "protein";
-  const rows = [["Morgenmad", lib.morgenmad[variant]], ["Frokost", lib.frokost[variant]], ["Aftensmad", lib.aftensmad[variant]], ["Mellemmåltid", lib.mellem[variant]]].map(([meal, text]) => ({ meal: t(meal), text: swap(t(text), intol) }));
+  const work = dayType === "long" || dayType === "quality";
+  const session = dayType === "lift" ? "lift" : km > 0 || work ? "run" : null;
+  const [pre, post] = session && AROUND[time] ? AROUND[time] : [null, null];
+  const n = dayOfYear(date) + shift * 3;
+  const rows = SLOTS.map(([key, label, share], i) => {
+    const variant = key === post ? "recover" : key === pre ? "carb" : work ? "carb" : "protein";
+    const list = lib[key][variant];
+    const tag = key === pre ? (session === "lift" ? t("før styrken") : t("før turen")) : key === post ? (session === "lift" ? t("efter styrken") : t("efter turen")) : "";
+    return { meal: t(label), tag, text: swap(t(list[(n + i) % list.length]), intol), protein: Math.round((protein * share) / 5) * 5 };
+  });
+  const fuel = dayType === "long" ? (km >= 10 ? t("Undervejs: {g} g kulhydrat i timen, fx 2–3 geler eller banan og dadler, og 4–6 dl at drikke i timen.", { g: carbsPerHour }) : t("Undervejs: vand er nok under en time; tag en gel eller en banan med, hvis turen trækker ud.")) : null;
+  const after = session && post ? t("Inden for en time efter: ca. {p} g protein og noget kulhydrat.", { p: Math.max(25, Math.min(40, Math.round(weight * 0.3 / 5) * 5)) }) : null;
   const hint = body === "lean" ? t("Halvdelen af tallerkenen er grønt, protein i hvert måltid, og drik vand før du spiser. Sulten efter en lang tur er ægte: spis, men vælg protein og grønt først.")
     : body === "muscle" ? t("Protein i alle fire måltider, og noget at spise inden for en time efter styrke. Et ekstra mellemmåltid på styrkedage.")
     : dayType === "long" ? t("Spis 2–3 timer før turen, tag 40–90 g kulhydrat i timen undervejs, og spis inden for en time efter.") : t("Tre måltider og et mellemmåltid. Protein i hvert af dem.");
-  return { rows, hint };
+  return { rows, fuel, after, season: seasonLine(date), hint };
 }

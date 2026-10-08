@@ -950,7 +950,11 @@ export default function App() {
   };
   const sendBox = (r) => sendMsg?.key === r.key && (sendMsg.ok ? <div className="advice">{t("Uge {i} er kopieret. Sæt den ind i en besked til træneren.", { i: r.i })}</div>
     : <div className="advice warn">{t("Kunne ikke kopiere automatisk. Markér teksten og kopiér den:")}<textarea className="send-text" readOnly value={sendMsg.text} onFocus={(e) => e.target.select()} /></div>);
-  const nutritionFor = (dayType) => ({ targets: dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType }), meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body }) });
+  const [mealShift, setMealShift] = useState(0); // "Andre forslag": rolls the day's meal ideas
+  const nutritionFor = (dayType, around = {}) => {
+    const targets = dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType });
+    return { targets, meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body, protein: targets.protein, weight: p.weight, shift: mealShift, ...around }) };
+  };
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
   const pastWeeks = [...preRows.filter((r) => log[r.key]?.km > 0), ...planRows.filter((r) => r.key < cur.key)];
 
@@ -1226,7 +1230,7 @@ export default function App() {
           const easy = v > 0 && !long && !hard && !b2b && !ev; const hrCap = Math.round(maxHR * 0.7);
           const carbs = cur.phase === "Ultra-prep" ? "60–90" : "40–60";
           const session = lift ? sessionFor(ti) : null;
-          const todayNut = nutritionFor(dayTypeOf({ km: v, isLong: long, isHard: hard, isRace: raceDay, lift }));
+          const todayNut = nutritionFor(dayTypeOf({ km: v, isLong: long, isHard: hard, isRace: raceDay, lift }), { time: d.time || "", km: v, carbsPerHour: carbs });
           const ran = dayKm[ti]; const didOther = otherByDay[todayStr] || []; const didStrength = didOther.some((x) => actKind(x.type) === "strength");
           const done = v > 0 ? ran >= v * 0.9 : lift ? didStrength : didOther.length > 0;
           const todayRuns = actsByDay[todayStr] || [];
@@ -1346,7 +1350,7 @@ export default function App() {
                 </div>
               </section>
 
-              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} />
+              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} onMore={() => setMealShift((n) => n + 1)} />
 
             </>
           );
