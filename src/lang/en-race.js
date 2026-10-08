@@ -73,7 +73,6 @@ export default {
   "Skøn ud fra distance, højdemeter og dit tempo. Løbets egne krav til udstyr går altid forud.": "Estimates from distance, climb and your pace. The race's own kit rules always come first.",
   // App.jsx (plan view)
   "Læg planen i din kalender (.ics)": "Put the plan in your calendar (.ics)",
-  "Én heldagsaftale pr. løbetur, styrkepas og løbet. Åbn filen i Google/Apple/Outlook-kalenderen.": "One all-day event per run, strength session and the race. Open the file in Google/Apple/Outlook calendar.",
   "Løbsdag": "Race day",
   "pacing, mad og pakkeliste": "pacing, fuelling and kit list",
   "Pacing, mad og pakkeliste til løbet": "Pacing, fuelling and kit list for the race",

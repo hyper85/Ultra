@@ -41,6 +41,8 @@ const thisMonday = () => mondayOf(new Date());
 const fmtPaceMin = (m) => { const mm = Math.floor(m); const ss = Math.round((m - mm) * 60); return ss === 60 ? `${mm + 1}:00` : `${mm}:${String(ss).padStart(2, "0")}`; };
 const fmtHours = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
 const fmt = (d) => d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
+// "12.–18. okt." when the week sits in one month, else "28. sep.–4. okt."
+const fmtRange = (a, b) => (a.getMonth() === b.getMonth() ? `${a.toLocaleDateString(locale(), { day: "numeric" })}–${fmt(b)}` : `${fmt(a)}–${fmt(b)}`);
 const isoWeek = (d) => {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
@@ -609,8 +611,9 @@ export default function App() {
   const [showPre, setShowPre] = useState(false);
   // How to run the week: the hard session with its zone, the long run, the easy runs with the runner's own pace.
   // Used for the current week on Plan and for any week unfolded under "Alle uger".
+  const [guideFull, setGuideFull] = useState({}); // weeks whose how-to text is unfolded (titles always show)
   const renderGuide = (r) => (
-    <div className="guide">
+    <div className={`guide ${guideFull[r.key] ? "" : "compact"}`}>
       {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
@@ -619,11 +622,13 @@ export default function App() {
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p></div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
       {!r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
-      {(() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")}</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+      {(() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+      <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
     </div>
   );
   const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the race card on I dag
   const exportICS = () => downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
+  const [showPast, setShowPast] = useState(false); // finished weeks in "Alle uger" (they are also in the Log)
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -921,13 +926,14 @@ export default function App() {
     : <div className="advice warn">{t("Kunne ikke kopiere automatisk. Markér teksten og kopiér den:")}<textarea className="send-text" readOnly value={sendMsg.text} onFocus={(e) => e.target.select()} /></div>);
   const nutritionFor = (dayType) => ({ targets: dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType }), meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body }) });
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
+  const pastWeeks = [...preRows.filter((r) => log[r.key]?.km > 0), ...planRows.filter((r) => r.key < cur.key)];
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   const hrCap70 = Math.round(maxHR * 0.7);
   let advice = t("Denne uge: {km} km, {hard}, lang tur {lng} km{longDay}. Rolige ture under {hr} i puls.", { km: cur.km, hard: cur.qDay != null ? t("hård session {day} ({quality})", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : plan.coach || cur.recovery || cur.deload ? t("ingen hård session") : t("ingen hård session – ingen dag med tid nok"), lng: cur.lng, longDay: cur.longDay != null ? ` ${dayLow(cur.longDay)}` : "", hr: hrCap70 });
   let warn = false;
-  if (adjRow) { advice = t("Trænerråd: {reason} – rødt. Resten af ugen er skåret ned, så ugen ender på {km} km: ingen hård session, ingen back-to-back. Rolige ture under {hr} i puls.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
-  else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun rolige ture under {hr} i puls, ingen hård session og ingen back-to-back. {acwr}Mærk efter i benene før hvert pas. Er hvilepulsen 7 over din normal, skærer trænerrådet ugen mere ned.", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("ACWR {v} er høj efter eventet. Det er ventet, og ugen er allerede lagt an på det. ", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
+  if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
+  else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt, puls under {hr}. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
   else if (cur.unplaced >= 3) { advice = t('Din hverdag giver plads til {km} af de {target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de {km} km – det er ikke en fejl at leve et normalt liv.', { km: cur.km, target: cur.target }); warn = true; }
   if (lastIdx != null && !adjRow && !cur.recovery) {
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
@@ -938,7 +944,7 @@ export default function App() {
 
   /* ---- what the app has learned about the runner (deterministic, see insights.js) ---- */
   const insights = useMemo(() => buildInsights({ plan, log, acts, p, todayKey, maxHR, includeHikes: p.includeHikes }), [plan, log, acts, p, todayKey, maxHR]);
-  const topInsight = insights.findings.find((f) => f.id !== "empty") || null;
+  const [showAllFindings, setShowAllFindings] = useState(false);
   const applyInsight = (f) => { setP({ ...p, ...f.action.patch }); };
 
   /* ---- AI coach (Claude via /api/coach; the chat stays on this device) ---- */
@@ -1086,13 +1092,9 @@ export default function App() {
                 <div className="meta-chips">
                   <span className="meta-chip">{t("uge {i} af {n}", { i: cur.i, n: plan.weeks })}</span>
                   <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
-                  {plan.coach && <span className="meta-chip">{t("trænerplan")}</span>}
+                  {streak >= 2 && <span className="meta-chip streak" title={t("Uger i træk med logget træning")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9z" /></svg>{t("{n} uger i træk", { n: streak })}</span>}
                   {nextEvent && <span className="meta-chip event">★ {nextEvent.date === todayStr ? t("{name} i dag", { name: nextEvent.name }) : tn(nextEvent.days, "{name} i morgen", "{name} om {n} dage", { name: nextEvent.name })}</span>}
                 </div>
-              </div>
-              <div className="quote-row">
-                <div className="quote">{quoteFor({ type: raceDay ? "race" : v > 0 ? (long ? "long" : hard ? "hard" : "easy") : lift ? "lift" : "rest", phase: cur.phase, deload: cur.deload })}</div>
-                {streak >= 2 && <span className="streak" title={t("Uger i træk med logget træning")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 1-6 1-9z" /></svg>{t("{n} uger i træk", { n: streak })}</span>}
               </div>
               {coachOfferBox}
               {lastWeek && ti <= 2 && (
@@ -1142,19 +1144,12 @@ export default function App() {
                 </div>
                 {dayEdit?.key === cur.key && dayEdit.i !== ti && renderDayForm(cur.days[dayEdit.i])}
                 <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
-                {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal ({n}). Gult: hold igen med intensiteten, sov mere, og mål igen i morgen. Ved +7 skærer trænerrådet ugen ned.", { hr: hrNow, d: hrNow - p.restHR, n: p.restHR })}</div>}
-                {topInsight && (
-                  <div className={`insight ${topInsight.level}`}>
-                    <span>{topInsight.text}</span>
-                    {topInsight.action ? <button type="button" className="btn ghost" onClick={() => applyInsight(topInsight)}>{topInsight.action.label}</button>
-                      : <button type="button" className="btn ghost" onClick={() => setView("coach")}>{t("Se alle")}</button>}
-                  </div>
-                )}
+                {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal: hold igen og sov mere. Ved +7 skæres ugen ned.", { hr: hrNow, d: hrNow - p.restHR, n: p.restHR })}</div>}
                 {sendBox(cur)}
-                <button type="button" className="btn small send-btn" onClick={() => sendWeek(cur)}>{t("Send uge til træner")}</button>
+                {shareMsg && <div className="advice">{shareMsg}</div>}
                 <div className="panel-foot">
+                  <button type="button" className="btn ghost small send-btn" onClick={() => sendWeek(cur)}>{t("Send til træner")}</button>
                   <button type="button" className="btn ghost small" onClick={doShareWeek}>{t("Del ugen")}</button>
-                  <button type="button" className="btn ghost small" onClick={() => setView("overblik")}>{t("Overblik ›")}</button>
                 </div>
               </section>
 
@@ -1175,16 +1170,16 @@ export default function App() {
             <div>
             <h3 className="sub">{t("Det appen har lært om dig")}</h3>
             <div className="findings">
-              {insights.findings.map((f) => (
+              {(showAllFindings ? insights.findings : insights.findings.slice(0, 3)).map((f) => (
                 <div key={f.id} className={`finding ${f.level}`}>
                   <span>{f.text}</span>
                   {f.action && <button type="button" className="btn ghost" onClick={() => applyInsight(f)}>{f.action.label}</button>}
                 </div>
               ))}
             </div>
-            <p className="muted">{t("Bygger på {weeks} i loggen og dine ture dag for dag. Alt kan efterregnes; knapperne ændrer kun det, de siger.", { weeks: tn(insights.summary.weeksLogged, "{n} afsluttet uge", "{n} afsluttede uger") })}</p>
+            {insights.findings.length > 3 && <button type="button" className="linkbtn" onClick={() => setShowAllFindings((v) => !v)}>{showAllFindings ? t("Vis færre") : t("Vis alle {n}", { n: insights.findings.length })}</button>}
             <h3 className="sub">{t("Lad træneren forme planen")}</h3>
-            <p className="muted">{t("Ud fra hele din historik fra uret (måned for måned), de sidste 12 uger i detaljer, loggen og mønstrene foreslår AI-træneren top, niveau, løbedage og lang tur-dag. Appen bygger selv planen af tallene, og intet ændres, før du trykker Anvend.")}{plan.coach ? ` ${t("Trænerplanen har faste uger, så et forslag slår den fra.")}` : ""}</p>
+            <p className="muted">{t("AI-træneren foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.")}{plan.coach ? ` ${t("Trænerplanen har faste uger, så et forslag slår den fra.")}` : ""}</p>
             {!proposal && <button className="btn ghost" type="button" onClick={askForPlan} disabled={proposing || coachBusy}>{proposing ? t("Regner…") : t("Foreslå plan ud fra mine tal")}</button>}
             {proposal && (
               <div className="proposal">
@@ -1201,10 +1196,9 @@ export default function App() {
             </div>
             <div>
             <h3 className="sub">{t("Spørg træneren")}</h3>
-            <p className="muted">{t("En AI-træner, der kender dine tal: plan, log, mønstre og hverdag. Den får aldrig dit navn eller din e-mail. Samtalen gemmes kun på denne enhed.")}</p>
+            <p className="muted">{t("Kender dine tal, aldrig dit navn eller din e-mail. Samtalen bliver på denne enhed.")}</p>
             {chat.length === 0 && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))} disabled={coachBusy}>{t(q)}</button>)}</div>}
-            <div className="chat" ref={chatRef} aria-live="polite">
-              {chat.length === 0 && !coachBusy && <div className="muted chat-empty">{t("Stil et spørgsmål, eller vælg et af forslagene. Svaret kommer her.")}</div>}
+            <div className={`chat ${chat.length || coachBusy ? "" : "empty"}`} ref={chatRef} aria-live="polite">
               {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
               {coachBusy && <div className="msg assistant muted">{t("Tænker…")}</div>}
             </div>
@@ -1383,22 +1377,22 @@ export default function App() {
             <div className="reset-list">
               <div><b>{t("Svar på spørgsmålene igen")}</b><span>{t("Dine nuværende svar er udfyldt på forhånd. Log og ture bevares.")}</span><button className="btn ghost" type="button" onClick={() => setP({ ...p, onboarded: false, rerun: true })}>{t("Kør spørgeskemaet igen")}</button></div>
               <div><b>{t("Nulstil indstillinger")}</b><span>{t("Profil, løb, hverdag og kost slettes, og du starter forfra i spørgeskemaet. Log og ture bevares.")}</span><button className="btn ghost" type="button" onClick={() => { if (confirm(t("Nulstil alle indstillinger? Din log og dine ture bevares."))) setP({ ...DEFAULT, v: PROFILE_VERSION, onboarded: false }); }}>{t("Nulstil indstillinger")}</button></div>
+              <div><b>{t("Nulstil log")}</b><span>{t("Ugetal, RPE, hvilepuls, søvn og vægt slettes. Ture fra uret og planen bevares.")}</span><button className="btn ghost" type="button" onClick={() => { if (confirm(t("Slet hele loggen?"))) saveLog({}); }}>{t("Nulstil log")}</button></div>
               <div><b>{t("Slet alt")}</b><span>{t("Indstillinger, log og alle ture slettes, også i skyen, hvis du er logget ind. Kan ikke fortrydes.")}</span><button className="btn ghost danger" type="button" onClick={() => { if (confirm(t("Slet ALT – indstillinger, log og ture? Kan ikke fortrydes."))) { saveActs({}); saveLog({}); setP({ ...DEFAULT, v: PROFILE_VERSION, onboarded: false }); } }}>{t("Slet alt")}</button></div>
             </div>
           </details>
         </aside>
         )}
 
-        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} streak={streak} onShare={doShareWeek} shareMsg={shareMsg} onGo={(v) => setView(v)} />}
+        {view === "overblik" && <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} />}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">{t("Plan")}</h1>
           <div className="panel">
-            <div className="panel-head"><h2>{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })}</h2><span className="panel-num"><b>{cur.km}</b> km</span></div>
+            <div className="panel-head"><h2>{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })}</h2><span className="panel-num"><b>{curLog.km || 0}</b> / {cur.km} km</span></div>
             <div className="meta-chips" style={{ marginBottom: 6 }}>
               <span className="meta-chip">{fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))}</span>
               <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
-              {plan.coach && <span className="meta-chip">{t("trænerplan")}</span>}
               {cur.schedLabel && <span className="meta-chip">{t("skema {k}", { k: cur.schedLabel })}</span>}
             </div>
             {coachOfferBox}
@@ -1430,11 +1424,6 @@ export default function App() {
             </div>
             {dayEdit?.key === cur.key && renderDayForm(cur.days[dayEdit.i])}
             {renderGuide(cur)}
-            {curLog.auto && curLog.km > 0
-              ? <div className="muted" style={{ marginTop: 10 }}>{t("Løbet indtil nu i denne uge:")} <b style={{ color: "var(--text)" }}>{curLog.km} km</b> {t("på {runs} af {plan} km planlagt. Tryk på en dag for at logge en tur.", { runs: tn(curLog.n, "{n} tur", "{n} ture"), plan: cur.km })}</div>
-              : <div className="muted" style={{ marginTop: 10 }}>{t("Tryk på en dag for at logge en tur – så passer ugens tal, også før ugen er slut.")}</div>}
-            <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
-            {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal ({n}). Gult: hold igen med intensiteten, sov mere, og mål igen i morgen. Ved +7 skærer trænerrådet ugen ned.", { hr: hrNow, d: hrNow - p.restHR, n: p.restHR })}</div>}
           </div>
 
           <div className="panel">
@@ -1451,7 +1440,6 @@ export default function App() {
             <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />● {t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
             <div className="import-row" style={{ marginTop: 10 }}>
               <button type="button" className="btn ghost" onClick={exportICS}>{t("Læg planen i din kalender (.ics)")}</button>
-              <span className="muted">{t("Én heldagsaftale pr. løbetur, styrkepas og løbet. Åbn filen i Google/Apple/Outlook-kalenderen.")}</span>
             </div>
           </div>
 
@@ -1465,9 +1453,9 @@ export default function App() {
             {view === "plan" && (
               <div className="panel">
                 <h2>{t("Alle uger")}</h2>
-                <p className="muted" style={{ marginTop: -4 }}>{t("Tryk på en uge for at se dagene, den hårde session, tempo og den lange tur.")}</p>
+                {pastWeeks.length > 0 && <button type="button" className="linkbtn past-toggle" onClick={() => setShowPast((v) => !v)}>{showPast ? t("Skjul tidligere uger") : tn(pastWeeks.length, "Vis 1 tidligere uge", "Vis {n} tidligere uger")}</button>}
                 <div className="weeklist">
-                  {[...preRows.filter((r) => log[r.key]?.km > 0), ...planRows].map((r) => {
+                  {[...(showPast ? pastWeeks : []), ...planRows.filter((r) => r.key >= cur.key)].map((r) => {
                     const ran = log[r.key]?.km; const km = dayKmFor(r.key);
                     const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
                     const openP = openPlanWeek === r.key;
@@ -1477,13 +1465,13 @@ export default function App() {
                       : r.recovery ? [evs, t("Restitution efter {name} · kun roligt", { name: r.recovery.after })].filter(Boolean).join(" · ")
                       : evs && !r.isRace ? [evs, r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : null, r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null].filter(Boolean).join(" · ")
                       : r.isRace ? `★ ${p.raceName || t("Løbet")} · ${p.raceKm || r.lng} km`
-                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null, liftDays.length && !r.isRace ? t("styrke {days}", { days: liftDays.map((i) => dayLow(i)).join(" + ") }) : null].filter(Boolean).join(" · ");
+                      : [r.qDay != null && r.days[r.qDay] > 0 ? `${sessionName(r.quality)} ${dayLow(r.qDay)}` : t("Kun roligt"), r.longDay != null && r.lng > 0 ? t("lang tur {km} km {day}", { km: r.lng, day: dayLow(r.longDay) }) : null, r.sun > 0 ? t("back-to-back {km} km", { km: r.sun }) : null].filter(Boolean).join(" · ");
                     return (
                       <div key={r.key} className={`wkcard ${openP ? "open" : ""} ${isCur ? "cur" : ""} ${r.pre ? "pre" : ""} ${r.key < todayKey && !isCur ? "past" : ""}`}>
                         <button type="button" className="wkhead" onClick={() => setOpenPlanWeek(openP ? null : r.key)} aria-expanded={openP}>
                           <span className="wknum">{r.pre ? <small>{t("{n} uger før", { n: -r.i })}</small> : <><b>{r.i}</b>{r.deload && !r.isRace ? <i title={t("let uge")}>●</i> : ""}{r.isRace ? <i className="star">★</i> : ""}</>}</span>
                           <span className="wkmain">
-                            <span className="wktitle">{fmt(r.wkStart)}–{fmt(addDays(r.wkStart, 6))}{r.pre ? "" : <> · <i className="phase-dot" style={{ background: PH[r.phase] }} />{t(r.phase)}{r.recovery ? ` · ${t("restitution")}` : r.deload && !r.isRace && r.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}{isCur ? ` · ${t("nu")}` : ""}</>}</span>
+                            <span className="wktitle">{fmtRange(r.wkStart, addDays(r.wkStart, 6))}{r.pre ? "" : <> · <i className="phase-dot" style={{ background: PH[r.phase] }} />{t(r.phase)}{r.recovery ? ` · ${t("restitution")}` : r.deload && !r.isRace && r.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}{isCur ? ` · ${t("nu")}` : ""}</>}</span>
                             <span className="wksub">{line2}</span>
                             {!r.pre && <span className="wkdays hide-phone">{DAYS.map((d, i) => { const v = r.days[i]; return <span key={i} className={v ? (i === r.longDay ? "long" : i === r.qDay ? "hard" : "run") : liftDays.includes(i) ? "lift" : ""}><small>{d}</small>{v || (liftDays.includes(i) ? "S" : "–")}{km[i] > 0 && <em className={v && km[i] >= v * 0.9 ? "ok" : ""}>{km[i]}</em>}</span>; })}</span>}
                           </span>
@@ -1635,7 +1623,7 @@ export default function App() {
                 <table>
                   <thead><tr><th>{t("Uge")}</th><th className="num">{t("Plan")}</th><th>{t("Løbet km")}</th><th className="hide-phone">RPE</th><th className="hide-phone">{t("Hvilepuls")}</th><th className="hide-phone">{t("Vægt")}</th><th className="hide-phone">{t("Søvn t")}</th><th className="num hide-phone">{t("Belastning")}</th><th className="num">ACWR</th></tr></thead>
                   <tbody>
-                    {[...(showPre ? preRows : []), ...planRows].map((r) => {
+                    {[...(showPre ? preRows : []), ...planRows.filter((r) => r.key <= cur.key)].map((r) => {
                       const l = log[r.key] || {};
                       const a = acwrFor(r.key); const ld = loadOf(l);
                       const cell = (k) => (
@@ -1666,7 +1654,6 @@ export default function App() {
                               <label>RPE{cell("rpe")}</label><label>{t("Hvilepuls")}{cell("hr")}</label><label>{t("Vægt")}{cell("wt")}</label><label>{t("Søvn t")}{cell("sleep")}</label>
                               <div className="muted" style={{ gridColumn: "1 / -1" }}>{t("Belastning {load} = km × RPE", { load: ld ?? (r.pre && baseline ? `~${baseline}` : "–") })}</div>
                             </div>
-                            <div className="muted" style={{ marginBottom: 6 }}>{t("{week} fra {date} dag for dag · øverst det du løb, nederst planen. Tryk på en dag for at logge eller rette.", { week: r.pre ? t("Ugen") : t("Uge {i}", { i: r.i }), date: fmt(r.wkStart) })}</div>
                             {renderDayGrid(r)}
                             {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min · tæller {load} i belastningen (min × RPE ÷ 12).", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
                             {!r.pre && <div className="import-row" style={{ marginTop: 8 }}><button type="button" className="btn ghost small" onClick={() => sendWeek(r)}>{t("Send uge til træner")}</button></div>}
@@ -1679,8 +1666,7 @@ export default function App() {
                     })}
                   </tbody>
                 </table>
-                <p className="foot">{t("ACWR = ugens belastning (km × RPE) ÷ gennemsnittet af de 4 foregående uger. Grøn 0,8–1,3 · gul til 1,5 · rød over 1,5 = skær ned. ⌚ = tal fra dit ur · ~ = bygger på estimat. Alt gemmes på din telefon.")}</p>
-                <button className="btn ghost" onClick={() => { if (confirm(t("Slet hele loggen?"))) saveLog({}); }}>{t("Nulstil log")}</button>
+                <p className="foot">{t("ACWR: grøn 0,8–1,3 · gul til 1,5 · rød over 1,5. ⌚ = fra uret · ~ = estimat. Kommende uger står under Plan.")}</p>
               </div>
             )}
           </div>
