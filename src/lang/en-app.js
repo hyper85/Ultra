@@ -576,4 +576,12 @@ export default {
   "Vis 1 tidligere uge": "Show 1 earlier week",
   "Vis {n} tidligere uger": "Show {n} earlier weeks",
   "Send til træner": "Send to coach",
+  "Fremskridt": "Progress",
+  "Føltes som RPE {n}": "Felt like RPE {n}",
+  "Hvor hård føltes turen?": "How hard did the run feel?",
+  "Meget let": "Very easy",
+  "Let": "Easy",
+  "Moderat": "Moderate",
+  "Hård": "Hard",
+  "Max": "Max",
 };
