@@ -818,10 +818,10 @@ export default function App() {
   const logCell = (key, k, readOnly = false) => {
     const l = log[key] || {};
     const tag = ((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) ? <i className="tag" aria-label={t("importeret")}>⌚</i> : null;
-    if (readOnly) return <span className="cellval muted" title={t("Skrives på I dag")}>{l[k] ?? "–"}{tag}</span>;
+    if (readOnly) return <span className="cellval muted" title={t("Skrives på I dag")}>{l[k] == null || l[k] === "" ? "–" : l[k]}{tag}</span>;
     return (
       <span className="cellwrap">
-        <input type="number" min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
+        <input type="number" inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
           onChange={(e) => saveLog({ ...log, [key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
         {tag}
       </span>
