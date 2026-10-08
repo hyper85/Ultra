@@ -1,14 +1,16 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
-import Onboarding, { proteinG, dietTips, INJURY, AREAS, DIETS, INTOL } from "./Onboarding.jsx";
+import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
+// Loaded when first shown: the questionnaire (first run), race day and the stats page are not part of the start-up bundle.
+const Onboarding = lazy(() => import("./Onboarding.jsx"));
+const RaceDay = lazy(() => import("./RaceDay.jsx"));
+const Dashboard = lazy(() => import("./Dashboard.jsx"));
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
 import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
-import Dashboard from "./Dashboard.jsx";
 import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
-import { shareWeek } from "./share.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
 import { buildInsights, coachContext } from "./insights.js";
@@ -16,8 +18,6 @@ import { describeSession, describeLong, describeEasy, sessionName } from "./sess
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 import { t, tn, locale, getLang } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
-import RaceDay from "./RaceDay.jsx";
-import { planToICS, downloadICS } from "./ics.js";
 import { hillBenefit } from "./race.js";
 
 /* ================= storage (swappable) ================= */
@@ -635,7 +635,7 @@ export default function App() {
   ); };
   const [openRace, setOpenRace] = useState(false); // "Løbsdag" under Plan; opened from the countdown in the top bar
   const goRaceDay = () => { setOpenRace(true); setView("plan"); setOpenMore(null); setTimeout(() => { try { document.getElementById("raceday")?.scrollIntoView({ block: "start" }); } catch { /* ignore */ } }, 60); };
-  const exportICS = () => downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`);
+  const exportICS = async () => { const { planToICS, downloadICS } = await import("./ics.js"); downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`); };
   const [showPast, setShowPast] = useState(false); // finished weeks in "Alle uger" (they are also in the Log)
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
@@ -904,6 +904,7 @@ export default function App() {
     const days = DAYS.map((_, i) => { const day = ymd(addDays(parseLocal(cur.key), i)); const other = otherByDay[day] || []; return { km: dayKmFor(cur.key)[i], plan: cur.days[i] || 0, lift: liftDays.includes(i), other: other.length ? xLabel(other[0].type) : null }; });
     const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0;
     try {
+      const { shareWeek } = await import("./share.js");
       const r = await shareWeek({ week: { i: cur.i, n: plan.weeks, deload: cur.deload }, days, ran: (log[cur.key]?.km || 0), plan: cur.km, phase: cur.phase, streak, acwr: acwrFor(cur.key)?.v ?? null, other: log[cur.key]?.xn || 0, race: p.raceName, raceMeta: `${p.raceKm} km · ${p.raceVert || 0} m+ · ${p.raceDate ? new Date(p.raceDate).toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" }) : ""}`, daysToRace: p.raceDate ? daysToRace : null, quote: quoteFor({ type: v > 0 ? (ti === cur.longDay ? "long" : ti === cur.qDay ? "hard" : "easy") : liftDays.includes(ti) ? "lift" : "rest", phase: cur.phase, deload: cur.deload }) });
       setShareMsg(r === "shared" ? t("Delt.") : r === "saved" ? t("Billedet er gemt som PNG. Del det, hvor du vil.") : null);
     } catch (e) { setShareMsg(t("Kunne ikke lave billedet: {msg}", { msg: e.message })); }
@@ -1047,8 +1048,8 @@ export default function App() {
     </div>
   );
 
-  if (!p.onboarded) return <Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} buildPlan={buildPlan}
-    onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} />;
+  if (!p.onboarded) return <Suspense fallback={null}><Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} buildPlan={buildPlan}
+    onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} /></Suspense>;
 
   // Fremskridt → Log: the week table alone, newest first; pre-plan weeks behind a button below it.
   const renderLog = () => (
@@ -1574,7 +1575,7 @@ export default function App() {
             <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
             <div className="seg" role="tablist">{[["overblik", "Overblik"], ["log", "Log"]].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo(0, 0); }}>{t(l)}</button>)}</div>
             {emptyCard}
-            {view === "log" ? renderLog() : <Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} />}
+            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} /></Suspense>}
           </section>
         )}
         <section className="stack">
@@ -1682,7 +1683,7 @@ export default function App() {
 
           <details className="panel acc" id="raceday" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
             <summary><h2>{t("Løbsdag")}</h2><span className="acc-sum">{t("pacing · mad · pakkeliste")}</span><span className="chev" aria-hidden="true">›</span></summary>
-            <RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} />
+            {openRace && <Suspense fallback={null}><RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} /></Suspense>}
           </details>
           </>)}
 
