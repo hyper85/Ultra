@@ -303,7 +303,7 @@ export default {
   "Anvend": "Apply",
   "Afvis": "Reject",
   "Tænker…": "Thinking…",
-  "fx Skal jeg løbe, når jeg er forkølet?": "e.g. Should I run when I have a cold?",
+  "Skriv til træneren …": "Write to the coach …",
   "Send": "Send",
   "Ryd samtalen": "Clear the conversation",
 

@@ -642,6 +642,9 @@ export default function App() {
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sessions without km (strength, HIIT, cycling …) by day, so a day with one is not shown as skipped.
   const otherByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (counted(x) || !(x.min > 0 || (kind(x.type) === "hike" && x.km > 0))) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One letter for the strip tile (S styrke, G gang, H HIIT, C cykling, A andet – the plan's own "SA"/"SB" style), "+1" when
+  // there is more than one session; the full text sits in the tile's title.
+  const otherShort = (list) => { const l = xLabel(list[0].type).charAt(0).toUpperCase(); return list.length > 1 ? `${l}+${list.length - 1}` : l; };
   const otherText = (list) => (list || []).map((x) => `${xLabel(x.type)}${x.km > 0 ? ` ${x.km} km` : ""}${x.min ? ` ${x.min} min` : ""}`).join(", ");
   const dayKmFor = (key) => { const d0 = parseLocal(key); return [0, 1, 2, 3, 4, 5, 6].map((i) => Math.round((actsByDay[ymd(addDays(d0, i))] || []).reduce((s, x) => s + x.km, 0) * 10) / 10); };
   const dayKm = dayKmFor(curBase.key);
@@ -980,6 +983,7 @@ export default function App() {
   /* ---- AI coach (Claude via /api/coach; the chat stays on this device) ---- */
   const [chat, setChat] = useState(() => loadChat());
   const [coachQ, setCoachQ] = useState("");
+  const coachQRef = useRef(null); // the composer textarea: grows with the text, shrinks back after a send
   // Body goal, strength and today's nutrition targets, so the coach can answer about lifting and food too.
   const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.fitnessAge } : null, krop_mål: p.body || "keep", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
   const [coachBusy, setCoachBusy] = useState(false);
@@ -990,7 +994,7 @@ export default function App() {
   const ask = async (q) => {
     const question = (q ?? coachQ).trim();
     if (!question || coachBusy) return;
-    setCoachBusy(true); setCoachErr(null); setCoachQ("");
+    setCoachBusy(true); setCoachErr(null); setCoachQ(""); if (coachQRef.current) coachQRef.current.style.height = "auto";
     const history = chat.slice(-8).map(({ role, text }) => ({ role, text }));
     const next = [...chat, { role: "user", text: question, at: Date.now() }];
     setChat(next);
@@ -1396,13 +1400,14 @@ export default function App() {
               {coachBusy && <div className="msg assistant muted">{t("Tænker…")}</div>}
             </div>
             {coachErr && <div className="advice warn">{coachErr.text}</div>}
-            <form className="chatform" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-              <input aria-label={t("Spørg AI-træneren")} value={coachQ} onChange={(e) => setCoachQ(e.target.value)} placeholder={t("fx Skal jeg løbe, når jeg er forkølet?")} maxLength={800} disabled={coachBusy} />
+            {!coachBusy && <div className="chips ask-chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))}>{t(q)}</button>)}</div>}
+            <form className="chatform composer" onSubmit={(e) => { e.preventDefault(); ask(); }}>
+              <textarea ref={coachQRef} rows={1} aria-label={t("Spørg AI-træneren")} value={coachQ} maxLength={800} disabled={coachBusy} placeholder={t("Skriv til træneren …")}
+                onChange={(e) => { setCoachQ(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } }} />
               <button className="btn" type="submit" disabled={coachBusy || !coachQ.trim()}>{t("Send")}</button>
             </form>
-            {!coachBusy && <div className="chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))}>{t(q)}</button>)}</div>}
-            <p className="foot" style={{ marginTop: 10 }}>{t("Dine tal, aldrig dit navn. Samtalen bliver på enheden.")}</p>
-            {chat.length > 0 && <button className="btn ghost" type="button" style={{ marginTop: 10 }} onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>{t("Ryd samtalen")}</button>}
+            <p className="foot" style={{ marginTop: 8 }}>{t("Dine tal, aldrig dit navn. Samtalen bliver på enheden.")}{chat.length > 0 && <> · <button className="linkbtn" type="button" onClick={() => { setChat([]); saveChat([]); setCoachErr(null); }}>{t("Ryd samtalen")}</button></>}</p>
             </div>
           </div>
         </section>
@@ -1612,8 +1617,8 @@ export default function App() {
                     <b>{v || (lift ? (plan.coach ? liftShort(i) : "S") : "–")}</b>
                     <small>{cur.events?.[i] ? `★ ${cur.events[i].name}` : v ? (long ? t("lang") : hard ? t("hård") : b2b ? "B2B" : t("rolig")) : lift ? t("styrke") : t("Hvile")}</small>
                     {v > 0 && lift && <small className="lift-tag" title={liftName(i)}>{plan.coach ? liftShort(i) : "S"}</small>}
-                    {dayKm[i] > 0 && <small className="ran">✓ {dayKm[i]} km</small>}
-                    {other.length > 0 && <small className="ran">✓ {otherText(other)}</small>}
+                    {dayKm[i] > 0 && <small className="ran" title={`${dayKm[i]} km`}>✓ {dayKm[i]}</small>}
+                    {other.length > 0 && <small className="ran" title={otherText(other)}>✓ {otherShort(other)}</small>}
                     {d.note && <small className="note">{d.note}</small>}
                   </div>
                 );
