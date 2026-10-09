@@ -274,7 +274,7 @@ export default {
   "let uge": "easy week",
   "{pct} % af planen": "{pct}% of the plan",
   "Uge uden plan": "Week without a plan",
-  "styrke": "strength",
+  "styrke": "gym",
   "hvile": "rest",
   "{n} uger": "{n} weeks",
   "Andre pas": "Other sessions",
