@@ -990,7 +990,14 @@ export default function App() {
   const [coachErr, setCoachErr] = useState(null);
   // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.
   const chatRef = useRef(null);
-  useEffect(() => { const el = chatRef.current; if (el) el.scrollTop = el.scrollHeight; }, [chat, coachBusy, view]);
+  // The chat flows in the page (no inner scroll box): a new message scrolls the page so it sits just above the composer.
+  const chatSeen = useRef(0);
+  useEffect(() => {
+    const n = chat.length * 2 + (coachBusy ? 1 : 0); // changes both when "Tænker…" appears and when the reply replaces it
+    if (n === chatSeen.current || view !== "coach") { chatSeen.current = n; return; }
+    chatSeen.current = n;
+    const last = chatRef.current?.lastElementChild; if (last) last.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [chat, coachBusy, view]);
   const ask = async (q) => {
     const question = (q ?? coachQ).trim();
     if (!question || coachBusy) return;

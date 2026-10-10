@@ -758,3 +758,6 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
    are ~40 px wide, so the padding is slim and the small text 11 px. */
 .thisweek div > small:not(.note) { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 999px) { .thisweek { gap: 4px; } .thisweek div { padding: 10px 2px; } .thisweek div small { line-height: 1.3; } .thisweek .ran, .thisweek .lift-tag { margin-top: 2px; } }
+/* The chat is part of the page, not a box with its own scrollbar: one scroll on a phone, the composer stuck below it. */
+.chat { height: auto; min-height: 0; max-height: none; overflow: visible; overscroll-behavior: auto; }
+.chat .msg { scroll-margin-bottom: 150px; }
