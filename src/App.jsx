@@ -1238,6 +1238,7 @@ export default function App() {
           const ran = dayKm[ti]; const didOther = otherByDay[todayStr] || []; const didStrength = didOther.some((x) => actKind(x.type) === "strength");
           const done = v > 0 ? ran >= v * 0.9 : lift ? didStrength : didOther.length > 0;
           const todayRuns = actsByDay[todayStr] || [];
+          const todayVert = Math.round(todayRuns.reduce((s, x) => s + (x.vert || 0), 0)); // the day's climb across all runs
           const rpeNow = todayRuns.find((a) => a.rpe)?.rpe || null;
           const otherKm = didOther.reduce((s, a) => s + (a.km || 0), 0);
           // What the big button does next. A session typed by hand can be corrected (the form replaces it); one from the
@@ -1314,7 +1315,7 @@ export default function App() {
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
                 {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
-                {ran > 0 && <div className="today-ran">✓ {t("Logget")}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
+                {ran > 0 && <div className="today-ran">✓ {t("Logget")} · {ran} km{todayVert > 0 ? ` · ${todayVert} m+` : ""}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
                 {todayRuns.length > 0 && (
                   <div className="quick-rpe">
                     <span>{rpeNow ? t("Føltes som RPE {n}", { n: rpeNow }) : t("Hvor hård føltes turen?")}</span>
