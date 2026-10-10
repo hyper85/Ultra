@@ -8,6 +8,7 @@ import { t } from "./i18n.js";
 
 const DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]; // Danish: coachContext uses them as is, findings use t()
 const r1 = (x) => Math.round(x * 10) / 10;
+const r2 = (x) => Math.round(x * 100) / 100; // ACWR with two decimals, as Overblik shows it
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const median = (xs) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
@@ -196,9 +197,26 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
 /* Compact, anonymous context for the AI coach: numbers only, no name or e-mail. */
 export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, todayStr, maxHR, advice, extra = {} }) {
   const ur = watchSummary(acts, { includeHikes: !!p.includeHikes, todayKey: ymd(mondayOf(parseLocal(todayStr))), weeks: 12 });
-  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, højdemeter: l.vert ?? null, rpe: l.rpe ?? null, andre_pas_min: l.xmin ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, acwr: a ? r1(a.v) : null, i_gang: r.key === cur.key }; });
+  const rows = plan.rows.filter((r) => r.key <= cur.key).slice(-6).map((r) => { const l = log[r.key] || {}; const a = acwrFor(r.key); return { uge: r.i, fase: r.phase, plan_km: r.km, løbet_km: l.km ?? null, højdemeter: l.vert ?? null, rpe: l.rpe ?? null, andre_pas_min: l.xmin ?? null, hvilepuls: l.hr ?? null, søvn_t: l.sleep ?? null, vægt: l.wt ?? null, vo2max: l.vo2 ?? null, hrv: l.hrv ?? null, stress: l.stress ?? null, ...(r.key === cur.key ? { acwr_hidtil: a ? r2(a.v) : null } : { acwr: a ? r2(a.v) : null }), i_gang: r.key === cur.key }; });
+  // Where the runner is right now: weekday, km so far, what is left, and the ACWR the way Overblik shows it (the last
+  // completed week while this one is young), so the model never reads a half week as a verdict.
+  const di = (parseLocal(todayStr).getDay() + 6) % 7;
+  const curLog = log[cur.key] || {};
+  const done = plan.rows.filter((r) => r.key < cur.key); const lastDone = done[done.length - 1];
+  const aNow = acwrFor(cur.key), aLast = lastDone ? acwrFor(lastDone.key) : null;
+  const weekYoung = (curLog.km || 0) < (cur.km || 1) * 0.6;
+  const byDay = runsByDay(acts, !!p.includeHikes);
+  const perDay = [0, 1, 2, 3, 4, 5, 6].map((i) => r1((byDay[ymd(addDays(parseLocal(cur.key), i))] || []).reduce((a, x) => a + x.km, 0)));
+  const status_nu = {
+    dato: todayStr, ugedag: DAYS[di], dag_i_ugen: di + 1, dage_tilbage_i_ugen: 6 - di, uge: cur.i, fase: cur.phase,
+    plan_km: cur.km, løbet_km_hidtil: curLog.km ?? 0, plan_rest_km: r1(Math.max(0, (cur.km || 0) - (curLog.km || 0))), højdemeter_hidtil: curLog.vert ?? 0,
+    løbet_pr_dag: perDay, plan_pr_dag: cur.days, andre_pas_min_hidtil: curLog.xmin ?? 0,
+    acwr: weekYoung && aLast ? { værdi: r2(aLast.v), grundlag: `sidste hele uge (uge ${lastDone.i}); ugen i gang er for ung til en dom` } : aNow ? { værdi: r2(aNow.v), grundlag: "ugen i gang" } : null,
+    acwr_ugen_hidtil: aNow ? r2(aNow.v) : null,
+  };
   return {
     dato: todayStr,
+    status_nu,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
       hverdag: (p.sched?.A || []).map((d, i) => `${DAYS[i]}: ${d.avail}${d.time ? " " + d.time : ""}${d.note ? " (" + d.note + ")" : ""}`) },
     løb: { navn: p.raceName, dato: p.raceDate, km: p.raceKm, højdemeter: p.raceVert },
