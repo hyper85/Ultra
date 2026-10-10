@@ -637,6 +637,7 @@ export default function App() {
   const goRaceDay = () => { setOpenRace(true); setView("plan"); setOpenMore(null); setTimeout(() => { try { document.getElementById("raceday")?.scrollIntoView({ block: "start" }); } catch { /* ignore */ } }, 60); };
   const exportICS = async () => { const { planToICS, downloadICS } = await import("./ics.js"); downloadICS(planToICS({ rows: plan.rows.map((r) => (adjRow && r.key === adjRow.key ? adjRow : r)), liftDays, liftName, race: { name: p.raceName, km: p.raceKm }, dayFor: (key, i) => ymd(addDays(parseLocal(key), i)) }), `ultraplan-${p.raceName ? p.raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "plan"}.ics`); };
   const [showPast, setShowPast] = useState(false); // finished weeks in "Alle uger" (they are also in the Log)
+  const [showAllWeeks, setShowAllWeeks] = useState(false); // "Alle uger" shows this week + 3 ahead until asked for the rest
   const [openPlanWeek, setOpenPlanWeek] = useState(null); // week expanded in "Alle uger"   // weeks before the plan in the log (empty ones hidden by default)
   const counted = (x) => { const k = kind(x.type); return k === "run" || (k === "hike" && p.includeHikes); };
   const actsByDay = useMemo(() => { const m = {}; for (const x of Object.values(acts)) { if (!counted(x)) continue; (m[x.day] ||= []).push(x); } return m; }, [acts, p.includeHikes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -703,7 +704,7 @@ export default function App() {
     if (day > todayStr) { const row = planRows.find((r) => r.key === dayEdit.key); return row ? renderDayPreview(row, dayEdit.i) : null; }
     return (
       <form className="dayform" onSubmit={saveDay}>
-        <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? t("· plan {km} km", { km: planKm || 0 }) : t("· før planen")}</span></div>
+        <div className="dayform-head"><b>{DAYS[dayEdit.i]} {fmt(parseLocal(day))}</b> <span className="muted">{planKm != null ? (planKm > 0 ? t("· plan {km} km", { km: planKm }) : liftDays.includes(dayEdit.i) ? t("· plan {name}", { name: liftName(dayEdit.i) }) : t("· plan hvile")) : t("· før planen")}</span></div>
         {[...(actsByDay[day] || []), ...(otherByDay[day] || [])].map((x) => (
           <Fragment key={x.id}>
           <div className={`dayform-item ${dayEdit.replace === x.id ? "editing" : ""}`}><span>{dayEdit.replace === x.id ? `✎ ${t("rettes")}: ` : "✓ "}{x.km > 0 ? `${actKind(x.type) === "run" ? "" : `${xLabel(x.type)} `}${x.km} km` : xLabel(x.type)}{x.vert > 0 ? ` · ${x.vert} m+${x.incline ? ` (${x.incline} %)` : ""}` : ""}{x.min ? ` · ${x.min} min` : ""}{x.hr ? ` · ${t("puls")} ${x.hr}` : ""}{x.rpe ? ` · RPE ${x.rpe}` : ""} <span className="muted">· {t(x.source)}{x.treadmill && !x.incline ? ` · ${t("løbebånd")}` : ""}</span></span>
@@ -960,6 +961,7 @@ export default function App() {
   };
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
   const pastWeeks = [...preRows.filter((r) => log[r.key]?.km > 0), ...planRows.filter((r) => r.key < cur.key)];
+  const upcoming = planRows.filter((r) => r.key >= cur.key);
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   const hrCap70 = Math.round(maxHR * 0.7);
@@ -1088,7 +1090,7 @@ export default function App() {
               <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title={t("Antaget: km/uge nu × RPE 5")}>~{p.currentKm}</span> : "") : r.km}</td>
               <td>{logCell(r.key, "km")}</td><td className="hide-phone">{logCell(r.key, "rpe", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "hr", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "wt", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "sleep", r.key === cur.key)}</td>
               <td className="num hide-phone">{ld ?? (r.pre && baseline ? <span className="muted" title={t("Antaget belastning")}>~{baseline}</span> : "")}</td>
-              <td className="num"><span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span></td>
+              <td className="num">{r.key === todayKey ? <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>–</span> : <span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span>}</td>
             </tr>
             {open && (
               <tr className="dayrow"><td colSpan={9}>
@@ -1424,10 +1426,6 @@ export default function App() {
         {view === "more" && (
         <aside className="stack">
           <h1 className="screen-title">{t("Mere")}</h1>
-          <div className="panel setting-row">
-            <div><b>{t("Sprog")}</b><span className="muted">{t("Valget gemmes på denne enhed.")}</span></div>
-            <LangSwitch />
-          </div>
           {syncEnabled && (
             <details className="panel acc" id="konto" open={openMore === "konto" || (syncEnabled && !user)}>
               <summary><h2>{t("Konto")}</h2>{user ? <span className="acc-sum">{user.email}</span> : null}<span className="chev" aria-hidden="true">›</span></summary>
@@ -1459,7 +1457,7 @@ export default function App() {
           <details className="panel acc">
             <summary><h2>{t("Start")}</h2><span className="acc-sum">{plan.coach ? t("trænerplan") : fmt(startD)}</span><span className="chev" aria-hidden="true">›</span></summary>
             <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={p.coachMode !== false} onChange={(e) => setP({ ...p, coachMode: e.target.checked })} /> {t("Trænerplan – brug trænerens uger som de er")}</label>
-            {plan.coach ? <div className="muted" style={{ margin: "6px 0 4px" }}>{t("Uge 1 starter {start} · løbet {race}.", { start: fmt(plan.rows[0].wkStart), race: p.raceDate ? fmt(parseLocal(p.raceDate)) : "–" })}</div> : <>
+            {plan.coach ? <div className="muted" style={{ margin: "6px 0 4px" }}>{t("Uge 1 starter {start} · løbet {race}", { start: fmt(plan.rows[0].wkStart), race: p.raceDate ? fmt(parseLocal(p.raceDate)) : "–" })}</div> : <>
             <label>{t("Startdato (planen begynder mandag i den uge)")}
               <input type="date" value={p.startDate} max={p.raceDate} onChange={(e) => setStart(e.target.value)} />
             </label>
@@ -1471,7 +1469,7 @@ export default function App() {
           </details>
 
           <details className="panel acc" open={!!planMsg}>
-            <summary><h2>{t("Trænerplan")}</h2><span className="acc-sum">{CP.version || t("indbygget")}{p.coachPlan?.importedAt ? ` · ${fmt(new Date(p.coachPlan.importedAt))}` : ""}</span><span className="chev" aria-hidden="true">›</span></summary>
+            <summary><h2>{t("Trænerplan")}</h2><span className="acc-sum">{(CP.version || t("indbygget")).split(" — ")[0]}{p.coachPlan?.importedAt ? ` · ${fmt(new Date(p.coachPlan.importedAt))}` : ""}</span><span className="chev" aria-hidden="true">›</span></summary>
             <dl className="plan-meta">
               <div><dt>{t("Version")}</dt><dd>{CP.version || t("indbygget (ingen version)")}</dd></div>
               <div><dt>{t("Importeret")}</dt><dd>{p.coachPlan?.importedAt ? `${new Date(p.coachPlan.importedAt).toLocaleString(locale(), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} · ${p.coachPlan.fileName || ""}` : t("ikke importeret – appens egen fil")}</dd></div>
@@ -1528,7 +1526,7 @@ export default function App() {
             {plan.coach && <div className="muted" style={{ marginTop: 10 }}>{t("Trænerplanen bestemmer dagene: styrke {lift} · hård {hard} · lang {long}.", { lift: liftDays.map((i) => dayLow(i)).join(" + "), hard: dayLow(CP.week.qualityDay), long: dayLow(CP.week.longDay) })}</div>}
             {(
               <div style={{ marginTop: 8 }}>
-                <label className="check"><input type="checkbox" checked={!!p.altWeeks} onChange={(e) => setP({ ...p, altWeeks: e.target.checked })} /> {t("Deleordning – ugerne skifter (uge A / uge B)")}</label>
+                {!plan.coach && <label className="check"><input type="checkbox" checked={!!p.altWeeks} onChange={(e) => setP({ ...p, altWeeks: e.target.checked })} /> {t("Deleordning – ugerne skifter (uge A / uge B)")}</label>}
                 {p.altWeeks && <label style={{ marginTop: 6 }}>{t("Første uge A starter mandag")}<input type="date" value={p.altStart} onChange={(e) => { if (e.target.value) setP({ ...p, altStart: ymd(mondayOf(parseLocal(e.target.value))) }); }} /></label>}
               </div>
             )}
@@ -1623,7 +1621,7 @@ export default function App() {
                     className={`${long ? "long" : hard ? "hard" : lift && !v ? "lift" : ""} ${dayKm[i] || other.length ? "done" : ""} ${isEditing(cur.key, i) ? "edit" : ""}`}>
                     <small>{DAYS[i]}</small>
                     <b>{v || (lift ? (plan.coach ? liftShort(i) : "S") : "–")}</b>
-                    <small>{cur.events?.[i] ? `★ ${cur.events[i].name}` : v ? (long ? t("lang") : hard ? t("hård") : b2b ? "B2B" : t("rolig")) : lift ? t("styrke") : t("Hvile")}</small>
+                    <small>{cur.events?.[i] ? `★ ${cur.events[i].name}` : v ? (long ? t("lang") : hard ? t("hård") : b2b ? "B2B" : t("rolig")) : lift ? t("styrke") : t("hvile")}</small>
                     {v > 0 && lift && <small className="lift-tag" title={liftName(i)}>{plan.coach ? liftShort(i) : "S"}</small>}
                     {dayKm[i] > 0 && <small className="ran" title={`${dayKm[i]} km`}>✓ {dayKm[i]}</small>}
                     {other.length > 0 && <small className="ran" title={otherText(other)}>✓ {otherShort(other)}</small>}
@@ -1640,7 +1638,7 @@ export default function App() {
               <h2>{t("Alle uger")}</h2>
               {pastWeeks.length > 0 && <button type="button" className="linkbtn past-toggle" onClick={() => setShowPast((v) => !v)}>{showPast ? t("Skjul tidligere uger") : tn(pastWeeks.length, "Vis 1 tidligere uge", "Vis {n} tidligere uger")}</button>}
               <div className="weeklist">
-                {[...(showPast ? pastWeeks : []), ...planRows.filter((r) => r.key >= cur.key)].map((r) => {
+                {[...(showPast ? pastWeeks : []), ...upcoming.slice(0, showAllWeeks ? upcoming.length : 4)].map((r) => {
                   const ran = log[r.key]?.km; const km = dayKmFor(r.key);
                   const ranCls = !ran ? "" : r.pre ? "" : ran >= r.km * 0.9 ? "ok" : r.key < todayKey ? "low" : "";
                   const openP = openPlanWeek === r.key;
@@ -1678,6 +1676,7 @@ export default function App() {
                   );
                 })}
               </div>
+              {upcoming.length > 4 && <button type="button" className="linkbtn past-toggle" onClick={() => setShowAllWeeks((v) => !v)}>{showAllWeeks ? t("Vis kun de næste 4 uger") : t("Vis alle {n} uger", { n: upcoming.length })}</button>}
             </div>
           
 
@@ -1731,6 +1730,12 @@ export default function App() {
             )}
 
           </div>
+          {view === "more" && (
+            <div className="panel setting-row" style={{ marginTop: 18 }}>
+              <div><b>{t("Sprog")}</b><span className="muted">{t("Valget gemmes på denne enhed.")}</span></div>
+              <LangSwitch />
+            </div>
+          )}
           {view === "more" && <p className="foot">{t("Planens tal er et loft, ikke et gulv. Ikke lægefaglig rådgivning.")}<br /><span style={{ opacity: .7 }}>Ultraplan {__APP_VERSION__}</span></p>}
         </section>
       </main>

@@ -761,3 +761,4 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 /* The chat is part of the page, not a box with its own scrollbar: one scroll on a phone, the composer stuck below it. */
 .chat { height: auto; min-height: 0; max-height: none; overflow: visible; overscroll-behavior: auto; }
 .chat .msg { scroll-margin-bottom: 150px; }
+.kost .row-between h2 { white-space: nowrap; }
