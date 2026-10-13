@@ -322,11 +322,14 @@ export default function App() {
   /* ---- Strava ---- */
   const [strava, setStrava] = useState({ connected: null, athlete: null, lastSync: null, busy: false, msg: null });
   const stravaRef = useRef({ synced: false, exchanging: false });
+  const lastSyncAtRef = useRef(0); // when this tab last pulled from Strava
+  const stravaBusyRef = useRef(false); stravaBusyRef.current = strava.busy;
   // Pull new activities from Strava and merge them like a file import (same dedupe, same weekly totals).
   const runStravaSync = async (silent = false) => {
     setStrava((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
     try {
       const r = await stravaSync();
+      lastSyncAtRef.current = Date.now();
       const parsed = (r.activities || []).map(activityFromStrava).filter(Boolean);
       const merged = mergeActivities(actsRef.current, parsed);
       const { next, removed } = dedupeStore(merged.next);
@@ -338,6 +341,20 @@ export default function App() {
     } catch (e) { setStrava((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
   };
   const actsRef = useRef(acts); actsRef.current = acts;
+  // A PWA that stays open is never "opened" again, so the once-per-load sync misses the session you just finished.
+  // Coming back to the app (tab visible, window focused) re-syncs silently when the last sync is over 5 minutes old.
+  const syncFnRef = useRef(null); syncFnRef.current = runStravaSync;
+  useEffect(() => {
+    if (!strava.connected) return;
+    const onBack = () => {
+      if (document.visibilityState !== "visible" || stravaBusyRef.current) return;
+      if (Date.now() - lastSyncAtRef.current < 5 * 60000) return;
+      syncFnRef.current?.(true);
+    };
+    document.addEventListener("visibilitychange", onBack); window.addEventListener("focus", onBack);
+    return () => { document.removeEventListener("visibilitychange", onBack); window.removeEventListener("focus", onBack); };
+  }, [strava.connected]);
+
   const connectStrava = async () => {
     setStrava((x) => ({ ...x, busy: true, msg: null }));
     try { window.location.assign(await stravaConnectURL()); } catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
