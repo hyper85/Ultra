@@ -949,6 +949,10 @@ export default function App() {
     const verdict = pct == null ? "" : pct >= 85 && pct <= 120 ? t("Lige på planen.") : pct > 120 ? t("Over planen – planens tal er et loft.") : pct >= 60 ? t("Lidt under planen, det er fint.") : t("Langt under planen – passer dagene?");
     return { i: prev.i, km: l.km || 0, plan: prev.km, pct, acwr: a?.v ?? null, xn: l.xn || 0, xmin: l.xmin || 0, sleep: l.sleep, verdict };
   }, [plan.rows, cur.key, log]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Yesterday had plan km, no run, no event (same week, not Monday): I dag says so, and the coach gets a question for it.
+  const missedYesterday = (() => { const ti = (new Date().getDay() + 6) % 7; if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; return { km: yKm, other: otherByDay[ymd(addDays(parseLocal(cur.key), y))] || [] }; })();
+  // Suggested questions: the ones the week calls for first, then the standing four, four in all.
+  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const hrNow = log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); if (p.restHR && hrNow >= p.restHR + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
   /* ---- "Send uge til træner": a compact text of one week, copied to the clipboard ---- */
   const num = (x, d = 1) => (x == null || x === "" ? null : Number(x).toLocaleString(locale(), { maximumFractionDigits: d }));
   const weekText = (r) => {
@@ -1337,8 +1341,7 @@ export default function App() {
                   <div>{nextEvent.days === 1 ? t("Pak tasken i aften: sko, mad, flasker, jakke. Intet nyt på dagen.") : t("Tjek vejr, sko og mad nu, så det ikke er gæt på dagen.")}</div>
                   {nextEvent.note && <div className="muted">{nextEvent.note}</div>}
                 </div>); })()}
-              {(() => { if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; const yKey = ymd(addDays(parseLocal(cur.key), y)); if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; const other = otherByDay[yKey] || []; return (
-                <div className="advice missed">{other.length ? t("I går: {km} km planlagt, du lavede {what} i stedet. Lad turen ligge.", { km: yKm, what: otherText(other).toLowerCase() }) : t("I går: {km} km planlagt, ikke løbet. Lad den ligge, planens tal er et loft.", { km: yKm })}</div>); })()}
+              {missedYesterday && <div className="advice missed">{missedYesterday.other.length ? t("I går: {km} km planlagt, du lavede {what} i stedet. Lad turen ligge.", { km: missedYesterday.km, what: otherText(missedYesterday.other).toLowerCase() }) : t("I går: {km} km planlagt, ikke løbet. Lad den ligge, planens tal er et loft.", { km: missedYesterday.km })}</div>}
               <section className={`panel today ${done ? "done" : ""} kind-${raceDay || ev ? "race" : long ? "long" : hard ? "hard" : b2b ? "b2b" : v > 0 ? "easy" : lift ? "lift" : "rest"}`}>
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
@@ -1453,7 +1456,7 @@ export default function App() {
               {coachBusy && <div className="msg assistant muted">{t("Tænker…")}</div>}
             </div>
             {coachErr && <div className="advice warn">{coachErr.text}</div>}
-            {!coachBusy && <div className="chips ask-chips">{SUGGESTED.map((q) => <button key={q} type="button" onClick={() => ask(t(q))}>{t(q)}</button>)}</div>}
+            {!coachBusy && <div className="chips ask-chips">{suggested.map((q) => <button key={q} type="button" onClick={() => ask(q)}>{q}</button>)}</div>}
             <form className="chatform composer" onSubmit={(e) => { e.preventDefault(); ask(); }}>
               <textarea ref={coachQRef} rows={1} aria-label={t("Spørg AI-træneren")} value={coachQ} maxLength={800} disabled={coachBusy} placeholder={t("Skriv til træneren …")}
                 onChange={(e) => { setCoachQ(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
@@ -1641,7 +1644,7 @@ export default function App() {
             <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
             <div className="seg" role="tablist">{[["overblik", "Overblik"], ["log", "Log"]].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo(0, 0); }}>{t(l)}</button>)}</div>
             {emptyCard}
-            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} /></Suspense>}
+            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} /></Suspense>}
           </section>
         )}
         <section className="stack">

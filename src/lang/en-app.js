@@ -607,4 +607,8 @@ export default {
   "To filer, lavet på telefonen: loggen uge for uge, og alle ture og pas. Åbner direkte i Excel og Numbers.": "Two files, made on the phone: the log week by week, and every run and session. Opens straight in Excel and Numbers.",
   "Loggen (CSV)": "The log (CSV)",
   "Ture og pas (CSV)": "Runs and sessions (CSV)",
+  "Hvordan skal jeg gribe {name} an?": "How should I approach {name}?",
+  "Jeg sprang gårsdagens tur over – hvad nu?": "I skipped yesterday's run – what now?",
+  "Er min belastning for høj lige nu?": "Is my load too high right now?",
+  "Min hvilepuls er høj – skal jeg løbe i dag?": "My resting heart rate is high – should I run today?",
 };

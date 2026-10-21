@@ -78,6 +78,25 @@ for (const [at, want] of [["2026-10-21T09:00:00", /★ Eventyrsport BakkeTrail o
   ok(/^Fredag 9\. oktober/.test(await page.locator(".today-date").innerText()), `after midnight and a return: ${await page.locator(".today-date").innerText()}`);
   await browser.close();
 }
+// 7. Overblik forecast tile and contextual coach questions
+{
+  const { browser, page } = await openApp({ lang: "da", width: 390, at: "2026-10-22T09:00:00" });
+  await tab(page, 2);
+  const tile = page.locator(".tile", { hasText: /Prognose/ });
+  const tt = (await tile.innerText()).replace(/\n/g, " ");
+  ok(/Prognose \d{1,2}:\d\d ud fra dit rolige tempo/.test(tt), `forecast tile: ${tt}`);
+  await tile.click(); await page.waitForTimeout(500);
+  ok(await page.locator("#raceday[open]").count() === 1, "tapping the forecast opens Løbsdag");
+  await tab(page, 3);
+  const chips = await page.locator(".ask-chips button").allInnerTexts();
+  ok(chips.length === 4 && chips[0] === "Hvordan skal jeg gribe Eventyrsport BakkeTrail an?" && chips[1] === "Jeg sprang gårsdagens tur over – hvad nu?", `chips: ${chips.join(" | ")}`);
+  await browser.close();
+  const b = await openApp({ lang: "da", width: 390, patch: { restHR: 44 } }); // this week's 50 is 6 over the normal 44
+  await tab(b.page, 3);
+  const c2 = await b.page.locator(".ask-chips button").allInnerTexts();
+  ok(c2[0] === "Min hvilepuls er høj – skal jeg løbe i dag?" && c2.length === 4, `chips with a high resting HR: ${c2.join(" | ")}`);
+  await b.browser.close();
+}
 // English
 {
   const { browser, page, errors } = await openApp({ lang: "en", width: 360, at: "2026-10-22T09:00:00" });
