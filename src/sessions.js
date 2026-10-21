@@ -2,7 +2,7 @@
    this turns the name into a short, concrete instruction with the runner's own heart-rate numbers. Pure and
    deterministic, like the rest of the engine. The session names are Danish (that is what the plan stores); the
    matching stays Danish and every returned string goes through t(). */
-import { t, getLang } from "./i18n.js";
+import { t, getLang, locale } from "./i18n.js";
 
 const fmtHR = (maxHR, lo, hi) => (maxHR ? ` (${Math.round(maxHR * lo)}–${Math.round(maxHR * hi)})` : "");
 const reps = (q) => { const m = String(q).match(/(\d+)\s*[×x]\s*(\d+(?:[.,]\d+)?)\s*(min|s)/i); return m ? { n: +m[1], d: +m[2].replace(",", "."), unit: m[3].toLowerCase() } : null; };
@@ -52,3 +52,18 @@ export function describeSession(quality, { maxHR, easyPace } = {}) {
 export const describeLong = ({ km, carbs, maxHR, phase }) => t("Lang tur på {km} km: puls under {hr} det meste af vejen, gå stigningerne, {carbs} g kulhydrat i timen fra minut 30.{kit}", { km, hr: maxHR ? Math.round(maxHR * 0.75) : "75 %", carbs, kit: phase === "Ultra-prep" ? t(" Test kit, lygte og mad som på løbsdagen.") : "" });
 export const describeEasy = ({ km, maxHR, easyPace }) => t("{km} km i snakketempo, puls under {hr}{pace}. Skal føles for langsomt.", { km, hr: maxHR ? Math.round(maxHR * 0.7) : "70 %", pace: easyPace ? t(" (ca. {pace}/km)", { pace: easyPace }) : "" });
 export const fmtPace = (minKm) => { if (!(minKm > 0)) return null; const m = Math.floor(minKm), s = Math.round((minKm - m) * 60); return `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}`; };
+
+/* longRunPlan({ km, easyPaceMinKm, phase, raceKm, raceVert }) -> one line with the run's likely duration, carbohydrate
+   to bring (50 g/h in build, 70 g/h in ultra-prep, 25 g per gel), drink, and a climb target when the race has one
+   (60 % of the race's m/km over the run's distance, rounded to 50). null when the run is under 75 minutes. */
+export const longRunPlan = ({ km, easyPaceMinKm, phase, raceKm, raceVert }) => {
+  const pace = easyPaceMinKm > 0 ? easyPaceMinKm * 1.08 : 7; // long runs go a little slower than the easy pace
+  const min = km * pace;
+  if (!(min >= 75)) return null;
+  const hours = min / 60; const gph = phase === "Ultra-prep" ? 70 : 50;
+  const g = Math.round((hours * gph) / 10) * 10; const gels = Math.ceil(g / 25);
+  const l = (Math.round(hours * 5) / 10).toLocaleString(locale(), { maximumFractionDigits: 1 });
+  const time = `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, "0")}`;
+  const climb = raceVert > 0 && raceKm > 0 && phase !== "Genopbygning" ? Math.round((km * (raceVert / raceKm) * 0.6) / 50) * 50 : 0;
+  return t("Ca. {time} · ~{g} g kulhydrat ≈ {gels} geler · {l} l at drikke{climb}", { time, g, gels, l, climb: climb >= 100 ? t(" · sigt efter ~{m} m+", { m: climb }) : "" });
+};

@@ -762,3 +762,8 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 .chat { height: auto; min-height: 0; max-height: none; overflow: visible; overscroll-behavior: auto; }
 .chat .msg { scroll-margin-bottom: 150px; }
 .kost .row-between h2 { white-space: nowrap; }
+/* Round 4: event prep and missed-day notes above the day card, fuel lines. */
+.advice.event-prep { border-left-color: var(--volt); margin-bottom: 12px; display: grid; gap: 6px; }
+.advice.event-prep > b { font-size: 15px; }
+.advice.missed { border-left-color: var(--muted); margin-bottom: 12px; font-size: 14px; }
+.today-sub.fuel, .guide p.fuel { color: var(--muted); font-size: 13px; }
