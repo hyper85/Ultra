@@ -285,4 +285,9 @@ export default {
   "{n} uger i træk": "{n} weeks in a row",
   "om 1 dag": "in 1 day",
   "om {n} dage": "in {n} days",
+  "Prognose": "Forecast",
+  "dit mål {goal} · ": "your goal {goal} · ",
+  "ud fra dit rolige tempo": "from your easy pace",
+  "standardtempo, indtil loggen har rolige ture": "a standard pace until the log has easy runs",
+  "Åbn Løbsdag": "Open Race day",
 };
