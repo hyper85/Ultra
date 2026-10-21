@@ -14,11 +14,12 @@ import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
 import { buildInsights, coachContext } from "./insights.js";
-import { describeSession, describeLong, describeEasy, sessionName } from "./sessions.js";
+import { describeSession, describeLong, describeEasy, sessionName, longRunPlan } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 import { t, tn, locale, getLang } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
-import { hillBenefit } from "./race.js";
+import { hillBenefit, fuelling } from "./race.js";
+import { logToCSV, actsToCSV, downloadText } from "./export.js";
 
 /* ================= storage (swappable) ================= */
 const store = {
@@ -502,9 +503,16 @@ export default function App() {
   // Calendar days from today's date to the race date, not from the clock: counted from midnight, so the number only
   // changes when the date does (rounding absorbs the hour lost or gained when summer time starts or ends).
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - parseLocal(ymd(new Date()))) / 86400000));
+  // An app left open overnight must notice the new day: a tick on the date, checked every minute and on return.
+  const [dayTick, setDayTick] = useState(() => ymd(new Date()));
+  useEffect(() => {
+    const check = () => { const d = ymd(new Date()); setDayTick((x) => (x === d ? x : d)); };
+    const id = setInterval(check, 60_000); document.addEventListener("visibilitychange", check); window.addEventListener("focus", check);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
+  }, []);
   const todayKey = ymd(thisMonday());
   // The next event from the coach plan (today included), for the countdown on I dag.
-  const nextEvent = useMemo(() => { if (p.coachMode === false) return null; const today = ymd(new Date()); const e = activeCoachPlan(p).events.find((x) => x.date >= today && !x.main); return e ? { ...e, days: Math.round((parseLocal(e.date) - parseLocal(today)) / 86400000) } : null; }, [p.coachPlan, p.coachMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nextEvent = useMemo(() => { if (p.coachMode === false) return null; const today = ymd(new Date()); const e = activeCoachPlan(p).events.find((x) => x.date >= today && !x.main); return e ? { ...e, days: Math.round((parseLocal(e.date) - parseLocal(today)) / 86400000) } : null; }, [p.coachPlan, p.coachMode, dayTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const lastPlanRow = plan.rows[plan.rows.length - 1];
   const curBase = plan.rows.find((r) => r.key === todayKey) || (todayKey > lastPlanRow.key ? lastPlanRow : plan.rows[0]);
   const todayStr = ymd(new Date());
@@ -643,7 +651,7 @@ export default function App() {
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
         : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
         : null}
-      {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p></div>}
+      {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
       {full && !r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
       {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
@@ -1312,7 +1320,7 @@ export default function App() {
                 <h1 className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</h1>
                 <div className="meta-chips">
                   <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })} · {t(cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
-                  {nextEvent && <span className="meta-chip event">★ {nextEvent.date === todayStr ? t("{name} i dag", { name: nextEvent.name }) : tn(nextEvent.days, "{name} i morgen", "{name} om {n} dage", { name: nextEvent.name })}</span>}
+                  {nextEvent && !(nextEvent.days >= 1 && nextEvent.days <= 3) && <span className="meta-chip event">★ {nextEvent.date === todayStr ? t("{name} i dag", { name: nextEvent.name }) : tn(nextEvent.days, "{name} i morgen", "{name} om {n} dage", { name: nextEvent.name })}</span>}
                 </div>
               </div>
               {coachOfferBox}
@@ -1321,6 +1329,16 @@ export default function App() {
                   <b>{t("Sidste uge:")}</b> {t("{km} af {plan} km", { km: lastWeek.km, plan: lastWeek.plan })}{lastWeek.pct != null && (lastWeek.pct < 85 || lastWeek.pct > 120) ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${tn(lastWeek.xn, "1 andet pas", "{n} andre pas")} (${lastWeek.xmin} min)` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · ${t("søvn {h} t", { h: lastWeek.sleep })}` : ""}. {lastWeek.verdict}
                 </div>
               )}
+              {nextEvent && nextEvent.days >= 1 && nextEvent.days <= 3 && (() => { const f = nextEvent.hours ? fuelling({ totalMin: nextEvent.hours * 60 }) : null; const when = parseLocal(nextEvent.date).toLocaleDateString(locale(), { weekday: "long" }); return (
+                <div className="advice event-prep">
+                  <b>★ {nextEvent.days === 1 ? t("{name} i morgen", { name: nextEvent.name }) : t("{name} om {n} dage", { name: nextEvent.name, n: nextEvent.days })}</b>
+                  <div>{when.charAt(0).toUpperCase() + when.slice(1)}{nextEvent.start ? ` ${t("kl. {time}", { time: nextEvent.start })}` : ""}{nextEvent.km ? ` · ${nextEvent.km} km` : ""}</div>
+                  {f && <div>{t("Ca. {time} undervejs: {g} g kulhydrat i timen, ca. {gels} geler i alt, {ml} l at drikke.", { time: fmtHours(nextEvent.hours), g: f.carbsPerHour, gels: f.gels, ml: (f.ml / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }) })}</div>}
+                  <div>{nextEvent.days === 1 ? t("Pak tasken i aften: sko, mad, flasker, jakke. Intet nyt på dagen.") : t("Tjek vejr, sko og mad nu, så det ikke er gæt på dagen.")}</div>
+                  {nextEvent.note && <div className="muted">{nextEvent.note}</div>}
+                </div>); })()}
+              {(() => { if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; const yKey = ymd(addDays(parseLocal(cur.key), y)); if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; const other = otherByDay[yKey] || []; return (
+                <div className="advice missed">{other.length ? t("I går: {km} km planlagt, du lavede {what} i stedet. Lad turen ligge.", { km: yKm, what: otherText(other).toLowerCase() }) : t("I går: {km} km planlagt, ikke løbet. Lad den ligge, planens tal er et loft.", { km: yKm })}</div>); })()}
               <section className={`panel today ${done ? "done" : ""} kind-${raceDay || ev ? "race" : long ? "long" : hard ? "hard" : b2b ? "b2b" : v > 0 ? "easy" : lift ? "lift" : "rest"}`}>
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
@@ -1333,6 +1351,7 @@ export default function App() {
                 {ev && (ev.hours || 0) > 6 && <div className="today-sub muted">{t("Over 6 timer: næste uge er sat til restitution.")}</div>}
                 {raceDay && <div className="today-sub">{t("Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.")}</div>}
                 {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, maxHR, phase: cur.phase })}</div>}
+                {long && !raceDay && !(ran > 0) && (() => { const l = longRunPlan({ km: v, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: cur.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <div className="today-sub fuel">{l}</div> : null; })()}
                 {b2b && <div className="today-sub">{t("Back-to-back på trætte ben. Puls under {hr}. {carbs} g kulhydrat/t.", { hr: hrCap, carbs })}</div>}
                 {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
                 {!v && !raceDay && !ev && lift && !session && <div className="today-sub">{strengthPlan.note || t("Styrkedag. Kort og tungt, ingen løb.")}</div>}
@@ -1351,6 +1370,13 @@ export default function App() {
                   </div>
                 )}
                 {didOther.length > 0 && <div className="today-ran">✓ {otherText(didOther)}{lift && !didStrength ? ` · ${t("styrken mangler stadig")}` : !lift && v > 0 && !(ran > 0) ? ` · ${t("i stedet for løbeturen")}` : ""}</div>}
+                {didStrength && (() => { const lifts = didOther.filter((x) => actKind(x.type) === "strength"); const rpeLift = lifts.find((x) => x.rpe)?.rpe || null; return (
+                  <div className="quick-rpe">
+                    <span>{rpeLift ? t("Styrken føltes som RPE {n}", { n: rpeLift }) : t("Hvor hård var styrken?")}</span>
+                    <div className="rpe-chips" role="group" aria-label={t("Hvor hård var styrken?")}>
+                      {QUICK_RPE.map(([n, label]) => <button key={n} type="button" className={rpeLift === n ? "on" : ""} aria-pressed={rpeLift === n} onClick={() => setRpeFor(lifts, n)}><b>{n}</b><small>{t(label)}</small></button>)}
+                    </div>
+                  </div>); })()}
                 <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, primary.type, primary.edit)}>{primary.label}</button>
                 {secondary && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, secondary.type, secondary.edit)}>{secondary.label}</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
@@ -1590,6 +1616,14 @@ export default function App() {
           </details>
           <div className="group-label">{t("Data")}</div>
           {renderSources()}
+          <details className="panel acc">
+            <summary><h2>{t("Eksportér")}</h2><span className="acc-sum">{t("CSV til regneark eller træner")}</span><span className="chev" aria-hidden="true">›</span></summary>
+            <p className="muted">{t("To filer, lavet på telefonen: loggen uge for uge, og alle ture og pas. Åbner direkte i Excel og Numbers.")}</p>
+            <div className="import-row">
+              <button className="btn ghost" type="button" onClick={() => downloadText(logToCSV(log), `ultraplan-log-${todayStr}.csv`)}>{t("Loggen (CSV)")}</button>
+              <button className="btn ghost" type="button" onClick={() => downloadText(actsToCSV(acts), `ultraplan-ture-${todayStr}.csv`)}>{t("Ture og pas (CSV)")}</button>
+            </div>
+          </details>
           <details className="panel acc">
             <summary><h2>{t("Nulstil")}</h2><span className="chev" aria-hidden="true">›</span></summary>
             <div className="reset-list">

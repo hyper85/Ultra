@@ -189,7 +189,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (findings.length === 0) add("empty", "info", t("Appen kender dig ikke endnu. Log dine ture i et par uger, så dukker mønstrene op her."));
   const order = { warn: 0, info: 1, good: 2 };
   findings.sort((a, b) => order[a.level] - order[b.level]);
-  const summary = { sleepAvg, easyPace, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
+  const summary = { sleepAvg, easyPace, easyPaceMinKm, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
     skippedDay: skipped ? day(skipped.i) : null, extraDay: usedFree ? day(usedFree.i) : null };
   return { summary, findings, weeks };
 }

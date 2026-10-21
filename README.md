@@ -11,6 +11,14 @@ Appen findes på dansk og engelsk. Vælg under Mere → Sprog, på login-siden e
 
 Under Plan → Løbsdag regner appen pacing (splits pr. 10 km med kontrolleret start), mad og drikke undervejs (kulhydrat, væske, natrium pr. time og i alt) og en pakkeliste efter distance og årstid. Skriv din måltid, ellers bruges appens skøn ud fra dit rolige tempo. "Læg planen i din kalender" gemmer hele planen som en .ics-fil til Google/Apple/Outlook: én aftale pr. dag med løb, styrke, events og løbet. Ugen i gang kommer med, som appen viser den – også når trænerrådet har skåret den ned. Filen er et øjebliksbillede, så hent den igen, når planen ændrer sig; hver dag har et fast id, så kalenderen opdaterer dagene i stedet for at lave dubletter. Dagene er markeret "Optaget" (Outlook på telefonen viser ellers kun en tynd streg uden titel), så læg filen i en egen "Ultraplan"-kalender, hvis den ikke skal blokere arbejdskalenderen.
 
+## Før et event, efter en sprunget dag
+
+Tre dage før et event fra trænerplanen viser I dag et kort med ugedag, starttid, distance, mad og drikke undervejs
+(g kulhydrat i timen, geler i alt, liter) og en huskeliste; dagen før: "pak tasken i aften". Springer du en planlagt
+tur over, siger I dag det næste dag og beder dig lade den ligge. Lange ture får en linje med forventet tid, kulhydrat
+at tage med, væske og et mål for højdemeter ud fra løbets profil. Styrkepas får RPE-knapper som løb. Under Mere → Data
+→ Eksportér kan loggen og alle ture hentes som CSV.
+
 ## Løbebånd og højdemeter
 
 Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. En løbebåndstur fra Strava har 0 højdemeter (uret måler ikke stigning indendørs): tryk "↗ Stigning" ved turen på dagen og skriv båndets %. Det bliver stående ved næste synk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.
