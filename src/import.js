@@ -556,15 +556,18 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
   if (cDate < 0) throw new ImportError(t("{file}: fandt ingen dato-kolonne. Kolonnerne begynder med: {cols}.", { file: fileName, cols: rows[0].slice(0, 6).join(", ") }));
   if (!cols.length) throw new ImportError(t("{file}: ingen af tallene bruges af appen ({cols}). Tempo, distance, tid og kalorier kommer fra dine ture i stedet.", { file: fileName, cols: rows[0].filter((_, k) => k !== cDate).slice(0, 4).join(", ") }));
   const acc = {}; // monday -> key -> [values]
+  const days = {}; // YYYY-MM-DD -> key -> value, when the rows are daily (a 4-week report); weeks and months give none
   for (const row of rows.slice(1)) {
     const r = [...row];
     while (r.length > headers.length && /^\s*\d{4}\b/.test(r[cDate + 1] || "")) r.splice(cDate, 2, `${r[cDate]}, ${r[cDate + 1].trim()}`);
     const label = r[cDate]; if (!label) continue;
     const weeks = periodWeeks(label); if (!weeks) continue;
+    const day = !weekLabelStart(label) && !monthLabelWeeks(label) ? parseDate(label) : null;
     for (const { idx, m } of cols) {
       const v = m.parse(r[idx]);
       if (!(v >= m.min && v <= m.max)) continue;
       for (const k of weeks) ((acc[k] ||= {})[m.key] ||= []).push(v);
+      if (day) (days[ymd(day)] ||= {})[m.key] = m.key === "hr" || m.key === "stress" || m.key === "endurance" ? Math.round(v) : Math.round(v * 10) / 10;
     }
   }
   const weeks = {}; const counts = {};
@@ -574,5 +577,22 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
     if (Object.keys(w).length) weeks[k] = w;
   }
   if (!Object.keys(weeks).length) throw new ImportError(t(`{file}: kunne ikke læse datoerne (fx "{example}").`, { file: fileName, example: rows[1]?.[cDate] || "" }));
-  return { weeks, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, t(m.label)])) };
+  return { weeks, days, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, t(m.label)])) };
+};
+
+/* The daily wellness store on the profile (p.wellness: YYYY-MM-DD -> { hr, sleep, hrv, stress }), capped at 400 days. */
+export const mergeWellnessDays = (store = {}, days = {}) => {
+  const next = { ...store };
+  for (const [d, v] of Object.entries(days)) next[d] = { ...(next[d] || {}), ...v };
+  const keys = Object.keys(next).sort();
+  for (const k of keys.slice(0, Math.max(0, keys.length - 400))) delete next[k];
+  return next;
+};
+/* restingHRSeries(store, { days = 28, until }) -> { rows: [{ day, hr }], normal } – the last `days` days with a resting
+   HR (up to `until`), and the median of them as the runner's normal. */
+export const restingHRSeries = (store = {}, { days = 28, until } = {}) => {
+  const rows = Object.keys(store).filter((d) => store[d]?.hr > 0 && (!until || d <= until)).sort().slice(-days).map((d) => ({ day: d, hr: store[d].hr }));
+  const sorted = rows.map((r) => r.hr).sort((a, b) => a - b);
+  const normal = sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : Math.round((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2)) : null;
+  return { rows, normal };
 };
