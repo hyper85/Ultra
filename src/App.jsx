@@ -1,5 +1,5 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, mergeWellnessDays, restingHRSeries, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
 import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
 import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
 // Loaded when first shown: the questionnaire (first run), race day and the stats page are not part of the start-up bundle.
@@ -562,6 +562,7 @@ export default function App() {
         // Reports (Sleep.csv, VO2 max, HRV, resting HR, weight …) go into the weekly log; a report the app has no numbers
         // from (pace, distance, fitness age …) throws a clear message instead of falling into the activity parser.
         // An Excel file is read sheet by sheet; each sheet is routed like a CSV file would be.
+        if (/^image\//.test(f.type || "") || /\.(jpe?g|png|gif|heic|webp)$/i.test(f.name)) { errors.push(t("{name} er et billede. Appen læser tal, ikke skærmbilleder: hent rapporten som CSV fra connect.garmin.com (⋮ øverst til højre → Eksportér) og vælg den her.", { name: f.name })); continue; }
         const allSheets = /\.xlsx$|\.xlsm$/i.test(f.name) ? await readExcel(f) : /\.csv$/i.test(f.name) ? [{ name: f.name, text: decodeText(await f.arrayBuffer()) }] : null;
         if (!allSheets) { parsed = parsed.concat(await parseFile(f)); continue; }
         // The coach's program workbook (a Plan tab next to a Tracker tab) is a plan, not a log: nothing from it goes
@@ -582,7 +583,7 @@ export default function App() {
         if (!gotSheet) errors.push(...sheetErrors);
       } catch (err) { errors.push(err?.message || t("{name}: kunne ikke læses.", { name: f.name })); console.error("import", f.name, err); }
     }
-    let logBase = log; const got = {}; const skippedCols = [];
+    let logBase = log; const got = {}; const skippedCols = []; let daysN = 0;
     if (wellness.length) {
       const n = { ...log };
       for (const w of wellness) {
@@ -596,6 +597,10 @@ export default function App() {
         skippedCols.push(...w.skipped);
       }
       logBase = n; if (!parsed.length) saveLog(n);
+      // Daily rows (a 4-week report) go to the profile's day store, for the day-by-day chart and the coach.
+      const days = Object.assign({}, ...wellness.map((w) => w.days || {}));
+      daysN = Object.keys(days).length;
+      if (daysN) setP({ ...p, wellness: mergeWellnessDays(p.wellness, days) });
     }
     const merged = mergeActivities(acts, parsed);
     const { next, removed } = dedupeStore(merged.next);
@@ -604,7 +609,7 @@ export default function App() {
     if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
     const gotText = Object.values(got).map((g) => t("{label} for {n} uger", { label: g.label, n: g.n })).join(", ");
-    const wellText = wellness.length ? " " + t("{got} lagt i loggen.", { got: gotText.charAt(0).toUpperCase() + gotText.slice(1) }) + (skippedCols.length ? " " + t("Sprunget over: {list}.", { list: [...new Set(skippedCols)].slice(0, 5).join(", ") }) : "") : "";
+    const wellText = wellness.length ? " " + t("{got} lagt i loggen.", { got: gotText.charAt(0).toUpperCase() + gotText.slice(1) }) + (daysN ? " " + t("{n} dage på Overblik.", { n: daysN }) : "") + (skippedCols.length ? " " + t("Sprunget over: {list}.", { list: [...new Set(skippedCols)].slice(0, 5).join(", ") }) : "") : "";
     setImportMsg({
       warn: errors.length > 0 || (parsed.length === 0 && !wellness.length),
       text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
@@ -952,7 +957,7 @@ export default function App() {
   // Yesterday had plan km, no run, no event (same week, not Monday): I dag says so, and the coach gets a question for it.
   const missedYesterday = (() => { const ti = (new Date().getDay() + 6) % 7; if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; return { km: yKm, other: otherByDay[ymd(addDays(parseLocal(cur.key), y))] || [] }; })();
   // Suggested questions: the ones the week calls for first, then the standing four, four in all.
-  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const hrNow = log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); if (p.restHR && hrNow >= p.restHR + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
+  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr }); const latest = daily.rows[daily.rows.length - 1]; const hrNow = latest && latest.day >= ymd(addDays(parseLocal(todayStr), -2)) ? latest.hr : log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); const normal = daily.rows.length >= 7 ? daily.normal : p.restHR; if (normal && hrNow >= normal + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
   /* ---- "Send uge til træner": a compact text of one week, copied to the clipboard ---- */
   const num = (x, d = 1) => (x == null || x === "" ? null : Number(x).toLocaleString(locale(), { maximumFractionDigits: d }));
   const weekText = (r) => {
@@ -1231,6 +1236,7 @@ export default function App() {
               <li><b>{t("Strava, én tur:")}</b> {t("åbn turen → ⋯ → Export GPX.")}</li>
               <li><b>{t("Garmin Connect, mange ture:")}</b> {t('connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.')}</li>
               <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.")}</li>
+              <li><b>{t("Garmin Connect, hvilepuls dag for dag:")}</b> {t("connect.garmin.com i browseren (ikke Garmin-appen) → Puls → vælg 4 uger → ⋮ → Eksportér. Dagene vises på Overblik, ugerne lander i loggen. 1 år giver kun ugetal.")}</li>
               <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
               <li><b>{t("Garmin Connect, rapporter:")}</b> {t("Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.")}</li>
               <li><b>{t("Hvilepuls fra en tabel:")}</b> {t('en CSV med en dato-kolonne og en kolonne "Resting" virker også.')}</li>

@@ -19,6 +19,13 @@ tur over, siger I dag det næste dag og beder dig lade den ligge. Lange ture få
 at tage med, væske og et mål for højdemeter ud fra løbets profil. Styrkepas får RPE-knapper som løb. Under Mere → Data
 → Eksportér kan loggen og alle ture hentes som CSV.
 
+## Hvilepuls dag for dag
+
+Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag.
+Overblik viser de sidste 28 dage mod din normal (medianen) og siger, når dagens tal ligger 4 eller 7 slag over; AI-træneren
+får samme serie og bruger den som restitutionsmål. Ugernes gennemsnit lander stadig i loggen. Skærmbilleder kan ikke
+læses, og appen siger hvor CSV-filen hentes.
+
 ## Løbebånd og højdemeter
 
 Logger du en tur på løbebånd, kan du skrive stigningen i %. Appen regner højdemeter (km × 10 × %), "flad indsats" (100 højdemeter ≈ 1 km) og sammenligner med løbets egen profil (m pr. km), så du kan se, om turen matcher det, du træner til. Højdemeter tæller med i ugens belastning og ACWR, og Strava-ture får deres højdemeter med automatisk. En løbebåndstur fra Strava har 0 højdemeter (uret måler ikke stigning indendørs): tryk "↗ Stigning" ved turen på dagen og skriv båndets %. Det bliver stående ved næste synk. Overblik viser højdemeter de sidste 4 uger mod det, løbet kræver.

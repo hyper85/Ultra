@@ -260,7 +260,7 @@ export default {
   "Sæt et nyt løb": "Set a new race",
   "Planen starter mandag {date}": "The plan starts Monday {date}",
   "dag": "day",
-  "dage": "days",
+  "{n} dage på Overblik.": "{n} days on Overview.",
   "Uge 1 er {km} km i {phase}. Indtil da: løb roligt, sov godt, og log det du løber, så ACWR-tallet bliver ægte fra dag ét.": "Week 1 is {km} km in {phase}. Until then: run easy, sleep well, and log what you run, so the ACWR number is real from day one.",
   "Se planen": "See the plan",
   "Flyt startdato": "Move start date",
@@ -611,4 +611,8 @@ export default {
   "Jeg sprang gårsdagens tur over – hvad nu?": "I skipped yesterday's run – what now?",
   "Er min belastning for høj lige nu?": "Is my load too high right now?",
   "Min hvilepuls er høj – skal jeg løbe i dag?": "My resting heart rate is high – should I run today?",
+  "{name} er et billede. Appen læser tal, ikke skærmbilleder: hent rapporten som CSV fra connect.garmin.com (⋮ øverst til højre → Eksportér) og vælg den her.": "{name} is a picture. The app reads numbers, not screenshots: export the report as CSV from connect.garmin.com (⋮ top right → Export) and choose that file here.",
+  "{n} dage på Overblik.": "{n} days on Overview.",
+  "Garmin Connect, hvilepuls dag for dag:": "Garmin Connect, resting HR day by day:",
+  "connect.garmin.com i browseren (ikke Garmin-appen) → Puls → vælg 4 uger → ⋮ → Eksportér. Dagene vises på Overblik, ugerne lander i loggen. 1 år giver kun ugetal.": "connect.garmin.com in the browser (not the Garmin app) → Heart Rate → choose 4 weeks → ⋮ → Export. The days show on Overview, the weeks land in the log. 1 year gives weekly numbers only.",
 };

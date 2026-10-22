@@ -1,4 +1,4 @@
-import { ymd, parseLocal, addDays, mondayOf, kind } from "./import.js";
+import { ymd, parseLocal, addDays, mondayOf, kind, restingHRSeries } from "./import.js";
 import { t } from "./i18n.js";
 
 /* ================= insights: what the app has learned about the runner =================
@@ -214,9 +214,12 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
     acwr: weekYoung && aLast ? { værdi: r2(aLast.v), grundlag: `sidste hele uge (uge ${lastDone.i}); ugen i gang er for ung til en dom` } : aNow ? { værdi: r2(aNow.v), grundlag: "ugen i gang" } : null,
     acwr_ugen_hidtil: aNow ? r2(aNow.v) : null,
   };
+  const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr });
+  const hvilepuls_dagligt = daily.rows.length ? { normal_28d: daily.normal, seneste: daily.rows[daily.rows.length - 1], sidste_28_dage: daily.rows.map((r) => [r.day, r.hr]) } : null;
   return {
     dato: todayStr,
     status_nu,
+    hvilepuls_dagligt,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
       hverdag: (p.sched?.A || []).map((d, i) => `${DAYS[i]}: ${d.avail}${d.time ? " " + d.time : ""}${d.note ? " (" + d.note + ")" : ""}`) },
     løb: { navn: p.raceName, dato: p.raceDate, km: p.raceKm, højdemeter: p.raceVert },

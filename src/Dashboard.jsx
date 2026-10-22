@@ -1,4 +1,4 @@
-import { ymd, parseLocal, addDays, kind } from "./import.js";
+import { ymd, parseLocal, addDays, kind, restingHRSeries } from "./import.js";
 import { watchHistory } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { predictFinish, fmtTime } from "./race.js";
@@ -41,6 +41,7 @@ function Bars({ rows, height = 150, cur }) {
 }
 
 /* A line with an optional good band. */
+const fmtDay = (d) => parseLocal(d).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 function Line({ rows, height = 130, band, color = "accent", format = (v) => v, cur }) {
   const W = 640, H = height, padL = 34, padB = 22, padT = 8;
   const vals = rows.map((r) => r.v).filter((v) => v != null);
@@ -170,6 +171,12 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
             <Line rows={sleep} band={[7, 9]} color="sleep" cur={cur.key} />
           </div>
         )}
+        {(() => { const d = restingHRSeries(p.wellness, { days: 28, until: ymd(addDays(parseLocal(todayKey), 6)) }); if (d.rows.length < 7) return null; const rows = d.rows.map((r) => ({ key: r.day, label: String(+r.day.slice(8, 10)), v: r.hr })); const last = d.rows[d.rows.length - 1]; const diff = last.hr - d.normal; return (
+          <div className="panel" id="chart-hr-days">
+            <div className="row-between"><h2 style={{ margin: 0 }}>{t("Hvilepuls, dag for dag")}</h2><span className="muted">{t("{n} dage · normal {hr}", { n: d.rows.length, hr: d.normal })}</span></div>
+            <p className="muted" style={{ margin: "4px 0 0" }}>{diff >= 7 ? t("Seneste {hr} ({d}): {delta} over normal. Hold igen og sov mere.", { hr: last.hr, d: fmtDay(last.day), delta: diff }) : diff >= 4 ? t("Seneste {hr} ({d}): {delta} over normal. Mærk efter.", { hr: last.hr, d: fmtDay(last.day), delta: diff }) : t("Seneste {hr} ({d}): på normalen.", { hr: last.hr, d: fmtDay(last.day) })}</p>
+            <Line rows={rows} band={[d.normal - 3, d.normal + 3]} color="hr" cur={last.day} />
+          </div>); })()}
         {hr.filter((r) => r.v != null).length >= 3 && (
           <div className="panel">
             <h2 style={{ margin: 0 }}>{t("Hvilepuls")}</h2>

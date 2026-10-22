@@ -290,4 +290,9 @@ export default {
   "ud fra dit rolige tempo": "from your easy pace",
   "standardtempo, indtil loggen har rolige ture": "a standard pace until the log has easy runs",
   "Åbn Løbsdag": "Open Race day",
+  "Hvilepuls, dag for dag": "Resting heart rate, day by day",
+  "{n} dage · normal {hr}": "{n} days · normal {hr}",
+  "Seneste {hr} ({d}): {delta} over normal. Hold igen og sov mere.": "Latest {hr} ({d}): {delta} above normal. Hold back and sleep more.",
+  "Seneste {hr} ({d}): {delta} over normal. Mærk efter.": "Latest {hr} ({d}): {delta} above normal. Check in with yourself.",
+  "Seneste {hr} ({d}): på normalen.": "Latest {hr} ({d}): on your normal.",
 };
