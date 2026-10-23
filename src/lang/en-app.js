@@ -616,7 +616,7 @@ export default {
   "Garmin Connect, hvilepuls dag for dag:": "Garmin Connect, resting HR day by day:",
   "connect.garmin.com i browseren (ikke Garmin-appen) → Puls → vælg 4 uger → ⋮ → Eksportér. Dagene vises på Overblik, ugerne lander i loggen. 1 år giver kun ugetal.": "connect.garmin.com in the browser (not the Garmin app) → Heart Rate → choose 4 weeks → ⋮ → Export. The days show on Overview, the weeks land in the log. 1 year gives weekly numbers only.",
   "Kan telefonen ikke vælge filen? Indsæt teksten": "Phone will not pick the file? Paste the text",
-  "Åbn CSV-filen i en tekstviser (fx Google Drive eller Filer), markér alt, kopiér, og sæt det ind her.": "Open the CSV in a text viewer (Google Drive or Files), select all, copy, and paste it here.",
+  "Åbn CSV-, GPX- eller TCX-filen i en tekstviser (fx Google Drive eller Filer), markér alt, kopiér, og sæt det ind her.": "Open the CSV, GPX or TCX file in a text viewer (Google Drive or Files), select all, copy, and paste it here.",
   "CSV-tekst": "CSV text",
   "indsat": "pasted",
   "Importér teksten": "Import the text",

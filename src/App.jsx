@@ -1211,9 +1211,9 @@ export default function App() {
           </div>
           <details className="paste">
             <summary>{t("Kan telefonen ikke vælge filen? Indsæt teksten")}</summary>
-            <p className="muted">{t("Åbn CSV-filen i en tekstviser (fx Google Drive eller Filer), markér alt, kopiér, og sæt det ind her.")}</p>
+            <p className="muted">{t("Åbn CSV-, GPX- eller TCX-filen i en tekstviser (fx Google Drive eller Filer), markér alt, kopiér, og sæt det ind her.")}</p>
             <textarea aria-label={t("CSV-tekst")} rows={4} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={",Resting Heart Rate\n09/25/2026,52\n…"} disabled={importing} />
-            <button className="btn ghost" type="button" disabled={importing || !pasteText.trim()} onClick={() => { importFiles([new File([pasteText], t("indsat") + ".csv", { type: "text/csv" })]); setPasteText(""); }}>{t("Importér teksten")}</button>
+            <button className="btn ghost" type="button" disabled={importing || !pasteText.trim()} onClick={() => { const txt = pasteText.trim(); const ext = /<TrainingCenterDatabase/i.test(txt) ? "tcx" : /<gpx[\s>]/i.test(txt) ? "gpx" : "csv"; importFiles([new File([txt], `${t("indsat")}.${ext}`, { type: ext === "csv" ? "text/csv" : "application/xml" })]); setPasteText(""); }}>{t("Importér teksten")}</button>
           </details>
           <div className="import-row" style={{ display: "none" }}>
           </div>
