@@ -503,6 +503,21 @@ export default function App() {
   // Calendar days from today's date to the race date, not from the clock: counted from midnight, so the number only
   // changes when the date does (rounding absorbs the hour lost or gained when summer time starts or ends).
   const daysToRace = Math.max(0, Math.round((parseLocal(p.raceDate) - parseLocal(ymd(new Date()))) / 86400000));
+  // A PWA that stays open runs old code after a deploy: on return (and once after load) compare the deployed bundle's
+  // name with the one running, and offer a reload.
+  const [updateReady, setUpdateReady] = useState(false);
+  const updateCheckedRef = useRef(0);
+  useEffect(() => {
+    const running = [...document.scripts].map((x) => x.src).find((x) => /\/assets\/index-/.test(x));
+    if (!running) return;
+    const check = async () => {
+      if (document.visibilityState !== "visible" || Date.now() - updateCheckedRef.current < 5 * 60000) return;
+      updateCheckedRef.current = Date.now();
+      try { const html = await (await fetch("/index.html", { cache: "no-store" })).text(); const m = /\/assets\/index-[^"']+\.js/.exec(html); if (m && !running.endsWith(m[0])) setUpdateReady(true); } catch { /* offline */ }
+    };
+    const t1 = setTimeout(check, 30_000); document.addEventListener("visibilitychange", check); window.addEventListener("focus", check);
+    return () => { clearTimeout(t1); document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
+  }, []);
   // An app left open overnight must notice the new day: a tick on the date, checked every minute and on return.
   const [dayTick, setDayTick] = useState(() => ymd(new Date()));
   useEffect(() => {
@@ -550,8 +565,9 @@ export default function App() {
     saveLog(n);
     return weeks;
   };
-  const onFiles = async (e) => {
-    const files = Array.from(e.target.files || []);
+  const onFiles = (e) => importFiles(Array.from(e.target.files || []));
+  const [pasteText, setPasteText] = useState(""); // the file's text pasted by hand, for phones whose picker will not hand a CSV over
+  const importFiles = async (files) => {
     if (!files.length) return;
     setImporting(true); setImportMsg(null);
     await new Promise((r) => setTimeout(r, 50)); // let the "Læser…" state paint
@@ -1189,9 +1205,17 @@ export default function App() {
         <div className="import">
           <p className="muted">{t('CSV, Excel, GPX, TCX eller Stravas zip – flere filer ad gangen. Garmins rapporter (søvn, hvilepuls, vægt, VO2 max, HRV) lægges i loggen pr. uge.')}</p>
           <div className="import-row">
-            <input ref={fileRef} aria-label={t("Vælg filer")} type="file" multiple accept=".csv,.xlsx,.xlsm,.xls,.gpx,.tcx,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFiles} disabled={importing} />
+            <input ref={fileRef} aria-label={t("Vælg filer")} type="file" multiple onChange={onFiles} disabled={importing} />
             {importing && <span className="muted">{t("Læser…")}</span>}
             <label className="check"><input type="checkbox" checked={!!p.includeHikes} onChange={(e) => setHikes(e.target.checked)} /> {t("Tæl vandring og gang med")}</label>
+          </div>
+          <details className="paste">
+            <summary>{t("Kan telefonen ikke vælge filen? Indsæt teksten")}</summary>
+            <p className="muted">{t("Åbn CSV-filen i en tekstviser (fx Google Drive eller Filer), markér alt, kopiér, og sæt det ind her.")}</p>
+            <textarea aria-label={t("CSV-tekst")} rows={4} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={",Resting Heart Rate\n09/25/2026,52\n…"} disabled={importing} />
+            <button className="btn ghost" type="button" disabled={importing || !pasteText.trim()} onClick={() => { importFiles([new File([pasteText], t("indsat") + ".csv", { type: "text/csv" })]); setPasteText(""); }}>{t("Importér teksten")}</button>
+          </details>
+          <div className="import-row" style={{ display: "none" }}>
           </div>
           {importMsg && <div className={`advice ${importMsg.warn ? "warn" : ""}`}>{importMsg.text}</div>}
           {nActs > 0 && (
@@ -1236,6 +1260,7 @@ export default function App() {
               <li><b>{t("Strava, én tur:")}</b> {t("åbn turen → ⋯ → Export GPX.")}</li>
               <li><b>{t("Garmin Connect, mange ture:")}</b> {t('connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.')}</li>
               <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.")}</li>
+              <li><b>{t("Telefonen vil kun vise billeder, eller filen er spærret af en arbejdsprofil:")}</b> {t("åbn CSV-filen i en tekstviser, kopiér alt, og brug Indsæt teksten ovenfor.")}</li>
               <li><b>{t("Garmin Connect, hvilepuls dag for dag:")}</b> {t("connect.garmin.com i browseren (ikke Garmin-appen) → Puls → vælg 4 uger → ⋮ → Eksportér. Dagene vises på Overblik, ugerne lander i loggen. 1 år giver kun ugetal.")}</li>
               <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
               <li><b>{t("Garmin Connect, rapporter:")}</b> {t("Rapporter → vælg fx VO2 Max, HRV Status, Average Heart Rate (hvilepuls) eller vægt → 1 år → Eksportér. Daglige, ugentlige og månedlige rækker forstås alle; tallene lægges i loggen pr. uge.")}</li>
@@ -1268,6 +1293,7 @@ export default function App() {
       </nav>
 
       <main key={view === "log" ? "overblik" : view} className="wrap stack view-in" data-view={view}>
+        {updateReady && <div className="advice update"><span><b>{t("Ny udgave klar.")}</b> {t("Genindlæs for at få den.")}</span><button className="btn small" type="button" onClick={() => window.location.reload()}>{t("Opdater")}</button></div>}
         {view === "today" && (() => {
           const ti = (new Date().getDay() + 6) % 7;
           const v = cur.days[ti]; const d = cur.sched[ti] || {}; const lift = liftDays.includes(ti);
@@ -1528,7 +1554,7 @@ export default function App() {
             </dl>
             <p className="muted">{t("Importér trænerens coach-plan.json eller Excel. Kun planens uger skiftes ud – loggen røres ikke.")}</p>
             <div className="import-row">
-              <input ref={planFileRef} type="file" accept=".json,.xlsx,.xlsm,application/json" onChange={importPlan} aria-label={t("Importér trænerplan")} />
+              <input ref={planFileRef} type="file" onChange={importPlan} aria-label={t("Importér trænerplan")} />
               {p.coachPlan && <button className="btn ghost" type="button" onClick={resetPlan}>{t("Brug den indbyggede plan")}</button>}
             </div>
             {planMsg && <div className={`advice ${planMsg.warn ? "warn" : ""}`}>{planMsg.text}</div>}
