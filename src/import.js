@@ -56,7 +56,7 @@ const parseMinutes = (s) => {
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, maj: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, okt: 9, nov: 10, dec: 11 };
 
 // Returns a Date or null. Strava's CSV is in UTC; Garmin's CSV is local time.
-export const parseDate = (s, { utc = false } = {}) => {
+export const parseDate = (s, { utc = false, mdy = false } = {}) => {
   if (!s) return null;
   const t = String(s).trim();
   let m;
@@ -65,7 +65,10 @@ export const parseDate = (s, { utc = false } = {}) => {
     return utc ? new Date(Date.UTC(y, mo - 1, d, h, mi, sec)) : new Date(y, mo - 1, d, h, mi, sec);
   }
   if ((m = t.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[ ,]+(\d{1,2})[:.](\d{2})(?::(\d{2}))?)?/))) {
-    const [, d, mo, y, h = 0, mi = 0, sec = 0] = m.map((x) => (x == null ? undefined : Number(x)));
+    let [, d, mo, y, h = 0, mi = 0, sec = 0] = m.map((x) => (x == null ? undefined : Number(x)));
+    // Danish files are day/month; Garmin's reports are month/day (09/25/2026). A second number over 12 settles it for
+    // one value, `mdy` for a whole column (the caller has scanned it).
+    if (mdy || (mo > 12 && d <= 12)) [d, mo] = [mo, d];
     return new Date(y, mo - 1, d, h, mi, sec);
   }
   if ((m = t.match(/^([A-Za-z]{3})[A-Za-z.]*\s+(\d{1,2}),?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i))) {
@@ -536,16 +539,21 @@ const monthLabelWeeks = (label, year = new Date().getFullYear()) => {
   return out;
 };
 // Which Mondays a row's date/period covers.
-const periodWeeks = (label) => {
+const periodWeeks = (label, mdy = false) => {
   const w = weekLabelStart(label); if (w) return [ymd(mondayOf(w))];
   const mo = monthLabelWeeks(label); if (mo) return mo;
-  const d = parseDate(label); return d ? [ymd(mondayOf(d))] : null;
+  const d = parseDate(label, { mdy }); return d ? [ymd(mondayOf(d))] : null;
 };
+// A column of 09/25/2026-style dates is month/day when any second number is over 12 (Garmin's exports).
+const columnIsMDY = (labels) => labels.some((l) => { const m = /^(\d{1,2})[./-](\d{1,2})[./-]\d{4}/.exec(String(l || "").trim()); return m && +m[2] > 12 && +m[1] <= 12; });
 export const wellnessFromCSV = (text, fileName = "csv") => {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new ImportError(t("{file}: filen er tom eller har kun en overskriftslinje.", { file: fileName }));
   const headers = rows[0].map(norm);
-  const cDate = findCol(headers, [/^date$/, /^dato$/, /^week$/, /^uge$/, /^month$/, /^måned$/, /^period/, /date|dato|week|uge|month|måned|period/]);
+  let cDate = findCol(headers, [/^date$/, /^dato$/, /^week$/, /^uge$/, /^month$/, /^måned$/, /^period/, /date|dato|week|uge|month|måned|period/]);
+  // Garmin's health reports leave the date column's header empty: the first column is the date when its values read as dates.
+  if (cDate < 0 && rows.slice(1, 4).some((r) => periodWeeks(r[0], columnIsMDY(rows.slice(1).map((x) => x[0]))))) cDate = 0;
+  const mdy = columnIsMDY(rows.slice(1).map((r) => r[cDate]));
   const cols = []; const skipped = [];
   headers.forEach((h, idx) => {
     if (idx === cDate) return;
@@ -561,8 +569,8 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
     const r = [...row];
     while (r.length > headers.length && /^\s*\d{4}\b/.test(r[cDate + 1] || "")) r.splice(cDate, 2, `${r[cDate]}, ${r[cDate + 1].trim()}`);
     const label = r[cDate]; if (!label) continue;
-    const weeks = periodWeeks(label); if (!weeks) continue;
-    const day = !weekLabelStart(label) && !monthLabelWeeks(label) ? parseDate(label) : null;
+    const weeks = periodWeeks(label, mdy); if (!weeks) continue;
+    const day = !weekLabelStart(label) && !monthLabelWeeks(label) ? parseDate(label, { mdy }) : null;
     for (const { idx, m } of cols) {
       const v = m.parse(r[idx]);
       if (!(v >= m.min && v <= m.max)) continue;
