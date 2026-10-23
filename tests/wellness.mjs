@@ -7,17 +7,19 @@ import { tmpdir } from "node:os";
 const { ok, done } = check();
 const dir = mkdtempSync(join(tmpdir(), "ultra-wellness-"));
 const days = []; for (let i = 27; i >= 0; i--) { const d = new Date(Date.UTC(2026, 9, 8) - i * 86400000).toISOString().slice(0, 10); days.push([d, i === 0 ? 55 : 46 + ((i * 7) % 5)]); }
-const csv = "Date,Resting Heart Rate,High Heart Rate\n" + days.map(([d, hr]) => `${d},${hr},${hr + 90}`).join("\n") + "\n";
-writeFileSync(join(dir, "Heart Rate.csv"), csv);
+// Garmin's real export: an empty header over the date column and US month/day/year dates
+const us = (d) => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}`;
+const csv = ",Resting Heart Rate\n" + days.map(([d, hr]) => `${us(d)},${hr}`).join("\n") + "\n";
+writeFileSync(join(dir, "Resting_Heart_Rate-2026-10-08.csv"), csv);
 writeFileSync(join(dir, "Screenshot_20261022.jpg"), Buffer.from("ffd8ffe000104a46494600010100000100010000ffd9", "hex"));
 const tab = (page, i) => page.locator("nav.tabbar button").nth(i).click().then(() => page.waitForTimeout(200));
 {
   const { browser, page, errors } = await openApp({ lang: "da", width: 390 });
   await tab(page, 4);
   await page.locator("#files > summary").click(); await page.waitForTimeout(150);
-  await page.locator("#files input[type=file]").setInputFiles(join(dir, "Heart Rate.csv")); await page.waitForTimeout(800);
+  await page.locator("#files input[type=file]").setInputFiles(join(dir, "Resting_Heart_Rate-2026-10-08.csv")); await page.waitForTimeout(800);
   const msg = await page.locator("#files .advice").first().innerText();
-  ok(/Hvilepuls for 5 uger lagt i loggen\. 28 dage på Overblik\./.test(msg), `import message: ${msg.slice(0, 120)}`);
+  ok(/Hvilepuls for 5 uger lagt i loggen\. 28 dage på Overblik\./.test(msg) && !/Sprunget over/.test(msg), `import message: ${msg.slice(0, 120)}`);
   const prof = await page.evaluate(() => JSON.parse(localStorage.getItem("ultraplan-profile")));
   ok(prof.wellness && Object.keys(prof.wellness).length === 28 && prof.wellness["2026-10-08"].hr === 55, `28 days stored, latest 55 (${Object.keys(prof.wellness || {}).length})`);
   const lg = await page.evaluate(() => JSON.parse(localStorage.getItem("ultraplan-log")));
