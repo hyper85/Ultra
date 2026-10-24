@@ -111,7 +111,7 @@ export function buildCoachPlan(p) {
     const runDays = days.map((v, i) => (v > 0 ? i : -1)).filter((i) => i >= 0);
     const qDay = /kun roligt/i.test(session) || w.race || ev[W.qualityDay] ? null : W.qualityDay;
     return { i: w.n, wkStart: parseLocal(w.start), key: w.start, iso: w.iso, phase: PHASE_DA[w.phase] || w.phase, km, target: km, unplaced: 0,
-      lng: ev[W.longDay] ? 0 : days[W.longDay], sun: ev[W.b2bDay] ? 0 : days[W.b2bDay], deload, isRace: !!w.race, quality: session, focus, days, longDay: W.longDay, qDay, runDays, sched, schedLabel: "", coach: true,
+      lng: ev[W.longDay] ? 0 : days[W.longDay], sun: ev[W.b2bDay] || ev[W.longDay] ? 0 : days[W.b2bDay] /* the day after an event is an easy run, not a back-to-back */, deload, isRace: !!w.race, quality: session, focus, days, longDay: W.longDay, qDay, runDays, sched, schedLabel: "", coach: true,
       events: ev, recovery };
   });
   return { rows, weeks: rows.length, peak: Math.max(...rows.filter((r) => !r.isRace).map((r) => r.km)), restart: rows[0].km, coach: true, cp: CP };
