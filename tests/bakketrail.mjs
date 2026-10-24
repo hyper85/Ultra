@@ -17,6 +17,7 @@ await page.getByRole("button", { name: /kalender/ }).click();
 const path = await (await dl).path(); const ics = (await import("node:fs")).readFileSync(path, "utf8");
 const ev = ics.split("BEGIN:VEVENT").find((v) => /BakkeTrail/.test(v)) || "";
 ok(/DTSTART;VALUE=DATE:20261024/.test(ev) && /start 10:00/.test(ev), `ics event on 24 Oct with the start: ${(ev.match(/SUMMARY:[^\r]*/) || [""])[0]}`);
-ok(!/DTSTART;VALUE=DATE:20261025[\s\S]*BakkeTrail/.test(ics), "nothing on 25 Oct carries the race");
+const sun = ics.split("BEGIN:VEVENT").find((v) => /DTSTART;VALUE=DATE:20261025/.test(v)) || "";
+ok(/SUMMARY:Rolig tur 5 km/.test(sun) && !/SUMMARY:[^\r]*BakkeTrail/.test(sun), `25 Oct is the 5 km easy run, not the race: ${(sun.match(/SUMMARY:[^\r]*/) || [""])[0]}`);
 ok(errors.length === 0, `no errors ${errors.join(";")}`);
 await browser.close(); done();
