@@ -118,7 +118,6 @@ export default {
   "Styrke": "Strength",
   "Ben og hofte": "Legs and hips",
   "Overkrop og core": "Upper body and core",
-  "Trænerens styrkepas, som de er.": "The coach's strength sessions, as they are.",
   "Squat 4×5": "Squat 4×5",
   "RDL 3×6": "RDL 3×6",
   "Lunge/step-up 3×8/ben": "Lunge/step-up 3×8/leg",

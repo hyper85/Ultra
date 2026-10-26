@@ -924,18 +924,22 @@ export default function App() {
   }, [trigger, recWeek, lastRow?.km, hrHigh, hrNow, lastA, curA, curBase, todayIdx, dayKm.join(","), lastLog?.km]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
+  // One generator for every week: the week number rotates the exercises. On the coach plan the sessions are the trail
+  // pair (A legs, B back + core) and keep the coach's day letters (B Tuesday, A Wednesday) via coachOrder().
+  const genStrength = (r) => buildStrength({ body: p.body, gear: p.gear || (plan.coach ? "gym" : "home"), phase: r.phase, deload: r.deload, isRace: r.isRace, count: plan.coach ? 2 : liftDays.length, week: r.i, focus: plan.coach ? "trail" : "default" });
+  const coachOrder = (gen) => { const st = CP.strength; const byKey = Object.fromEntries(gen.sessions.map((x) => [x.key, x])); return { ...gen, sessions: liftDays.map((d, i) => st.byDay[d] || st.sessions[i]).filter(Boolean).map((x) => byKey[x.key] || gen.sessions[0]).filter(Boolean) }; };
   const strengthPlan = useMemo(() => {
     if (plan.coach) {
       // The coach's sessions in the order of the lift days, so sessionFor(day) finds the session named for that day.
+      // The coach's days and letters stay (B Tuesday, A Wednesday); the exercises rotate week by week and lean on legs,
+      // hips, core and back for a mountain ultra. The coach's ankle routine and rule stay as written.
       const st = CP.strength; const coachLabel = (e) => (getLang() === "da" ? coachLabelDa(e) : e);
-      const mk = (x) => ({ key: x.key, name: t(`Styrke ${x.key}`), focus: x.upper ? t("Overkrop og core") : x.lower ? t("Ben og hofte") : "", exercises: x.list.map((e) => ({ name: e, label: coachLabel(e) })) });
-      const ordered = liftDays.map((d, i) => st.byDay[d] || st.sessions[i]).filter(Boolean);
-      return { sessions: ordered.map(mk), daily: st.daily.map(coachLabel), note: t("Trænerens styrkepas, som de er."), rule: st.rule ? t(st.rule) : "" };
+      return { ...coachOrder(genStrength(cur)), daily: st.daily.map(coachLabel), note: t("Trænerens dage. Øvelserne skifter uge for uge: ben, hofte, core og ryg til Bornholm."), rule: st.rule ? t(st.rule) : "" };
     }
-    return buildStrength({ body: p.body, gear: p.gear, phase: cur.phase, deload: cur.deload, isRace: cur.isRace, count: liftDays.length });
+    return genStrength(cur);
   }, [plan.coach, CP, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Strength for any plan week: the coach's fixed sessions, or the app's program dosed for that week's phase.
-  const strengthFor = (r) => (plan.coach || r.key === cur.key ? strengthPlan : buildStrength({ body: p.body, gear: p.gear, phase: r.phase, deload: r.deload, isRace: r.isRace, count: liftDays.length }));
+  const strengthFor = (r) => (r.key === cur.key ? strengthPlan : plan.coach ? coachOrder(genStrength(r)) : genStrength(r));
   const sessionFor = (ti) => { const k = liftDays.indexOf(ti); if (k < 0 || !strengthPlan.sessions.length) return null; return strengthPlan.sessions[k % strengthPlan.sessions.length]; };
   // Form against age and sex norms: measured VO2 max from the log when there is one, else estimated from heart rates.
   const latestVo2 = (() => { const keys = Object.keys(log).filter((k) => log[k]?.vo2 > 0).sort(); return keys.length ? +log[keys[keys.length - 1]].vo2 : null; })();

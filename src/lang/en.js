@@ -5,4 +5,5 @@ import enEngine from "./en-engine.js";
 import enRace from "./en-race.js";
 import enCoach from "./en-coach.js";
 import enMeals from "./en-meals.js";
-export default { ...enEngine, ...enScreens, ...enApp, ...enRace, ...enCoach, ...enMeals };
+import enStrength from "./en-strength.js";
+export default { ...enEngine, ...enScreens, ...enApp, ...enRace, ...enCoach, ...enMeals, ...enStrength };

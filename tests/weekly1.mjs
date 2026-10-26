@@ -33,7 +33,7 @@ const tab = (page, i) => page.locator("nav.tabbar button").nth(i).click().then((
   const btn = page.locator(".today .btn.big");
   ok(/ghost/.test(await btn.getAttribute("class")) && (await btn.innerText()) === "Log et pas", "rest day: quiet button");
   const sub = (await page.locator(".today").innerText()).replace(/\n/g, " ");
-  ok(/I morgen: Styrke B · Overkrop og core/.test(sub), `tomorrow line: ${sub.match(/I morgen:[^|]*/)?.[0]}`);
+  ok(/I morgen: Styrke B · Ryg og core/.test(sub), `tomorrow line: ${sub.match(/I morgen:[^|]*/)?.[0]}`);
   await browser.close();
   const b = await openApp({ lang: "da", width: 390, at: "2026-10-30T07:00:00" }); // Friday rest → Saturday long run
   const s2 = (await b.page.locator(".today").innerText()).replace(/\n/g, " ");

@@ -35,13 +35,14 @@ const byName = (name = "") => {
   const n = name.toLowerCase();
   if (/copenhagen/.test(n)) return "hip";
   if (/lægløft|calf/.test(n)) return "calf";
-  if (/udfald|split|bulgarian|lunge/.test(n)) return "single";
+  if (/udfald|split|bulgarian|lunge|step-up|stol på ét ben|pistol/.test(n)) return "single";
   if (/squat/.test(n)) return "squat";
-  if (/dødløft|hoftehæv|nordic|rdl|deadlift|hip thrust|bridge/.test(n)) return "hinge";
+  if (/dødløft|hoftehæv|nordic|rdl|deadlift|hip thrust|bridge|swing|superman|rygløft|rygstræk|back extension|good morning|bird dog/.test(n)) return "hinge";
+  if (/clamshell|monster|benløft|abduktion|abduction/.test(n)) return "hip";
   if (/armbøj|gulvpres|bænkpres|push-up|bench|floor press/.test(n)) return "push";
   if (/roning|pull-up|pulldown|row/.test(n)) return "pull";
   if (/pike|skulderpres|oh press|overhead|^press/.test(n)) return "press";
-  if (/planke|pallof|plank/.test(n)) return "core";
+  if (/planke|pallof|plank|dead bug|hollow|ab wheel|udrulning/.test(n)) return "core";
   if (/bæring|carry/.test(n)) return "carry";
   if (/curl|dips|pushdown/.test(n)) return "curl";
   if (/hop|jump/.test(n)) return "hop";
