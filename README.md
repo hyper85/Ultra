@@ -19,6 +19,12 @@ tur over, siger I dag det næste dag og beder dig lade den ligge. Lange ture få
 at tage med, væske og et mål for højdemeter ud fra løbets profil. Styrkepas får RPE-knapper som løb. Under Mere → Data
 → Eksportér kan loggen og alle ture hentes som CSV.
 
+## Styrke, der skifter
+
+Styrkepassene er bygget af bevægelsesmønstre (squat, hoftebøj, ét ben, læg, hofte, træk, ryg, core, bæring), og hver
+uge vælger sin variant, så to uger aldrig er ens. På trænerplanen er passene rettet mod et bjergultra: A = ben og hofte
+med step-ups, B = ryg og core (træk, rygstræk, to core-øvelser, bæring). Trænerens dage, ankelrutine og regel beholdes.
+
 ## Hvilepuls dag for dag
 
 Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag.
