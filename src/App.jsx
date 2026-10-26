@@ -1324,7 +1324,10 @@ export default function App() {
           else if (v > 0 && lift) { if (moved && !didStrength) { primary = liftAction; secondary = runAction; } else { primary = runAction; secondary = liftAction; } }
           else if (v > 0) primary = runAction;
           else if (lift) primary = didStrength ? (typedStrength ? { label: t("Ret dagens styrke"), type: "Strength", edit: typedStrength.id } : { label: t("Tilføj et pas"), type: null }) : { label: t("Log styrke"), type: "Strength" };
-          else primary = moved || didOther.length ? runAction : { label: t("Log et pas"), type: null };
+          else primary = moved || didOther.length ? runAction : { label: t("Log et pas"), type: null, quiet: true }; // a rest day does not shout for a session
+          // What tomorrow holds, for the rest-day card: the next day in this week, or next week's Monday.
+          const tomorrow = (() => { const r2 = ti < 6 ? cur : plan.rows.find((r) => r.key > cur.key) || null; const j = ti < 6 ? ti + 1 : 0; if (!r2) return null; const v2 = r2.days[j] || 0; const e2 = r2.events?.[j]; const l2 = liftDays.includes(j);
+            if (e2) return `★ ${e2.name}`; if (r2.isRace && j === r2.longDay) return t("Løbsdag"); if (v2 > 0) return `${j === r2.longDay ? t("Lang tur") : j === r2.qDay ? t("Hård session") : t("Rolig tur")} ${v2} km${l2 ? ` + ${liftName(j)}` : ""}`; if (l2) { const s2 = sessionFor(j); return s2 ? `${s2.name}${s2.focus ? ` · ${s2.focus}` : ""}` : liftName(j); } return t("Hvile"); })();
           const pct = Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
           if (afterRace) return (
@@ -1391,6 +1394,7 @@ export default function App() {
                 {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
                 {!v && !raceDay && !ev && lift && !session && <div className="today-sub">{strengthPlan.note || t("Styrkedag. Kort og tungt, ingen løb.")}</div>}
                 {!v && !lift && !raceDay && !ev && <div className="today-sub">{t("Hviledag. Sov, spis, gå en tur.")}</div>}
+                {!v && !lift && !raceDay && !ev && tomorrow && <div className="today-sub muted">{t("I morgen: {what}", { what: tomorrow })}</div>}
                 {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Justeret af trænerråd ({reason}).", { reason: adjRow.adjusted.reason })} {t("Original:")} {adjRow.adjusted.original[ti] || t("hvile")}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
                 {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
@@ -1412,7 +1416,7 @@ export default function App() {
                       {QUICK_RPE.map(([n, label]) => <button key={n} type="button" className={rpeLift === n ? "on" : ""} aria-pressed={rpeLift === n} onClick={() => setRpeFor(lifts, n)}><b>{n}</b><small>{t(label)}</small></button>)}
                     </div>
                   </div>); })()}
-                <button className="btn big" type="button" onClick={() => openDay(cur.key, ti, primary.type, primary.edit)}>{primary.label}</button>
+                <button className={`btn big ${primary.quiet ? "ghost" : ""}`} type="button" onClick={() => openDay(cur.key, ti, primary.type, primary.edit)}>{primary.label}</button>
                 {secondary && <button className="btn ghost" type="button" style={{ marginTop: 8 }} onClick={() => openDay(cur.key, ti, secondary.type, secondary.edit)}>{secondary.label}</button>}
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>

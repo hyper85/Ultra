@@ -295,4 +295,6 @@ export default {
   "Seneste {hr} ({d}): {delta} over normal. Hold igen og sov mere.": "Latest {hr} ({d}): {delta} above normal. Hold back and sleep more.",
   "Seneste {hr} ({d}): {delta} over normal. Mærk efter.": "Latest {hr} ({d}): {delta} above normal. Check in with yourself.",
   "Seneste {hr} ({d}): på normalen.": "Latest {hr} ({d}): on your normal.",
+  "ud fra dit tempo (uden puls)": "from your pace (no heart rate)",
+  " · heraf {km} km gang": " · {km} km of it walking",
 };

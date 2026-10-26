@@ -625,4 +625,5 @@ export default {
   "Opdater": "Update",
   "Telefonen vil kun vise billeder, eller filen er spærret af en arbejdsprofil:": "The phone only offers pictures, or a work profile blocks the file:",
   "åbn CSV-filen i en tekstviser, kopiér alt, og brug Indsæt teksten ovenfor.": "open the CSV in a text viewer, copy everything, and use Paste the text above.",
+  "I morgen: {what}": "Tomorrow: {what}",
 };
