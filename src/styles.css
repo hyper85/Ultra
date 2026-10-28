@@ -452,6 +452,21 @@ details.strava { margin-bottom: 12px; }
 .chart .pt.cur { stroke: var(--text); stroke-width: 1.5; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: middle; }
 .sw.plan { background: #3a3a3a; } .sw.ran { background: var(--orange); }
+/* Heart-rate zones per week: one orange hue, brighter = harder (validated as an ordinal ramp on the panel colour). */
+:root { --zone-easy: #c2470c; --zone-mid: #fc4c02; --zone-hard: #ff9466; }
+.chart .zone-easy, .sw.zone-easy { fill: var(--zone-easy); background: var(--zone-easy); }
+.chart .zone-mid, .sw.zone-mid { fill: var(--zone-mid); background: var(--zone-mid); }
+.chart .zone-hard, .sw.zone-hard { fill: var(--zone-hard); background: var(--zone-hard); }
+.chart .zbar .hit { fill: transparent; }
+.chart .zbar:hover .hit { fill: rgba(255, 255, 255, .05); }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 4px 0 0 -8px; font-size: 13px; }
+.legend > span { white-space: nowrap; }
+.zone-sum { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 8px 8px 0; }
+.zone-sum.good { border-left-color: var(--green); } .zone-sum.warn { border-left-color: var(--amber); } .zone-sum.bad { border-left-color: var(--red); }
+.zone-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.zone-table table { width: 100%; margin-top: 6px; }
+.hr-peak { margin: 8px 0; } .hr-peak.offer { padding: 8px 10px; border-left: 3px solid var(--orange); background: var(--panel-2); border-radius: 0 8px 8px 0; }
+.hr-peak p { margin: 0 0 6px; }
 @media (min-width: 1000px) {
   main[data-view="overblik"] > section.stack { grid-column: 1 / -1; }
   .dash .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
