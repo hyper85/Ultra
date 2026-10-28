@@ -252,6 +252,7 @@ export default function App() {
   const setP = (v) => { touch(); setPRaw(v); };
   const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
   const [acts, setActs] = useState({});        // imported activities keyed by id
+  const logRef = useRef(log); logRef.current = log; const actsRef = useRef(acts); actsRef.current = acts;
   const [importMsg, setImportMsg] = useState(null);
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState(() => { try { return sessionStorage.getItem("ultraplan-view") || "today"; } catch { return "today"; } }); // kept per tab, so a language switch (which remounts the app) lands where you were
@@ -294,8 +295,10 @@ export default function App() {
     setReady(true);
   })(); }, []);
   useEffect(() => { if (ready) store.set("ultraplan-profile", p); }, [p, ready]);
-  const saveLog = (n) => { touch(); setLog(n); store.set("ultraplan-log", n); };
-  const saveActs = (n) => { touch(); setActs(n); store.set("ultraplan-activities", n); };
+  // The refs follow every save at once (not only on the next render), so two syncs finishing close together (Strava and
+  // Garmin on app start) each build on the other's result instead of an older copy of the log.
+  const saveLog = (n) => { touch(); logRef.current = n; setLog(n); store.set("ultraplan-log", n); };
+  const saveActs = (n) => { touch(); actsRef.current = n; setActs(n); store.set("ultraplan-activities", n); };
 
   /* ---- account & cloud sync (Supabase, optional) ---- */
   const [user, setUser] = useState(null);
@@ -342,7 +345,6 @@ export default function App() {
       setStrava((x) => ({ ...x, connected: true, athlete: r.athlete || x.athlete, lastSync: r.lastSync, busy: false, msg: { text: added ? t("Hentede {added} nye fra Strava ({runs} løb{others}).", { added, runs, others: others ? t(", {n} andet", { n: others }) : "" }) + (swapped ? " " + t("{n} indtastede pas erstattet af urets udgave.", { n: swapped }) : "") : swapped ? t("Strava: ingen nye, men {n} indtastede pas erstattet af urets udgave.", { n: swapped }) : t("Strava: ingen nye aktiviteter.") } }));
     } catch (e) { setStrava((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
   };
-  const actsRef = useRef(acts); actsRef.current = acts;
   // A PWA that stays open is never "opened" again, so the once-per-load sync misses the session you just finished.
   // Coming back to the app (tab visible, window focused) re-syncs silently when the last sync is over 5 minutes old.
   const syncFnRef = useRef(null); syncFnRef.current = runStravaSync;
@@ -369,7 +371,6 @@ export default function App() {
   /* ---- Garmin (api/garmin.js): resting HR, sleep and HRV day by day from the runner's own Personal API key ---- */
   const [garmin, setGarmin] = useState({ connected: null, lastSync: null, busy: false, msg: null, key: "" });
   const garminRef = useRef({ synced: false });
-  const logRef = useRef(log); logRef.current = log;
   // Days from Garmin take the file import's road: a 4-week-report-like table → weeks into the log, days into the store.
   const applyGarminDays = (days) => {
     const csv = daysToWellnessCSV(days); if (!csv) return 0;
@@ -600,7 +601,7 @@ export default function App() {
   /* ---- Strava / Garmin import ---- */
   // Write weekly totals from the imported activities into the log. Imported km always win for weeks that have activities;
   // RPE is only estimated where the user has not typed one.
-  const applyActivities = (nextActs, includeHikes, base = log) => {
+  const applyActivities = (nextActs, includeHikes, base = logRef.current) => {
     const weeks = weeklyTotals(nextActs, { includeHikes, maxHR });
     const n = { ...base };
     for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, xmin, xn, xload, vert, ekm, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
