@@ -343,4 +343,5 @@ export default {
   "Garmin-nøgle": "Garmin key",
   "indsæt nøglen": "paste the key",
   "Forbind Garmin": "Connect Garmin",
+  "Hvilepuls fra feltet {field}.": "Resting heart rate from the field {field}.",
 };

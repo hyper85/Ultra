@@ -65,4 +65,11 @@ const fake3 = async (url) => { const u = new URL(url);
   return new Response("[]", { status: 200 }); };
 const r3 = garminDays(await garminFetch({ token: "T", start: "2026-10-20", end: "2026-10-28", fetchImpl: fake3 }));
 ok(r3.fields.dagspuls?.join() === "userProfilePK,startTimestampGMT,heartRateValues", `unreadable one-day answer names its keys: ${JSON.stringify(r3.fields)}`);
+// only the day and its heartRate section: a "resting…" number in stress is not a pulse; the source path is reported
+const st = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { restingValue: null }, stress: { restingLevel: 30, restingStressDuration: 40 } }] } });
+ok(!st.days["2026-10-28"] && st.fields["dagsoversigt.heartRate"]?.join() === "restingValue: tom", `stress numbers ignored (${JSON.stringify(st.days)})`);
+const src = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { restingValue: 50 } }, { calendarDate: "2026-10-27", heartRate: { restingValue: { value: 49 } } }] } });
+ok(src.source.hr === "dagsoversigt.heartRate.restingValue" && src.found.hr === 2, `source path: ${src.source.hr}`);
+const fb2 = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { restingValue: null } }] }, heartDays: [{ calendarDate: "2026-10-28", restingHeartRate: 48 }] });
+ok(fb2.source.hr === "dagspuls.restingHeartRate" && fb2.days["2026-10-28"].hr === 48, `fallback source: ${fb2.source.hr}`);
 done();

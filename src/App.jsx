@@ -372,26 +372,33 @@ export default function App() {
   const [garmin, setGarmin] = useState({ connected: null, lastSync: null, busy: false, msg: null, key: "" });
   const garminRef = useRef({ synced: false });
   // Days from Garmin take the file import's road: a 4-week-report-like table → weeks into the log, days into the store.
-  const applyGarminDays = (days) => {
+  // replaceHr = the range of a full sync that found resting HR: inside it Garmin's day values replace the stored ones,
+  // and a stored resting HR on a day Garmin has none for goes (it came from an older, looser parser).
+  const applyGarminDays = (days, replaceHr = null) => {
     const csv = daysToWellnessCSV(days); if (!csv) return 0;
     let w; try { w = wellnessFromCSV(csv, "Garmin"); } catch { return 0; }
     const wl = wellnessIntoLog(logRef.current, [w]); saveLog(wl.log);
-    if (Object.keys(w.days || {}).length) setP((prev) => ({ ...prev, wellness: mergeWellnessDays(prev.wellness, w.days) }));
+    setP((prev) => {
+      let store = { ...(prev.wellness || {}) };
+      if (replaceHr) for (const d of Object.keys(store)) if (d >= replaceHr.start && d <= replaceHr.end && store[d]?.hr != null && !(w.days?.[d]?.hr > 0)) { const { hr, ...rest } = store[d]; store[d] = rest; }
+      return { ...prev, wellness: mergeWellnessDays(store, w.days || {}) };
+    });
     return Object.keys(days).length;
   };
   // Bumped when the Garmin parsing learns a field: the next sync then asks for the whole first range again, so days the
   // old parser missed (resting HR before v2) still arrive.
-  const GARMIN_V = 3; // 3: resting HR as heartRate.restingValue, also wrapped or as text
+  const GARMIN_V = 4; // 3: heartRate.restingValue also wrapped or as text · 4: resting HR only from the day or its heartRate section
   const runGarminSync = async (silent = false) => {
     setGarmin((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
     try {
       const full = (p.garminV || 0) < GARMIN_V;
       const r = await garminSync(full ? { full: true } : {});
       if (full && (r.found?.hr || r.found?.sleep || r.found?.hrv)) setP((prev) => ({ ...prev, garminV: GARMIN_V }));
-      const n = applyGarminDays(r.days || {}); const f = r.found || {};
+      const f = r.found || {};
+      const n = applyGarminDays(r.days || {}, r.full && f.hr > 0 ? r.range : null);
       const parts = [f.hr ? tn(f.hr, "1 dag med hvilepuls", "{n} dage med hvilepuls") : null, f.sleep ? tn(f.sleep, "1 nat med søvn", "{n} nætter med søvn") : null, f.hrv ? tn(f.hrv, "1 nat med HRV", "{n} nætter med HRV") : null].filter(Boolean);
       const unknown = r.fields ? Object.entries(r.fields).map(([k, v]) => `${k}: ${v.join(", ")}`).join(" · ") : "";
-      const text = n ? t("Hentede fra Garmin: {parts}.", { parts: parts.join(", ") }) : t("Garmin svarede, men der var ingen nye tal.");
+      const text = (n ? t("Hentede fra Garmin: {parts}.", { parts: parts.join(", ") }) : t("Garmin svarede, men der var ingen nye tal.")) + (r.source?.hr ? " " + t("Hvilepuls fra feltet {field}.", { field: r.source.hr }) : "");
       setGarmin((x) => ({ ...x, connected: true, lastSync: r.lastSync || x.lastSync, busy: false, msg: silent && n === 0 && !unknown ? x.msg : { warn: !!unknown, text: text + (unknown ? " " + t("Appen genkendte ikke felterne ({fields}). Send gerne den linje, så bliver det rettet.", { fields: unknown }) : "") + (r.missing?.length ? " " + t("Ikke tilgængeligt med din nøgle: {list}.", { list: r.missing.join(", ") }) : "") } }));
     } catch (e) { setGarmin((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
   };
