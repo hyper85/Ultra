@@ -380,7 +380,7 @@ export default function App() {
   };
   // Bumped when the Garmin parsing learns a field: the next sync then asks for the whole first range again, so days the
   // old parser missed (resting HR before v2) still arrive.
-  const GARMIN_V = 2;
+  const GARMIN_V = 3; // 3: resting HR as heartRate.restingValue, also wrapped or as text
   const runGarminSync = async (silent = false) => {
     setGarmin((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
     try {
