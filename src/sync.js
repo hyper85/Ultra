@@ -93,5 +93,5 @@ const garminCall = async (op, extra = {}) => {
 };
 export const garminStatus = () => garminCall("status");
 export const garminConnect = (key) => garminCall("connect", { key });
-export const garminSync = () => garminCall("sync");
+export const garminSync = (opts = {}) => garminCall("sync", opts); // { full: true } fetches the whole first range again
 export const garminDisconnect = () => garminCall("disconnect");
