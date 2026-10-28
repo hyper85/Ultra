@@ -619,6 +619,30 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
   return { weeks, days, counts, skipped, file: fileName, labels: Object.fromEntries(WELLNESS_METRICS.map((m) => [m.key, t(m.label)])) };
 };
 
+/* Days from Garmin's API ({ "YYYY-MM-DD": { hr, sleep, hrv } }) as the same table a 4-week report would be, so they
+   take the file import's road: wellnessFromCSV → weeks for the log and days for the day store. */
+export const daysToWellnessCSV = (days = {}) => {
+  const keys = Object.keys(days).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if (!keys.length) return "";
+  const cols = [["hr", "Resting Heart Rate"], ["sleep", "Sleep Duration"], ["hrv", "HRV"]].filter(([k]) => keys.some((d) => days[d][k] != null));
+  return ["Date," + cols.map(([, h]) => h).join(","), ...keys.map((d) => [d, ...cols.map(([k]) => days[d][k] ?? "")].join(","))].join("\n") + "\n";
+};
+// Weekly wellness into the log: imported values fill a week where the runner has not typed a number (or where an earlier
+// import put one, marked `<key>Auto`). Returns { log, got: { key: { n, label } }, skipped }.
+export const wellnessIntoLog = (log = {}, list = []) => {
+  const n = { ...log }; const got = {}; const skipped = [];
+  for (const w of list) {
+    for (const [k, v] of Object.entries(w.weeks)) {
+      const l = { ...(n[k] || {}) };
+      for (const [key, val] of Object.entries(v)) if (l[key] == null || l[key] === "" || l[`${key}Auto`]) { l[key] = val; l[`${key}Auto`] = true; }
+      n[k] = l;
+    }
+    for (const [key, c] of Object.entries(w.counts)) got[key] = { n: Math.max(got[key]?.n || 0, c), label: w.labels[key] };
+    skipped.push(...w.skipped);
+  }
+  return { log: n, got, skipped };
+};
+
 /* The daily wellness store on the profile (p.wellness: YYYY-MM-DD -> { hr, sleep, hrv, stress }), capped at 400 days. */
 export const mergeWellnessDays = (store = {}, days = {}) => {
   const next = { ...store };

@@ -134,6 +134,18 @@ RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold t
 8 km rolig tur), så ACWR ser hele ugen. Dagen får et ✓ på "I dag", i planen og i loggen, og en styrkedag er først
 "gjort", når styrken er logget. Garmins "Strength Training"- og HIIT-rækker importeres nu også fra Activities.csv.
 
+### Garmin direkte (hvilepuls, søvn og HRV)
+
+Mere → Garmin: lav en personlig API-nøgle i Garmin Connect (Indstillinger → Personal API, op til 1 år) og sæt den ind.
+Serveren (`api/garmin.js`) tjekker nøglen hos Garmin og gemmer den i tabellen `garmin_keys`, som kun serveren kan læse.
+Nøglen kommer aldrig tilbage til browseren. Derefter hentes hvilepuls, søvn og HRV dag for dag, hver gang appen
+åbnes (første gang 120 dage). Tallene går samme vej som en Garmin-rapport: dag for dag på Overblik og som ugesnit i
+loggen, og tal, du selv har skrevet, bliver stående. Ture kommer stadig fra Strava.
+
+Opsætning: kør `supabase/garmin.sql` i Supabase → SQL Editor. Der skal ikke sættes noget i Vercel ud over det, Strava
+allerede bruger (`SUPABASE_SERVICE_ROLE_KEY`). Nøglen må ikke ligge i Vercel som fælles variabel: den åbner én
+Garmin-konto, og appen har flere brugere.
+
 ### Garmin-aktiviteter og pulszoner
 
 Pulszonerne er pulsreserve (Karvonen), ligesom Garmin og Strava med "% af pulsreserve": hvilepuls + en procent af

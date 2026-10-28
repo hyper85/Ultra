@@ -76,3 +76,22 @@ export const stravaExchange = (code, scope) => stravaCall("exchange", { code, sc
 export const stravaStatus = () => stravaCall("status");
 export const stravaSync = (since) => stravaCall("sync", since ? { since } : {});
 export const stravaDisconnect = () => stravaCall("disconnect");
+
+/* Garmin (api/garmin.js): the runner's own Personal API key goes to the server once, is checked at Garmin and stored
+   there per user; it never comes back. Sync returns resting HR, sleep and HRV per day. */
+const garminCall = async (op, extra = {}) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error(t("Log ind under Mere → Konto for at forbinde Garmin."));
+  let r;
+  try { r = await fetch("/api/garmin", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ op, ...extra }) }); }
+  catch { throw new Error(t("Kunne ikke kontakte serveren. Tjek din internetforbindelse.")); }
+  let body = null; try { body = await r.json(); } catch { /* not json */ }
+  if (r.status === 404 && !body) throw new Error(t("Garmin findes kun i den udgave, der kører på Vercel."));
+  if (!r.ok) { const e = new Error(body?.error || t("Garmin-forbindelsen fejlede ({status}).", { status: r.status })); e.status = r.status; e.connected = body?.connected; e.keyRejected = !!body?.keyRejected; throw e; }
+  return body;
+};
+export const garminStatus = () => garminCall("status");
+export const garminConnect = (key) => garminCall("connect", { key });
+export const garminSync = () => garminCall("sync");
+export const garminDisconnect = () => garminCall("disconnect");
