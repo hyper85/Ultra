@@ -604,6 +604,11 @@ export const wellnessFromCSV = (text, fileName = "csv") => {
       if (day) (days[ymd(day)] ||= {})[m.key] = m.key === "hr" || m.key === "stress" || m.key === "endurance" ? Math.round(v) : Math.round(v * 10) / 10;
     }
   }
+  // Single dates a week apart are weekly averages (Garmin's 1-year resting-HR report), not days: they would overwrite
+  // real daily values in the day store. Days only when the dates run (nearly) day by day.
+  const dk = Object.keys(days).sort();
+  const gaps = dk.slice(1).map((d, i) => (parseLocal(d) - parseLocal(dk[i])) / 86400000).sort((x, y) => x - y);
+  if (dk.length >= 2 && gaps[gaps.length >> 1] > 2) for (const d of dk) delete days[d];
   const weeks = {}; const counts = {};
   for (const [k, byKey] of Object.entries(acc)) {
     const w = {};

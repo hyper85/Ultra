@@ -54,4 +54,15 @@ const tab = (page, i) => page.locator("nav.tabbar button").nth(i).click().then((
   const ctx = coachContext({ p, plan: { rows, weeks: 8, peak: 50 }, cur: rows[6], log: {}, acts: {}, acwrFor: () => null, insights: ins, todayStr: "2026-10-08", maxHR: 186, advice: "x" });
   ok(ctx.hvilepuls_dagligt && ctx.hvilepuls_dagligt.normal_28d === 48 && ctx.hvilepuls_dagligt.seneste.hr === 55 && ctx.hvilepuls_dagligt.sidste_28_dage.length === 28, `context: ${JSON.stringify(ctx.hvilepuls_dagligt).slice(0, 90)}`);
 }
+// Garmin's 1-year resting-HR report: one date per week (weekly averages). They fill the weekly log, never the day
+// store, so the daily values imported earlier stay. Sleep.csv's weekly rows ("Oct 22-28") give sleep hours.
+{
+  const { wellnessFromCSV } = await import("../src/import.js");
+  const weekly = ",Resting Heart Rate\n" + Array.from({ length: 12 }, (_, k) => { const d = new Date(Date.UTC(2026, 7, 6) + k * 7 * 86400000).toISOString().slice(0, 10); return `${us(d)},${50 + (k % 4)}`; }).join("\n") + "\n";
+  const w = wellnessFromCSV(weekly, "Resting_Heart_Rate-2026-10-28.csv");
+  ok(Object.keys(w.days).length === 0 && Object.keys(w.weeks).length === 12 && w.weeks["2026-10-19"]?.hr === 53, `weekly rows: 12 weeks, no days (${Object.keys(w.days).length} days)`);
+  const sleep = "Date,Avg Score,Avg Quality,Avg Duration,Avg Sleep Need,Avg Bedtime,Avg Wake Time\nOct 22-28,71,Fair,6h 44min,8h 16min,10:28 PM,5:36 AM\nOct 15-21,59,Poor,5h 31min,8h 54min,12:08 AM,6:06 AM\nDec 25-31, 2025,70,Fair,6h 27min,8h 24min,12:29 AM,7:10 AM\n";
+  const sw = wellnessFromCSV(sleep, "Sleep.csv");
+  ok(sw.weeks["2026-10-19"]?.sleep === 6.7 && sw.weeks["2026-10-12"]?.sleep === 5.5 && sw.weeks["2025-12-22"]?.sleep === 6.5 && Object.keys(sw.days).length === 0, `sleep weeks: ${JSON.stringify(sw.weeks)}`);
+}
 done();
