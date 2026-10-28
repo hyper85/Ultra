@@ -378,10 +378,15 @@ export default function App() {
     if (Object.keys(w.days || {}).length) setP((prev) => ({ ...prev, wellness: mergeWellnessDays(prev.wellness, w.days) }));
     return Object.keys(days).length;
   };
+  // Bumped when the Garmin parsing learns a field: the next sync then asks for the whole first range again, so days the
+  // old parser missed (resting HR before v2) still arrive.
+  const GARMIN_V = 2;
   const runGarminSync = async (silent = false) => {
     setGarmin((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
     try {
-      const r = await garminSync();
+      const full = (p.garminV || 0) < GARMIN_V;
+      const r = await garminSync(full ? { full: true } : {});
+      if (full && (r.found?.hr || r.found?.sleep || r.found?.hrv)) setP((prev) => ({ ...prev, garminV: GARMIN_V }));
       const n = applyGarminDays(r.days || {}); const f = r.found || {};
       const parts = [f.hr ? tn(f.hr, "1 dag med hvilepuls", "{n} dage med hvilepuls") : null, f.sleep ? tn(f.sleep, "1 nat med søvn", "{n} nætter med søvn") : null, f.hrv ? tn(f.hrv, "1 nat med HRV", "{n} nætter med HRV") : null].filter(Boolean);
       const unknown = r.fields ? Object.entries(r.fields).map(([k, v]) => `${k}: ${v.join(", ")}`).join(" · ") : "";

@@ -22,7 +22,7 @@ await ctx.route("**/sb/rest/v1/**", (r) => r.fulfill({ status: r.request().metho
 await ctx.route("**/api/strava", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ connected: false }) }));
 let connected = false;
 await ctx.route("**/api/garmin", async (r) => {
-  const b = JSON.parse(r.request().postData() || "{}"); calls.push({ op: b.op, key: b.key, auth: r.request().headers().authorization });
+  const b = JSON.parse(r.request().postData() || "{}"); calls.push({ op: b.op, key: b.key, full: !!b.full, auth: r.request().headers().authorization });
   if (b.op === "status") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ connected, lastSync: null }) });
   if (b.op === "connect") { if (b.key !== "GOOD-KEY-0123456789-abcdef") return r.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "Garmin afviste nøglen. Den kan være forkert, udløbet eller slettet." }) }); connected = true; return r.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' }); }
   if (b.op === "sync") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ days, found: { hr: 14, sleep: 14, hrv: 14 }, lastSync: "2026-10-28T08:00:00.000Z" }) });
@@ -61,7 +61,9 @@ await page.locator("nav.tabbar button").nth(2).click(); await page.waitForTimeou
 ok(await page.locator("#chart-hr-days").count() === 1, "resting HR day by day on Overblik");
 // reload: status says connected and syncs silently
 await page.reload({ waitUntil: "networkidle" }); await page.waitForTimeout(1200);
-ok(calls.filter((x) => x.op === "sync").length === 2, `silent sync on load (${calls.filter((x) => x.op === "sync").length})`);
+const syncs = calls.filter((x) => x.op === "sync");
+ok(syncs.length === 2, `silent sync on load (${syncs.length})`);
+ok(syncs[0].full === true && syncs[1].full === false, `the first sync after a parser update asks for the full range, the next does not (${syncs.map((x) => x.full)})`);
 await page.locator("nav.tabbar button").nth(4).click(); await page.waitForTimeout(300);
 await page.locator("details#garmin summary").click(); await page.waitForTimeout(200);
 ok(/forbundet · synk/.test(await page.locator("details#garmin summary").textContent()), "summary: connected with last sync");

@@ -37,4 +37,19 @@ const tk = await exchangeKey("K".repeat(30), async (url, opts) => { seen = opts;
 ok(seen.method === "POST" && seen.headers.Authorization === `ApiKey ${"K".repeat(30)}` && tk.token.startsWith("h."), "key exchanged with Authorization: ApiKey");
 let err = null; try { await exchangeKey("bad", async () => new Response("", { status: 401 })); } catch (e) { err = e; }
 ok(err && err.status === 401 && /Garmin afviste nøglen/.test(err.message) && /personalApiToken/.test(err.message), "rejected key: clear message with the page to make a new one");
+// v2 daily summaries: resting HR under another name inside heartRate; the 7-day average is not today's value
+const v2 = garminDays({ summaries: { data: [{ uuid: "x", calendarDate: "2026-10-28", heartRate: { lastSevenDaysAvgRestingValue: 53, restingValue: 50, maxValue: 150 } }] } });
+ok(v2.days["2026-10-28"]?.hr === 50, `restingValue inside heartRate (${JSON.stringify(v2.days)})`);
+const miss = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { minValue: 45, maxValue: 150 } }] } });
+ok(miss.fields["dagsoversigt.heartRate"]?.join() === "minValue,maxValue", `unknown heartRate names its inner fields: ${JSON.stringify(miss.fields)}`);
+const fb = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { maxValue: 150 } }] }, heartDays: [{ calendarDate: "2026-10-28", restingHeartRate: 49, heartRateValues: [[1, 60]] }] });
+ok(fb.days["2026-10-28"]?.hr === 49 && fb.found.hr === 1, "fallback: one-day heart rate gives the resting HR");
+// the one-day endpoint answers a single object with samples: it is one day, not a list of samples
+const calls2 = [];
+const fake2 = async (url) => { calls2.push(String(url)); const u = new URL(url);
+  if (u.pathname.includes("dailysummaries")) return new Response(JSON.stringify({ data: [{ calendarDate: "2026-10-28", heartRate: { maxValue: 150 } }] }), { status: 200 });
+  if (u.pathname.includes("dailyHeartRate")) return new Response(JSON.stringify({ calendarDate: u.searchParams.get("date"), restingHeartRate: 50, heartRateValues: [[1, 60], [2, 61]] }), { status: 200 });
+  return new Response("[]", { status: 200 }); };
+const raw2 = await garminFetch({ token: "T", start: "2026-10-01", end: "2026-10-28", fetchImpl: fake2 });
+ok(raw2.heartDays.length === 7 && calls2.filter((c) => c.includes("dailyHeartRate?date=")).length === 7 && garminDays(raw2).found.hr === 7, `fallback asks 7 days and gets 7 resting values (${raw2.heartDays.length})`);
 done();
