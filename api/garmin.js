@@ -67,18 +67,17 @@ const RHR = ["restingHeartRate", "restingHeartRateInBeatsPerMinute", "restingHr"
 const SLEEP_S = ["sleepTimeSeconds", "totalSleepTimeInSeconds", "sleepTimeInSeconds", "totalSleepSeconds", "durationInSeconds"];
 const HRV = ["lastNightAvg", "lastNightAverage", "hrvLastNightAvg"];
 const fieldNames = (list) => [...new Set(list.slice(0, 3).flatMap((o) => Object.keys(o || {})))].slice(0, 25);
-// Resting HR under any name with "resting" in it (v2 daily summaries nest it in a heartRate section whose field names
-// are not documented); 7-day averages, timestamps and zones are not today's value.
-const NOT_TODAY = /seven|avg|average|timestamp|time|date|zone|trend|baseline/i;
-const restingOf = (o, depth = 3) => {
-  const exact = deep(o, RHR, (v) => num(v) != null); if (exact != null) return num(exact);
-  const walk = (x, d) => {
-    if (!x || typeof x !== "object" || d < 0) return null;
-    for (const [k, v] of Object.entries(x)) if (/resting/i.test(k) && !NOT_TODAY.test(k) && num(v) != null) return num(v);
-    for (const [k, v] of Object.entries(x)) if (v && typeof v === "object" && !Array.isArray(v) && !NOT_TODAY.test(k)) { const r = walk(v, d - 1); if (r != null) return r; }
-    return null;
-  };
-  return walk(o, depth);
+// Resting HR: the known names first, then any name with "resting" in it – but ONLY at the top of the day and in its
+// heartRate section. Other sections (stress, respiration, body battery) have "resting…" numbers that are not a pulse.
+// 7-day averages, timestamps, durations and zones are not today's value. Returns { v, path } so the reply can say
+// which field the number came from.
+const NOT_TODAY = /seven|avg|average|timestamp|time|date|zone|trend|baseline|duration|stress|percent/i;
+export const restingOf = (o) => {
+  if (!o || typeof o !== "object") return null;
+  const scopes = [["", o], ["heartRate.", o.heartRate && typeof o.heartRate === "object" ? o.heartRate : null]].filter(([, x]) => x);
+  for (const [pre, x] of scopes) for (const k of RHR) if (num(x[k]) != null) return { v: num(x[k]), path: pre + k };
+  for (const [pre, x] of scopes) for (const [k, v] of Object.entries(x)) if (/resting/i.test(k) && !NOT_TODAY.test(k) && num(v) != null) return { v: num(v), path: pre + k };
+  return null;
 };
 // The fields one level inside the heartRate section with their TYPE, for the "not recognised" message: names and
 // shapes only, never values ("restingValue: tom", "restingValue: {value, unit}", "minValue: tal").
@@ -93,13 +92,14 @@ const heartRateNames = (list) => {
 /* garminDays({ summaries, sleeps, hrvs }) → { days: { "YYYY-MM-DD": { hr?, sleep?, hrv? } }, found, fields }.
    Sleep in hours (one decimal), resting HR and HRV whole numbers; values outside a human range are dropped. */
 export const garminDays = ({ summaries, sleeps, hrvs, heartDays } = {}) => {
-  const days = {}; const found = { hr: 0, sleep: 0, hrv: 0 }; const fields = {};
+  const days = {}; const found = { hr: 0, sleep: 0, hrv: 0 }; const fields = {}; const paths = {};
   const put = (d, k, v) => { (days[d] ||= {})[k] = v; found[k]++; };
   const S = listOf(summaries), Z = listOf(sleeps), H = listOf(hrvs);
-  for (const o of S) { const d = dateOf(o), v = restingOf(o); if (d && v >= 25 && v <= 120) put(d, "hr", Math.round(v)); }
+  const hrFrom = (o, pre) => { const r = restingOf(o); if (r && r.v >= 25 && r.v <= 120) { paths[pre + r.path] = (paths[pre + r.path] || 0) + 1; return r.v; } return null; };
+  for (const o of S) { const d = dateOf(o), v = hrFrom(o, "dagsoversigt."); if (d && v != null) put(d, "hr", Math.round(v)); }
   // Fallback: the one-day heart-rate endpoint, for the days the summaries gave no resting HR.
   const D = listOf(heartDays);
-  for (const o of D) { const d = dateOf(o), v = restingOf(o); if (d && !days[d]?.hr && v >= 25 && v <= 120) put(d, "hr", Math.round(v)); }
+  for (const o of D) { const d = dateOf(o); if (!d || days[d]?.hr) continue; const v = hrFrom(o, "dagspuls."); if (v != null) put(d, "hr", Math.round(v)); }
   for (const o of Z) { const d = dateOf(o), s = deep(o, SLEEP_S, isNum); if (d && s / 3600 >= 1 && s / 3600 <= 16) put(d, "sleep", Math.round((s / 3600) * 10) / 10); }
   for (const o of H) { const d = dateOf(o), v = deep(o, HRV, isNum); if (d && v >= 10 && v <= 250) put(d, "hrv", Math.round(v)); }
   if (S.length && !found.hr) { fields.dagsoversigt = fieldNames(S); const h = heartRateNames(S); if (h) fields["dagsoversigt.heartRate"] = h; }
@@ -107,7 +107,8 @@ export const garminDays = ({ summaries, sleeps, hrvs, heartDays } = {}) => {
   if (!D.length && heartDays?.probe && !found.hr) fields.dagspuls = heartDays.probe;
   if (Z.length && !found.sleep) fields.søvn = fieldNames(Z);
   if (H.length && !found.hrv) fields.hrv = fieldNames(H);
-  return { days, found, fields };
+  const source = Object.keys(paths).length ? { hr: Object.entries(paths).sort((a, b) => b[1] - a[1])[0][0] } : {};
+  return { days, found, fields, source };
 };
 
 // Date ranges split into chunks Garmin accepts (sleep 31 days, HRV 180, daily summaries 365).
@@ -133,7 +134,7 @@ export const garminFetch = async ({ token, start, end, fetchImpl = fetch }) => {
   ]);
   // No resting HR in the summaries: ask the one-day heart-rate endpoint for the last 7 days of the range.
   let heartDays = [];
-  if (!summaries.some((o) => restingOf(o) > 0)) {
+  if (!summaries.some((o) => restingOf(o)?.v > 0)) {
     const last = Array.from({ length: 7 }, (_, i) => ymdUTC(Date.parse(end) - i * DAY)).filter((d) => d >= start);
     heartDays = (await Promise.all(last.map((d) => get("/wellness-service/wellness/dailyHeartRate", { date: d }, "dagspuls").then((x) => (x.length ? x : [])).catch(() => [])))).flat();
   }
@@ -188,7 +189,7 @@ export default async function handler(req, res) {
       const got = out.found.hr + out.found.sleep + out.found.hrv;
       const lastSync = got ? new Date(now).toISOString() : row.last_sync || null;
       if (got) await admin.from("garmin_keys").update({ last_sync: lastSync }).eq("user_id", uid);
-      return json(res, 200, { days: out.days, found: out.found, range, lastSync, ...(Object.keys(out.fields).length ? { fields: out.fields } : {}), ...(raw.missing.length ? { missing: raw.missing } : {}) });
+      return json(res, 200, { days: out.days, found: out.found, source: out.source, range, full: !!body?.full, lastSync, ...(Object.keys(out.fields).length ? { fields: out.fields } : {}), ...(raw.missing.length ? { missing: raw.missing } : {}) });
     }
     return json(res, 400, { error: "Ukendt handling." });
   } catch (e) {

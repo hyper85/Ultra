@@ -14,7 +14,7 @@ await ctx.addInitScript(({ base, log, acts, session }) => {
   if (sessionStorage.getItem("seeded")) return; sessionStorage.setItem("seeded", "1");
   localStorage.setItem("ultraplan-profile", JSON.stringify(base)); localStorage.setItem("ultraplan-log", JSON.stringify(log)); localStorage.setItem("ultraplan-activities", JSON.stringify(acts)); localStorage.setItem("ultraplan-lang", "da");
   localStorage.setItem("sb-localhost-auth-token", JSON.stringify(session));
-}, { base, log: { ...log, "2026-10-19": { km: 20, hr: 47 } }, acts, session });
+}, { base: { ...base, wellness: { "2026-10-02": { hr: 99 }, "2026-06-01": { hr: 50 } } }, log: { ...log, "2026-10-19": { km: 20, hr: 47 } }, acts, session });
 const calls = [];
 await ctx.route("**/sb/auth/v1/user**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
 await ctx.route("**/sb/auth/v1/token**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
@@ -25,7 +25,7 @@ await ctx.route("**/api/garmin", async (r) => {
   const b = JSON.parse(r.request().postData() || "{}"); calls.push({ op: b.op, key: b.key, full: !!b.full, auth: r.request().headers().authorization });
   if (b.op === "status") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ connected, lastSync: null }) });
   if (b.op === "connect") { if (b.key !== "GOOD-KEY-0123456789-abcdef") return r.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "Garmin afviste nøglen. Den kan være forkert, udløbet eller slettet." }) }); connected = true; return r.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' }); }
-  if (b.op === "sync") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ days, found: { hr: 14, sleep: 14, hrv: 14 }, lastSync: "2026-10-28T08:00:00.000Z" }) });
+  if (b.op === "sync") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ days, found: { hr: 14, sleep: 14, hrv: 14 }, source: { hr: "dagsoversigt.heartRate.restingValue" }, range: { start: "2026-07-01", end: "2026-10-28" }, full: !!b.full, lastSync: "2026-10-28T08:00:00.000Z" }) });
   if (b.op === "disconnect") { connected = false; return r.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' }); }
 });
 const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
@@ -46,10 +46,11 @@ await input.fill("GOOD-KEY-0123456789-abcdef"); await btn.click(); await page.wa
 const c = calls.find((x) => x.op === "connect" && x.key === "GOOD-KEY-0123456789-abcdef");
 ok(c && c.auth === "Bearer sess", "key sent once to /api/garmin with the session");
 const msg = (await g.locator(".advice").innerText()).replace(/\n/g, " ");
-ok(/Hentede fra Garmin: 14 dage med hvilepuls, 14 nætter med søvn, 14 nætter med HRV\./.test(msg), `sync message: ${msg}`);
+ok(/Hentede fra Garmin: 14 dage med hvilepuls, 14 nætter med søvn, 14 nætter med HRV\. Hvilepuls fra feltet dagsoversigt\.heartRate\.restingValue\./.test(msg), `sync message: ${msg}`);
 ok(await g.locator("input[type=password]").count() === 0 && await g.getByRole("button", { name: "Afbryd Garmin" }).count() === 1, "connected: key field gone, disconnect offered");
 const prof = await page.evaluate(() => JSON.parse(localStorage.getItem("ultraplan-profile")));
-ok(Object.keys(prof.wellness || {}).length === 14 && prof.wellness["2026-10-28"].hr === 48 + (13 % 3) && prof.wellness["2026-10-28"].hrv === 63, `14 days in the day store (${Object.keys(prof.wellness || {}).length})`);
+ok(!prof.wellness["2026-10-02"]?.hr && prof.wellness["2026-06-01"]?.hr === 50, "full sync: an old resting HR inside the range without a Garmin value goes, outside the range it stays");
+ok(Object.keys(prof.wellness || {}).filter((d) => prof.wellness[d].hr).length === 15 && prof.wellness["2026-10-28"].hr === 48 + (13 % 3) && prof.wellness["2026-10-28"].hrv === 63, `14 days in the day store (${Object.keys(prof.wellness || {}).length})`);
 ok(!JSON.stringify(prof).includes("GOOD-KEY"), "the key is not stored in the profile");
 const lg = await page.evaluate(() => JSON.parse(localStorage.getItem("ultraplan-log")));
 ok(lg["2026-10-19"].hr === 47 && !lg["2026-10-19"].hrAuto && lg["2026-10-19"].sleep > 0 && lg["2026-10-19"].sleepAuto, `typed resting HR kept, sleep filled (${JSON.stringify(lg["2026-10-19"])})`);
