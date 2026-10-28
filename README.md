@@ -134,6 +134,19 @@ RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold t
 8 km rolig tur), så ACWR ser hele ugen. Dagen får et ✓ på "I dag", i planen og i loggen, og en styrkedag er først
 "gjort", når styrken er logget. Garmins "Strength Training"- og HIIT-rækker importeres nu også fra Activities.csv.
 
+### Garmin-aktiviteter og pulszoner
+
+Garmins Activities.csv (connect.garmin.com → Aktiviteter → Alle → Eksportér CSV) kan lægges ind oven på Strava. Et pas,
+appen allerede har fra Strava, bliver ikke en dublet: det får bare den puls, makspuls og stigning, Strava-kopien
+manglede. Indendørs pas (cykling, trappemaskine, MMA, cardio), hvor Garmin skriver bevægelsestid 0, tæller med deres
+samlede tid. Stigning læses fra "Total Ascent" (også "1,091"), og løbebåndsture markeres som løbebånd.
+
+Pulszoner-kortet under Mere viser den højeste puls, målt på et løb det seneste år. Én enlig top, mere end 4 slag over
+den næste, springes over som fejlmåling. Er den målte højere end makspulsen i brug, kan du bruge den med ét tryk.
+Overblik viser "Pulszoner pr. uge": løbeminutter pr. uge efter hvert løbs gennemsnitspuls, rolig under 70 % af
+makspuls, Z3 70–80 %, Z4–Z5 derover, og andelen roligt de sidste 4 uger mod målet på cirka 80 %. Garmins eksport har
+ikke tid i zoner pr. pas, så et løb tæller helt i zonen for sit gennemsnit. Træneren får de samme tal.
+
 Kroppen ud over løbet: i spørgeskemaet vælger du, hvad du vil med kroppen (holde vægten, tabe dig, bygge muskler
 eller være fit), hvor mange styrkepas du vil have om ugen (0–3), og hvilket udstyr du har (ingen, håndvægte/elastik
 eller fitnesscenter). Appen lægger styrkedagene på dage uden lang tur og bygger pas af syv bevægelser (squat, hoftebøj,

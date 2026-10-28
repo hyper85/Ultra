@@ -1,5 +1,5 @@
 import { ymd, parseLocal, addDays, kind, restingHRSeries } from "./import.js";
-import { watchHistory } from "./insights.js";
+import { watchHistory, hrZoneWeeks } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { predictFinish, fmtTime } from "./race.js";
 import { t, tn, locale } from "./i18n.js";
@@ -33,6 +33,35 @@ function Bars({ rows, height = 150, cur }) {
             {r.ran > 0 && <rect x={x + bw + 2} y={y(r.ran)} width={bw} height={H - padB - y(r.ran)} className={`bar ran ${r.key === cur ? "cur" : ""}`} />}
             {(i % Math.ceil(rows.length / 8) === 0 || r.key === cur) && <text x={x + bw + 1} y={H - 6} className={`tick ${r.key === cur ? "cur" : ""}`} textAnchor="middle">{r.label}</text>}
             {r.deload && <circle cx={x + bw + 1} cy={H - padB + 4} r={2} className="dot" />}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* Run minutes per week, stacked by the zone of each run's average heart rate: easy at the base, hard on top. One hue,
+   light to bright (brighter = harder), a 2 px gap between segments, a hover title per week, a legend above. */
+const ZONES = [["easy", "Rolig · Z1–Z2"], ["mid", "Z3"], ["hard", "Z4–Z5"]];
+function ZoneBars({ rows, height = 230, cur }) {
+  const W = 640, H = height, padL = 34, padB = 22, padT = 8, gap = 2;
+  const tot = (r) => r.easy + r.mid + r.hard;
+  const max = Math.ceil(Math.max(60, ...rows.map(tot)) / 60) * 60; // whole hours on the axis
+  const iw = (W - padL) / rows.length, bw = Math.max(4, iw * 0.56);
+  const y = (v) => padT + (H - padB - padT) * (1 - v / max);
+  const ticks = [0, Math.round(max / 2), Math.round(max)];
+  return (
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Løbeminutter pr. uge efter pulszone")}>
+      {ticks.map((v) => <g key={v}><line x1={padL} x2={W} y1={y(v)} y2={y(v)} className="grid" /><text x={padL - 6} y={y(v) + 4} className="tick" textAnchor="end">{v}</text></g>)}
+      {rows.map((r, i) => {
+        const x = padL + i * iw + (iw - bw) / 2; let base = 0;
+        const segs = ZONES.map(([z]) => { const v = r[z]; const s = { z, y0: base, y1: base + v }; base += v; return s; }).filter((s) => s.y1 > s.y0);
+        return (
+          <g key={r.key} className="zbar">
+            <title>{`${r.label}: ${ZONES.map(([z, n]) => `${t(n)} ${r[z]} min`).join(" · ")}${r.none ? ` · ${t("uden puls")} ${r.none} min` : ""}`}</title>
+            <rect x={padL + i * iw} y={padT} width={iw} height={H - padB - padT} className="hit" />
+            {segs.map((s, k) => { const top = y(s.y1), bot = y(s.y0) - (k > 0 ? gap : 0); return bot - top > 0.5 ? <rect key={s.z} x={x} y={top} width={bw} height={bot - top} className={`zone-${s.z}`} /> : null; })}
+            {(i % Math.ceil(rows.length / 8) === 0 || r.key === cur) && <text x={x + bw / 2} y={H - 6} className={`tick ${r.key === cur ? "cur" : ""}`} textAnchor="middle">{r.label}</text>}
           </g>
         );
       })}
@@ -90,7 +119,7 @@ function PaceTrend({ ae }) {
   );
 }
 
-export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onRaceDay }) {
+export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onRaceDay, maxHR }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
   const curLog = log[cur.key] || {};
@@ -148,6 +177,20 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
           <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
           <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} />
         </div>}
+        {(() => { const zw = hrZoneWeeks(acts, { maxHR, until: todayKey, weeks: 12, includeHikes }); const withHR = zw.rows.filter((r) => r.easy + r.mid + r.hard > 0); if (withHR.length < 3) return null;
+          const byKey = Object.fromEntries(plan.rows.map((r) => [r.key, r])); const rows = zw.rows.map((r) => ({ ...r, label: byKey[r.key] ? weekLabel(byKey[r.key]) : fmtDay(r.key) }));
+          const l = zw.last4; const cap = Math.round(maxHR * 0.7); const unknown = zw.rows.reduce((s, r) => s + r.none, 0); return (
+          <div className="panel" id="chart-zones">
+            <h2 style={{ margin: 0 }}>{t("Pulszoner pr. uge")}</h2>
+            <div className="muted legend">{ZONES.map(([z, n]) => <span key={z}><i className={`sw zone-${z}`} /> {t(n)}</span>)}</div>
+            {l && <p className={`zone-sum ${l.easy >= 70 ? "good" : l.easy >= 50 ? "warn" : "bad"}`}>{t("Sidste 4 uger: {easy} % roligt, {mid} % Z3, {hard} % Z4–Z5.", l)} {l.easy >= 70 ? t("Godt: det meste er roligt.") : t("Målet er omkring 80 % roligt. Hold de rolige ture under {cap} i puls.", { cap })}</p>}
+            <ZoneBars rows={rows} cur={cur.key} />
+            <p className="muted">{t("Minutter løb pr. uge. Hvert løb tæller i zonen for sin gennemsnitspuls, med makspuls {max}. Rolig er under {cap}, Z3 {cap}–{z4}, Z4–Z5 fra {z4}.", { max: maxHR, cap, z4: Math.round(maxHR * 0.8) })}{unknown > 0 ? " " + t("{n} min løb uden puls er ikke med.", { n: unknown }) : ""}</p>
+            <details className="zone-table"><summary>{t("Vis tallene")}</summary>
+              <table><thead><tr><th>{t("Uge")}</th>{ZONES.map(([z, n]) => <th key={z} className="num">{t(n)}</th>)}</tr></thead>
+                <tbody>{rows.filter((r) => r.easy + r.mid + r.hard + r.none > 0).map((r) => <tr key={r.key}><td>{r.label}</td>{ZONES.map(([z]) => <td key={z} className="num">{r[z]}</td>)}</tr>)}</tbody></table>
+            </details>
+          </div>); })()}
         {(() => { const ae = aerobicEfficiency(acts); if (!ae.enough) return null; return (
           <div className="panel">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Aerob effektivitet")}</h2><span className="muted">{t("rolige ture, puls {lo}–{hi}, min. {km} km", { lo: AE.hrLo, hi: AE.hrHi, km: AE.minKm })}</span></div>

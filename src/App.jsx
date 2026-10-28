@@ -13,7 +13,7 @@ import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
-import { buildInsights, coachContext } from "./insights.js";
+import { buildInsights, coachContext, hrPeak } from "./insights.js";
 import { describeSession, describeLong, describeEasy, sessionName, longRunPlan } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 import { t, tn, locale, getLang } from "./i18n.js";
@@ -334,8 +334,8 @@ export default function App() {
       const parsed = (r.activities || []).map(activityFromStrava).filter(Boolean);
       const merged = mergeActivities(actsRef.current, parsed);
       const { next, removed } = dedupeStore(merged.next);
-      const { added, replaced } = merged;
-      if (added || replaced || removed) { saveActs(next); applyActivities(next, p.includeHikes); }
+      const { added, replaced, enriched } = merged;
+      if (added || replaced || removed || enriched) { saveActs(next); applyActivities(next, p.includeHikes); }
       const runs = parsed.filter((a) => a.kind === "run").length, others = parsed.length - runs;
       const swapped = replaced + removed;
       setStrava((x) => ({ ...x, connected: true, athlete: r.athlete || x.athlete, lastSync: r.lastSync, busy: false, msg: { text: added ? t("Hentede {added} nye fra Strava ({runs} løb{others}).", { added, runs, others: others ? t(", {n} andet", { n: others }) : "" }) + (swapped ? " " + t("{n} indtastede pas erstattet af urets udgave.", { n: swapped }) : "") : swapped ? t("Strava: ingen nye, men {n} indtastede pas erstattet af urets udgave.", { n: swapped }) : t("Strava: ingen nye aktiviteter.") } }));
@@ -620,7 +620,7 @@ export default function App() {
     }
     const merged = mergeActivities(acts, parsed);
     const { next, removed } = dedupeStore(merged.next);
-    const added = merged.added, swapped = merged.replaced + removed;
+    const added = merged.added, swapped = merged.replaced + removed, enriched = merged.enriched;
     let weeks = {};
     if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
@@ -631,7 +631,7 @@ export default function App() {
       text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
         : parsed.length === 0 && !wellness.length ? t("Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil.")
         : parsed.length === 0 ? wellText.trim() + (errors.length ? " " + errors.join(" ") : "")
-        : t("Læste {n} aktiviteter ({runs} løb{hikes}{other}), {added} nye{swapped}. {weeks} uger i loggen har nu km fra dit ur.", { n: parsed.length, runs, hikes: hikes ? t(", {n} vandring", { n: hikes }) : "", other: other ? t(", {n} andet", { n: other }) : "", added, swapped: swapped ? t(", {n} indtastede erstattet af urets udgave", { n: swapped }) : "", weeks: Object.keys(weeks).length }) + wellText + (errors.length ? " " + errors.join(" ") : ""),
+        : t("Læste {n} aktiviteter ({runs} løb{hikes}{other}), {added} nye{swapped}. {weeks} uger i loggen har nu km fra dit ur.", { n: parsed.length, runs, hikes: hikes ? t(", {n} vandring", { n: hikes }) : "", other: other ? t(", {n} andet", { n: other }) : "", added, swapped: (swapped ? t(", {n} indtastede erstattet af urets udgave", { n: swapped }) : "") + (enriched ? tn(enriched, ", 1 pas fik puls eller stigning fra filen", ", {n} pas fik puls eller stigning fra filen") : ""), weeks: Object.keys(weeks).length }) + wellText + (errors.length ? " " + errors.join(" ") : ""),
     });
     if (fileRef.current) fileRef.current.value = "";
     setImporting(false);
@@ -1684,7 +1684,7 @@ export default function App() {
             <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
             <div className="seg" role="tablist">{[["overblik", "Overblik"], ["log", "Log"]].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo(0, 0); }}>{t(l)}</button>)}</div>
             {emptyCard}
-            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} /></Suspense>}
+            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} maxHR={maxHR} /></Suspense>}
           </section>
         )}
         <section className="stack">
@@ -1805,6 +1805,13 @@ export default function App() {
               <details className="panel acc">
                 <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
+                {(() => { const pk = hrPeak(acts, { until: todayKey }); if (!pk) return null; const higher = pk.hr > maxHR; return (
+                  <div className={`hr-peak${higher || !p.maxHR ? " offer" : ""}`}>
+                    <p>{t("Højeste puls målt på et løb det seneste år: {hr} ({d}).", { hr: pk.hr, d: parseLocal(pk.day).toLocaleDateString(locale(), { day: "numeric", month: "short" }) })}
+                      {pk.skipped.length > 0 && ` ${tn(pk.skipped.length, "En enlig top på {hr} er sprunget over som fejlmåling.", "{n} enlige toppe (højest {hr}) er sprunget over som fejlmålinger.", { hr: pk.skipped[0].hr })}`}
+                      {higher ? ` ${t("Den er over den makspuls, appen bruger, så dine zoner er sat for lavt.")}` : !p.maxHR ? ` ${t("Din rigtige makspuls er mindst så høj.")}` : ""}</p>
+                    {pk.hr !== +p.maxHR && (higher || !p.maxHR) && <button type="button" className="ghost" onClick={() => setP({ ...p, maxHR: pk.hr })}>{t("Brug {hr} som makspuls", { hr: pk.hr })}</button>}
+                  </div>); })()}
                 <table><tbody>{zones.map(([n, lo, hi, txt]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{txt}</td></tr>)}</tbody></table>
               </details>
               </>

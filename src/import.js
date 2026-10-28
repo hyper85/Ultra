@@ -10,6 +10,7 @@ export const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
 const RUN = /run|løb|jog|trail/i;
 const NOT_RUN = /ride|cykl|cycl|bike|swim|svøm|ski|row|kajak|kayak|yoga|strength|styrke|workout|elliptical|stair/i;
 const HIKE = /hike|hiking|walk|vandr|gang|gåtur|trek/i;
+const TREADMILL = /treadmill|løbebånd|indoor run|virtual ?run/i;
 // Strava GPX exports carry a numeric <type>: 9 = run, 4 = hike, 10 = walk.
 const STRAVA_TYPES = { 9: "Run", 4: "Hike", 10: "Walk", 1: "Ride", 5: "Swim" };
 
@@ -37,6 +38,9 @@ const parseNum = (s) => {
   else if (hasComma) t = t.replace(",", ".");
   return parseFloat(t);
 };
+
+// Whole numbers with a thousands comma ("1,091" m climb, "2,408" kcal in Garmin's CSV) are not decimals.
+const parseCount = (s) => { const t = String(s ?? "").trim(); return /^\d{1,3}(,\d{3})+$/.test(t) ? +t.replace(/,/g, "") : parseNum(t); };
 
 // "1:02:33", "45:30", "3612" (seconds) -> minutes
 const parseMinutes = (s) => {
@@ -121,6 +125,10 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
   const cName = findCol(headers, [/^activity name$/, /^title$/, /^titel$/, /^name$/, /^navn$/]);
   const cTime = findCol(headers, [/^moving time$/, /^bevægelsestid$/, /^elapsed time$/, /^time$/, /^tid$/, /^duration$/, /^varighed$/, /^min$|^minutter$|^minutes$/, /time|tid|minut/]);
   const timeInMinutes = cTime >= 0 && /^min|minut/.test(headers[cTime]); // a "Min" column holds minutes, not seconds
+  // Garmin writes "Moving Time 00:00:00" for indoor sessions (bike, stair stepper, MMA): fall back to the session time.
+  const cTimeAlt = [/^time$/, /^tid$/, /^elapsed time$/, /^duration$/, /^varighed$/].map((re) => headers.findIndex((h) => re.test(h))).filter((i) => i >= 0 && i !== cTime);
+  const cMaxHR = findCol(headers, [/^max hr$/, /^max heart rate$/, /^maks puls$/, /^makspuls$/, /^max puls$/]);
+  const cAsc = findCol(headers, [/^total ascent$/, /^elevation gain$/, /^samlet stigning$/, /^stigning$/, /^højdemeter$/]);
   const cRPE = findCol(headers, [/^rpe$/, /anstrengelse|effort/]);
   const cHR = findCol(headers, [/^average heart rate$/, /^avg hr$/, /^gns puls$/, /gennemsnitlig puls/, /^average hr$/, /avg.*(hr|heart)|gns.*puls|puls.*gns/]);
   let distCols = headers.map((h, i) => (/^distance$|^afstand$|^distance km$|^distance m$|^km$|^kilometer$/.test(h) ? i : -1)).filter((i) => i >= 0);
@@ -139,13 +147,17 @@ export const activitiesFromCSV = (text, fileName = "csv") => {
     let km;
     if (distCols.length > 1 && last > 0 && (last > 1500 || (first > 0 && last / first > 100))) km = last / 1000;
     else km = first > 1500 ? first / 1000 : first;
-    const min = cTime < 0 ? NaN : timeInMinutes && !String(r[cTime] || "").includes(":") ? parseNum(r[cTime]) : parseMinutes(r[cTime]);
+    let min = cTime < 0 ? NaN : timeInMinutes && !String(r[cTime] || "").includes(":") ? parseNum(r[cTime]) : parseMinutes(r[cTime]);
+    for (const c of cTimeAlt) { if (min > 0) break; min = parseMinutes(r[c]); }
     const rowType = cType >= 0 ? r[cType] : "Run"; const rowKind = kind(rowType);
     // A session without distance (strength, HIIT, indoor cardio) still counts, by its minutes.
     if (!(km > 0)) { if ((rowKind === "strength" || rowKind === "other") && min > 0) km = 0; else continue; }
     if (km > 400) continue; // metres in a "km" column or a garbage row
-    const hr = cHR >= 0 ? parseNum(r[cHR]) : NaN;
-    const a = mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, type: rowType, name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : /\.xls/i.test(fileName) ? "Excel" : "CSV", file: fileName });
+    const hr = cHR >= 0 ? parseCount(r[cHR]) : NaN, maxHr = cMaxHR >= 0 ? parseCount(r[cMaxHR]) : NaN;
+    const treadmill = TREADMILL.test(rowType);
+    const vert = cAsc >= 0 && !treadmill ? parseCount(r[cAsc]) : NaN;
+    const a = mk({ date, km, min: min > 0 ? min : null, hr: hr > 40 ? Math.round(hr) : null, maxHr: maxHr > 40 && maxHr < 240 ? Math.round(maxHr) : null, type: rowType, name: cName >= 0 ? r[cName] : "", source: isStrava ? "Strava CSV" : /\.xls/i.test(fileName) ? "Excel" : "CSV", file: fileName,
+      vert: vert > 0 && vert < 20000 ? vert : 0, treadmill });
     const rpe = cRPE >= 0 ? parseNum(r[cRPE]) : NaN;
     if (rpe >= 1 && rpe <= 10) a.rpe = Math.round(rpe);
     out.push(a);
@@ -218,7 +230,7 @@ const mk = (a) => {
   const km = Math.round(a.km * 100) / 100;
   const slot = Math.round((a.date.getHours() * 60 + a.date.getMinutes()) / 5); // 5-minute start slot for dedupe
   const id = km > 0 ? `${ymd(a.date)}-${slot}-${km.toFixed(1)}` : `${ymd(a.date)}-${slot}-x-${String(a.type || "x").toLowerCase().replace(/[^a-z0-9]+/g, "")}-${Math.round(a.min || 0)}`;
-  return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file,
+  return { id, date: a.date.toISOString(), day: ymd(a.date), km, min: a.min ? Math.round(a.min) : null, hr: a.hr || null, ...(a.maxHr > (a.hr || 0) ? { maxHr: a.maxHr } : {}), type: String(a.type || "").trim(), kind: kind(a.type), name: a.name || "", source: a.source, file: a.file,
     ...(a.vert > 0 ? { vert: Math.round(a.vert) } : {}), ...(a.incline > 0 ? { incline: a.incline } : {}), ...(a.treadmill ? { treadmill: true } : {}) };
 };
 
@@ -356,7 +368,7 @@ export const activityFromStrava = (a) => {
   const date = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
   const km = +a.km || 0, min = +a.min || 0;
   if (!(km > 0) && !(min > 0)) return null;
-  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}`, vert: +a.vert || 0, treadmill: !!a.treadmill });
+  return mk({ date, km, min: min > 0 ? min : null, hr: a.hr || null, maxHr: a.maxHr || null, type: a.type || "Workout", name: a.name || "", source: "Strava", file: `strava:${a.stravaId}`, vert: +a.vert || 0, treadmill: !!a.treadmill });
 };
 
 // A run typed in by hand for a given day (YYYY-MM-DD). Stored like an imported activity. `source` ("Manuel") and the
@@ -421,21 +433,35 @@ export const withIncline = (a, incline) => {
   const { incline: _i, vert: _v, ...rest } = a;
   return inc ? { ...rest, incline: inc, vert: Math.round(a.km * 10 * inc) } : rest;
 };
+// What a second watch copy (Garmin CSV next to Strava) can add to the stored one: heart rate, max heart rate and the
+// climb, only where the stored copy has none. A treadmill climb typed as incline is left alone.
+export const fillGaps = (old, a) => {
+  if (old.source === "Manuel" || a.source === "Manuel") return null;
+  const add = {};
+  if (!old.hr && a.hr) add.hr = a.hr;
+  if (!old.maxHr && a.maxHr > (old.hr || a.hr || 0)) add.maxHr = a.maxHr;
+  if (!(old.vert > 0) && a.vert > 0 && !old.incline && !old.treadmill) add.vert = a.vert;
+  if (!old.treadmill && a.treadmill && !(old.vert > 0)) add.treadmill = true;
+  return Object.keys(add).length ? add : null;
+};
 // Merge parsed activities into the store. A duplicate keeps the stored copy, except that a copy from the watch
-// replaces a typed one (more exact, has heart rate); the typed RPE is carried over. Returns { next, added, replaced }.
+// replaces a typed one (more exact, has heart rate); the typed RPE is carried over. A duplicate from another watch
+// source fills what the stored copy lacks (fillGaps). Returns { next, added, replaced, enriched }.
 export const mergeActivities = (acts, parsed) => {
-  const next = { ...acts }; let added = 0, replaced = 0;
+  const next = { ...acts }; let added = 0, replaced = 0, enriched = 0;
+  const enrich = (id, a) => { const add = fillGaps(next[id], a); if (add) { next[id] = { ...next[id], ...add }; enriched++; } };
   for (const a of parsed) {
-    if (next[a.id]) continue;
+    if (next[a.id]) { enrich(a.id, a); continue; }
     const dup = findDuplicate(a, Object.values(next).filter((b) => b.day === a.day));
     if (dup) {
       const old = next[dup];
       if (old.source === "Manuel" && a.source !== "Manuel") { delete next[dup]; next[a.id] = { ...a, ...carryTyped(old, a) }; replaced++; }
+      else enrich(dup, a);
       continue;
     }
     next[a.id] = a; added++;
   }
-  return { next, added, replaced };
+  return { next, added, replaced, enriched };
 };
 // One pass over a store that may already hold a typed copy and a watch copy of the same session (from before the
 // rule above): the typed one goes, its RPE stays. Returns { next, removed }.
