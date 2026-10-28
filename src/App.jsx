@@ -1230,7 +1230,7 @@ export default function App() {
             : !user ? <><p className="muted">{t("Strava kræver login. Appen henter så dine ture selv, hver gang du åbner den.")}</p><button className="btn" type="button" onClick={() => setOpenMore("konto")}>{t("Log ind")}</button></>
             : strava.connected ? (
               <>
-                <p className="muted">{t("Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls, HRV og VO2 max har Strava ikke, dem henter du som rapporter herunder.")}</p>
+                <p className="muted">{t("Nye ture hentes, hver gang du åbner appen. Løb tæller i km, styrke og HIIT i minutter. Søvn, hvilepuls og HRV har Strava ikke. Dem henter Garmin herunder, eller du lægger rapporterne ind under Hent fra filer.")}</p>
                 <div className="import-row">
                   <button className="btn" type="button" disabled={strava.busy} onClick={() => runStravaSync()}>{strava.busy ? t("Henter…") : t("Hent nu")}</button>
                   <button className="btn ghost" type="button" disabled={strava.busy} onClick={disconnectStrava}>{t("Afbryd Strava")}</button>

@@ -100,6 +100,8 @@ const strava = { "s-trail": { ...mk("2026-10-24", 25.0, 175, "TrailRun", null), 
   await tab(page, 2);
   const h = await page.locator("#chart-zones h2").allTextContents();
   ok(h.length === 0 || h[0] === "Heart-rate zones per week", `English title or no panel (${h.join()})`);
+  const top = (await page.locator(".topbar-race").textContent()) || "";
+  ok(/\d+\s*days/.test(top) && !/dage/.test(top), `English countdown says days (${top.trim()})`);
   await browser.close();
 }
 done();
