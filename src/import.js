@@ -1,4 +1,5 @@
 import { t } from "./i18n.js";
+import { isFIT, fitActivities } from "./fit.js";
 
 /* ================= dates ================= */
 export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -393,8 +394,17 @@ export const parseFile = async (file) => {
   }
   if (n.endsWith(".xlsx") || n.endsWith(".xlsm")) return (await readExcel(file)).flatMap((x) => activitiesFromCSV(x.text, x.name));
   if (n.endsWith(".xls") || n.endsWith(".ods") || n.endsWith(".numbers")) throw new ImportError(t("{file}: gem regnearket som .xlsx (Filer → Gem som) eller som CSV, og vælg den fil.", { file: file.name }));
-  if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(t("{file}: FIT-filer understøttes ikke – vælg GPX eller TCX ved eksport.", { file: file.name }));
-  const text = decodeText(await file.arrayBuffer());
+  // FIT, the watch's own file: recognised by its header whatever the name says (phones rename them, e.g. ".tff");
+  // ".fit.gz" (Strava's archive) is unpacked first. A file the watch never closed is rebuilt from its samples.
+  let bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b && typeof DecompressionStream !== "undefined") { try { bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()); } catch { /* not gzip after all */ } }
+  if (isFIT(bytes)) {
+    let list; try { list = fitActivities(bytes); } catch { throw new ImportError(t("{file}: FIT-filen kunne ikke læses. Den kan være beskadiget.", { file: file.name })); }
+    if (!list.length) throw new ImportError(t("{file}: FIT-filen har ingen målinger fra en tur.", { file: file.name }));
+    return list.filter((a) => a.km > 0 || a.min > 0).map((a) => ({ ...mk({ ...a, source: "FIT", file: file.name }), ...(a.rebuilt ? { rebuilt: true } : {}) }));
+  }
+  if (n.endsWith(".fit") || n.endsWith(".fit.gz")) throw new ImportError(t("{file}: filen hedder .fit, men er ikke en FIT-fil.", { file: file.name }));
+  const text = decodeText(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   if (!text.trim()) throw new ImportError(t("{file}: filen er tom.", { file: file.name }));
   if (text.charCodeAt(0) === 0x50 && text.charCodeAt(1) === 0x4b) throw new ImportError(t("{file}: det ligner en zip-fil – omdøb den til .zip eller pak den ud.", { file: file.name }));
   return parseText(text, file.name); // any text file: sniff GPX/TCX, otherwise treat as CSV
