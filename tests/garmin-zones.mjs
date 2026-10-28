@@ -42,6 +42,10 @@ const strava = { "s-trail": { ...mk("2026-10-24", 25.0, 175, "TrailRun", null), 
   // Pulszoner card: the lone 199 is a spike; 190 is above the 186 in use → offer
   const card = page.locator("details.acc", { has: page.locator("summary h2", { hasText: "Pulszoner" }) });
   await card.locator("summary").click(); await page.waitForTimeout(150);
+  // Karvonen with resting 49 and max 186, as Garmin/Strava "% of HRR": 131 / 145 / 159 / 172
+  const zt = (await card.locator("table").innerText()).replace(/\s+/g, " ");
+  ok(/Z2 aerob 131–145/.test(zt) && /Z3 tempo 145–159/.test(zt) && /Z4 tærskel 159–172/.test(zt) && /Z5 VO2 172–186/.test(zt), `zone table by heart-rate reserve: ${zt.slice(0, 160)}`);
+  ok(/Zonerne er pulsreserve \(Karvonen\)/.test(await card.innerText()) && /\(137 slag\)/.test(await card.innerText()), "card explains the model and the 137-beat reserve");
   const pk = (await card.locator(".hr-peak").innerText()).replace(/\n/g, " ");
   ok(/Højeste puls målt på et løb det seneste år: 190 \(24\. okt\.?\)\./.test(pk) && /En enlig top på 199 er sprunget over som fejlmåling\./.test(pk) && /zoner er sat for lavt/.test(pk), `peak line: ${pk}`);
   await card.getByRole("button", { name: "Brug 190 som makspuls" }).click(); await page.waitForTimeout(200);
@@ -62,12 +66,33 @@ const strava = { "s-trail": { ...mk("2026-10-24", 25.0, 175, "TrailRun", null), 
   ok(/Rolig · Z1–Z2 \d+ min · Z3 \d+ min · Z4–Z5 \d+ min/.test(title), `hover title: ${title}`);
   await z.locator(".zone-table summary").click(); await page.waitForTimeout(100);
   ok(await z.locator(".zone-table tbody tr").count() >= 6, "table view lists the weeks");
-  ok(/makspuls 190\. Rolig er under 133, Z3 133–152, Z4–Z5 fra 152\./.test(await z.locator("p.muted").innerText()), "footnote names the max and the bands");
+  const foot = await z.locator("p.muted").innerText();
+  ok(/pulsreserve \(Karvonen\) med hvilepuls 49 og makspuls 190: rolig under 148, Z3 148–162, Z4–Z5 fra 162\./.test(foot), `footnote names Karvonen and the bands: ${foot.slice(0, 200)}`);
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok(over <= 0, `no horizontal scroll at 390 px (${over})`);
   await z.screenshot({ path: process.env.SHOT || "/tmp/claude-0/-home-user-Ultra/a738c4a7-b731-54dc-b1ff-3ce9899054c5/scratchpad/zones.png" });
   ok(errors.length === 0, `no errors ${errors.join(";")}`);
   await browser.close();
+}
+// Without a resting heart rate the zones fall back to % of max, and the card says how to switch
+{
+  const { browser, page } = await openApp({ lang: "da", width: 390, at: "2026-10-28T09:00:00", patch: { restHR: "" } });
+  await tab(page, 4);
+  const card = page.locator("details.acc", { has: page.locator("summary h2", { hasText: "Pulszoner" }) });
+  await card.locator("summary").click(); await page.waitForTimeout(150);
+  const zt = (await card.locator("table").innerText()).replace(/\s+/g, " ");
+  ok(/Z2 aerob 112–130/.test(zt) && /Skriv din hvilepuls ind under Dig/.test(await card.innerText()), `no resting HR: % of max (${zt.slice(0, 60)})`);
+  await tab(page, 0);
+  ok(!/puls under 145/.test(await page.locator("main").innerText()), "today's guidance follows the model");
+  await browser.close();
+}
+// The engine's numbers: describeEasy / describeSession / hrAt agree
+{
+  const { hrAt, hrShare } = await import("../src/hr.js");
+  const { describeEasy, describeSession } = await import("../src/sessions.js");
+  const hp = { maxHR: 186, restHR: 49 };
+  ok([0.6, 0.7, 0.8, 0.9].map((f) => hrAt(f, hp)).join("/") === "131/145/159/172" && hrAt(0.7, { maxHR: 186 }) === 130 && Math.abs(hrShare(145, hp) - 0.7) < 0.01, "hrAt: Karvonen with resting HR, % of max without");
+  ok(/puls under 145/.test(describeEasy({ km: 6, ...hp })) && /\(159–172\)/.test(describeSession("6×2 min tærskel", hp).text), "easy cap 145, threshold 159–172");
 }
 // English, and no panel without heart-rate data
 {

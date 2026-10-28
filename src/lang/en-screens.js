@@ -316,4 +316,8 @@ export default {
   "Brug {hr} som makspuls": "Use {hr} as max heart rate",
   ", 1 pas fik puls eller stigning fra filen": ", 1 session got heart rate or climb from the file",
   ", {n} pas fik puls eller stigning fra filen": ", {n} sessions got heart rate or climb from the file",
+  // Heart-rate zones by heart-rate reserve (Karvonen)
+  "Minutter løb pr. uge. Hvert løb tæller i zonen for sin gennemsnitspuls. Zonerne er pulsreserve (Karvonen) med hvilepuls {rest} og makspuls {max}: rolig under {cap}, Z3 {cap}–{z4}, Z4–Z5 fra {z4}.": "Minutes of running per week. Each run counts in the zone of its average heart rate. The zones are heart-rate reserve (Karvonen) with resting heart rate {rest} and max {max}: easy under {cap}, Z3 {cap}–{z4}, Z4–Z5 from {z4}.",
+  "Zonerne er pulsreserve (Karvonen): hvilepuls + en procent af forskellen op til makspuls ({reserve} slag). Det er det samme som Garmin og Strava med indstillingen % af pulsreserve.": "The zones are heart-rate reserve (Karvonen): resting heart rate plus a percentage of the gap up to max ({reserve} beats). It is the same as Garmin and Strava set to % of heart-rate reserve.",
+  "Zonerne er % af makspuls. Skriv din hvilepuls ind under Dig, så bruger appen pulsreserven (Karvonen) ligesom Garmin og Strava.": "The zones are % of max heart rate. Enter your resting heart rate under You, and the app uses the heart-rate reserve (Karvonen) like Garmin and Strava.",
 };
