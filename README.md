@@ -134,6 +134,13 @@ RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold t
 8 km rolig tur), så ACWR ser hele ugen. Dagen får et ✓ på "I dag", i planen og i loggen, og en styrkedag er først
 "gjort", når styrken er logget. Garmins "Strength Training"- og HIIT-rækker importeres nu også fra Activities.csv.
 
+### FIT-filer direkte fra uret
+
+Mere → Hent fra filer læser også urets egne FIT-filer (uret som drev → GARMIN → Activity), også når telefonen har
+omdøbt dem. En tur, uret aldrig fik afsluttet (den tæller i urets dagstotal, men kan ikke åbnes eller synkroniseres),
+regnes ud fra urets målinger: km, tid fra urets start/stop, gennemsnitspuls og højdemeter. Beskeden siger, at turen er
+genskabt. Kommer den senere fra Strava, bliver den ikke en dublet.
+
 ### Garmin direkte (hvilepuls, søvn og HRV)
 
 Mere → Garmin: lav en personlig API-nøgle i Garmin Connect (Indstillinger → Personal API, op til 1 år) og sæt den ind.

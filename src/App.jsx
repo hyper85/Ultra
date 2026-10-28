@@ -674,13 +674,15 @@ export default function App() {
     if (parsed.length) { saveActs(next); weeks = applyActivities(next, p.includeHikes, logBase); }
     const runs = parsed.filter((a) => a.kind === "run").length, hikes = parsed.filter((a) => a.kind === "hike").length, other = parsed.length - runs - hikes;
     const gotText = Object.values(got).map((g) => t("{label} for {n} uger", { label: g.label, n: g.n })).join(", ");
+    // A FIT file the watch never closed (no summary) is rebuilt from its samples: say so, the numbers are the app's.
+    const rebuiltText = parsed.filter((a) => a.rebuilt).map((a) => " " + t("{name} var ikke afsluttet på uret. Turen er regnet ud fra urets målinger: {km} km, {min} min, puls {hr}.", { name: a.name || a.file, km: a.km, min: a.min, hr: a.hr ?? "–" })).join("");
     const wellText = wellness.length ? " " + t("{got} lagt i loggen.", { got: gotText.charAt(0).toUpperCase() + gotText.slice(1) }) + (daysN ? " " + t("{n} dage på Overblik.", { n: daysN }) : "") + (skippedCols.length ? " " + t("Sprunget over: {list}.", { list: [...new Set(skippedCols)].slice(0, 5).join(", ") }) : "") : "";
     setImportMsg({
       warn: errors.length > 0 || (parsed.length === 0 && !wellness.length),
       text: parsed.length === 0 && !wellness.length && errors.length ? errors.join(" ")
         : parsed.length === 0 && !wellness.length ? t("Filen blev læst, men ingen rækker havde både dato og distance over 0. Tjek at det er Stravas activities.csv, Garmins CSV-eksport eller en GPX/TCX-fil.")
         : parsed.length === 0 ? wellText.trim() + (errors.length ? " " + errors.join(" ") : "")
-        : t("Læste {n} aktiviteter ({runs} løb{hikes}{other}), {added} nye{swapped}. {weeks} uger i loggen har nu km fra dit ur.", { n: parsed.length, runs, hikes: hikes ? t(", {n} vandring", { n: hikes }) : "", other: other ? t(", {n} andet", { n: other }) : "", added, swapped: (swapped ? t(", {n} indtastede erstattet af urets udgave", { n: swapped }) : "") + (enriched ? tn(enriched, ", 1 pas fik puls eller stigning fra filen", ", {n} pas fik puls eller stigning fra filen") : ""), weeks: Object.keys(weeks).length }) + wellText + (errors.length ? " " + errors.join(" ") : ""),
+        : t("Læste {n} aktiviteter ({runs} løb{hikes}{other}), {added} nye{swapped}. {weeks} uger i loggen har nu km fra dit ur.", { n: parsed.length, runs, hikes: hikes ? t(", {n} vandring", { n: hikes }) : "", other: other ? t(", {n} andet", { n: other }) : "", added, swapped: (swapped ? t(", {n} indtastede erstattet af urets udgave", { n: swapped }) : "") + (enriched ? tn(enriched, ", 1 pas fik puls eller stigning fra filen", ", {n} pas fik puls eller stigning fra filen") : ""), weeks: Object.keys(weeks).length }) + wellText + rebuiltText + (errors.length ? " " + errors.join(" ") : ""),
     });
     if (fileRef.current) fileRef.current.value = "";
     setImporting(false);
@@ -1279,7 +1281,7 @@ export default function App() {
       <details className="panel acc" id="files" open={openMore === "files"}>
         <summary><h2>{t("Hent fra filer")}</h2><span className="acc-sum">{nActs > 0 ? t("{n} aktiviteter", { n: nActs }) : t("Garmin, Strava, Excel")}</span><span className="chev" aria-hidden="true">›</span></summary>
         <div className="import">
-          <p className="muted">{t('CSV, Excel, GPX, TCX eller Stravas zip – flere filer ad gangen. Garmins rapporter (søvn, hvilepuls, vægt, VO2 max, HRV) lægges i loggen pr. uge.')}</p>
+          <p className="muted">{t('CSV, Excel, GPX, TCX, FIT eller Stravas zip – flere filer ad gangen. Garmins rapporter (søvn, hvilepuls, vægt, VO2 max, HRV) lægges i loggen pr. uge.')}</p>
           <div className="import-row">
             <input ref={fileRef} aria-label={t("Vælg filer")} type="file" multiple onChange={onFiles} disabled={importing} />
             {importing && <span className="muted">{t("Læser…")}</span>}
@@ -1335,7 +1337,7 @@ export default function App() {
               <li><b>{t("Strava, alle ture på én gang:")}</b> {t('strava.com → Settings → My Account → "Download or Delete Your Account" → Request archive. Du får en zip på mail; pak den ud og vælg')} <code>activities.csv</code>.</li>
               <li><b>{t("Strava, én tur:")}</b> {t("åbn turen → ⋯ → Export GPX.")}</li>
               <li><b>{t("Garmin Connect, mange ture:")}</b> {t('connect.garmin.com → Aktiviteter → filtrér på løb → "Eksportér CSV" øverst til højre.')}</li>
-              <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. FIT-filer kan ikke læses.")}</li>
+              <li><b>{t("Garmin Connect, én tur:")}</b> {t("åbn turen → tandhjul → Eksportér til GPX eller TCX. En FIT-fil direkte fra uret (GARMIN → Activity) virker også, også en tur uret ikke kunne gemme færdig.")}</li>
               <li><b>{t("Telefonen vil kun vise billeder, eller filen er spærret af en arbejdsprofil:")}</b> {t("åbn CSV-filen i en tekstviser, kopiér alt, og brug Indsæt teksten ovenfor.")}</li>
               <li><b>{t("Garmin Connect, hvilepuls dag for dag:")}</b> {t("connect.garmin.com i browseren (ikke Garmin-appen) → Puls → vælg 4 uger → ⋮ → Eksportér. Dagene vises på Overblik, ugerne lander i loggen. 1 år giver kun ugetal.")}</li>
               <li><b>{t("Garmin Connect, søvn:")}</b> {t('Rapporter → Søvn → vælg 1 år → Eksportér (Sleep.csv). Ugerne får "Søvn t" udfyldt.')}</li>
