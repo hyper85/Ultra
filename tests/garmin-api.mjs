@@ -41,7 +41,7 @@ ok(err && err.status === 401 && /Garmin afviste nøglen/.test(err.message) && /p
 const v2 = garminDays({ summaries: { data: [{ uuid: "x", calendarDate: "2026-10-28", heartRate: { lastSevenDaysAvgRestingValue: 53, restingValue: 50, maxValue: 150 } }] } });
 ok(v2.days["2026-10-28"]?.hr === 50, `restingValue inside heartRate (${JSON.stringify(v2.days)})`);
 const miss = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { minValue: 45, maxValue: 150 } }] } });
-ok(miss.fields["dagsoversigt.heartRate"]?.join() === "minValue,maxValue", `unknown heartRate names its inner fields: ${JSON.stringify(miss.fields)}`);
+ok(miss.fields["dagsoversigt.heartRate"]?.join() === "minValue: tal,maxValue: tal", `unknown heartRate names its inner fields: ${JSON.stringify(miss.fields)}`);
 const fb = garminDays({ summaries: { data: [{ calendarDate: "2026-10-28", heartRate: { maxValue: 150 } }] }, heartDays: [{ calendarDate: "2026-10-28", restingHeartRate: 49, heartRateValues: [[1, 60]] }] });
 ok(fb.days["2026-10-28"]?.hr === 49 && fb.found.hr === 1, "fallback: one-day heart rate gives the resting HR");
 // the one-day endpoint answers a single object with samples: it is one day, not a list of samples
@@ -52,4 +52,17 @@ const fake2 = async (url) => { calls2.push(String(url)); const u = new URL(url);
   return new Response("[]", { status: 200 }); };
 const raw2 = await garminFetch({ token: "T", start: "2026-10-01", end: "2026-10-28", fetchImpl: fake2 });
 ok(raw2.heartDays.length === 7 && calls2.filter((c) => c.includes("dailyHeartRate?date=")).length === 7 && garminDays(raw2).found.hr === 7, `fallback asks 7 days and gets 7 resting values (${raw2.heartDays.length})`);
+// the real v2 shape (28 Oct 2026): heartRate { minValue, maxValue, restingValue }, possibly wrapped or as text
+for (const [label, rv] of [["number", 51], ["text", "51"], ["wrapped", { value: 51, unit: "bpm" }]]) {
+  const r = garminDays({ summaries: { data: [{ uuid: "u", calendarDate: "2026-10-28", heartRate: { minValue: 44, maxValue: 150, restingValue: rv } }] } });
+  ok(r.days["2026-10-28"]?.hr === 51, `restingValue as ${label}`);
+}
+const empty = garminDays({ summaries: { data: [{ calendarDate: "2026-10-27", heartRate: { minValue: 44, maxValue: 150, restingValue: null } }, { calendarDate: "2026-10-28", heartRate: { minValue: { value: 44 }, maxValue: 150, restingValue: { score: 3 } } }] } });
+ok(empty.fields["dagsoversigt.heartRate"]?.join(" | ") === "minValue: {value} | maxValue: tal | restingValue: {score}", `shapes, no values: ${JSON.stringify(empty.fields)}`);
+const fake3 = async (url) => { const u = new URL(url);
+  if (u.pathname.includes("dailysummaries")) return new Response(JSON.stringify({ data: [{ calendarDate: "2026-10-28", heartRate: { restingValue: null } }] }), { status: 200 });
+  if (u.pathname.includes("dailyHeartRate")) return new Response(JSON.stringify({ userProfilePK: 1, startTimestampGMT: "x", heartRateValues: [[1, 60]] }), { status: 200 });
+  return new Response("[]", { status: 200 }); };
+const r3 = garminDays(await garminFetch({ token: "T", start: "2026-10-20", end: "2026-10-28", fetchImpl: fake3 }));
+ok(r3.fields.dagspuls?.join() === "userProfilePK,startTimestampGMT,heartRateValues", `unreadable one-day answer names its keys: ${JSON.stringify(r3.fields)}`);
 done();

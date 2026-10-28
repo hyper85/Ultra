@@ -54,6 +54,13 @@ const deep = (o, keys, test, depth = 3) => {
   return null;
 };
 const isNum = (v) => typeof v === "number" && isFinite(v);
+// A number as Garmin may send it: 52, "52", or wrapped ({ value: 52, unit: "bpm" }).
+export const num = (v) => {
+  if (isNum(v)) return v;
+  if (typeof v === "string" && /^\s*\d+(\.\d+)?\s*$/.test(v)) return +v;
+  if (v && typeof v === "object" && !Array.isArray(v)) { for (const k of ["value", "bpm", "beatsPerMinute", "average", "avg"]) { const n = num(v[k]); if (n != null) return n; } }
+  return null;
+};
 const isDate = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v);
 const dateOf = (o) => { const d = deep(o, ["calendarDate", "sleepDate", "date", "summaryDate"], isDate); return d ? d.slice(0, 10) : null; };
 const RHR = ["restingHeartRate", "restingHeartRateInBeatsPerMinute", "restingHr", "restingHR"];
@@ -64,17 +71,24 @@ const fieldNames = (list) => [...new Set(list.slice(0, 3).flatMap((o) => Object.
 // are not documented); 7-day averages, timestamps and zones are not today's value.
 const NOT_TODAY = /seven|avg|average|timestamp|time|date|zone|trend|baseline/i;
 const restingOf = (o, depth = 3) => {
-  const exact = deep(o, RHR, isNum); if (exact != null) return exact;
+  const exact = deep(o, RHR, (v) => num(v) != null); if (exact != null) return num(exact);
   const walk = (x, d) => {
     if (!x || typeof x !== "object" || d < 0) return null;
-    for (const [k, v] of Object.entries(x)) if (/resting/i.test(k) && !NOT_TODAY.test(k) && isNum(v)) return v;
+    for (const [k, v] of Object.entries(x)) if (/resting/i.test(k) && !NOT_TODAY.test(k) && num(v) != null) return num(v);
     for (const [k, v] of Object.entries(x)) if (v && typeof v === "object" && !Array.isArray(v) && !NOT_TODAY.test(k)) { const r = walk(v, d - 1); if (r != null) return r; }
     return null;
   };
   return walk(o, depth);
 };
-// The field names one level inside the heartRate section, for the "not recognised" message (names only, no values).
-const heartRateNames = (list) => { const h = list.map((o) => o?.heartRate).find((x) => x && typeof x === "object"); return h ? Object.keys(h).slice(0, 25) : null; };
+// The fields one level inside the heartRate section with their TYPE, for the "not recognised" message: names and
+// shapes only, never values ("restingValue: tom", "restingValue: {value, unit}", "minValue: tal").
+export const shapeOf = (v) => v == null ? "tom" : Array.isArray(v) ? `liste(${v.length})` : typeof v === "object" ? `{${Object.keys(v).slice(0, 6).join(", ")}}` : typeof v === "number" ? "tal" : typeof v === "string" ? (/^\s*\d/.test(v) ? "tal som tekst" : "tekst") : typeof v;
+const heartRateNames = (list) => {
+  const hs = list.map((o) => o?.heartRate).filter((x) => x && typeof x === "object"); if (!hs.length) return null;
+  // the most informative day: one where the resting field is not empty, if any
+  const h = hs.find((x) => Object.entries(x).some(([k, v]) => /resting/i.test(k) && v != null)) || hs[0];
+  return Object.entries(h).slice(0, 25).map(([k, v]) => `${k}: ${shapeOf(v)}`);
+};
 
 /* garminDays({ summaries, sleeps, hrvs }) → { days: { "YYYY-MM-DD": { hr?, sleep?, hrv? } }, found, fields }.
    Sleep in hours (one decimal), resting HR and HRV whole numbers; values outside a human range are dropped. */
@@ -90,6 +104,7 @@ export const garminDays = ({ summaries, sleeps, hrvs, heartDays } = {}) => {
   for (const o of H) { const d = dateOf(o), v = deep(o, HRV, isNum); if (d && v >= 10 && v <= 250) put(d, "hrv", Math.round(v)); }
   if (S.length && !found.hr) { fields.dagsoversigt = fieldNames(S); const h = heartRateNames(S); if (h) fields["dagsoversigt.heartRate"] = h; }
   if (D.length && !found.hr) fields.dagspuls = fieldNames(D);
+  if (!D.length && heartDays?.probe && !found.hr) fields.dagspuls = heartDays.probe;
   if (Z.length && !found.sleep) fields.søvn = fieldNames(Z);
   if (H.length && !found.hrv) fields.hrv = fieldNames(H);
   return { days, found, fields };
@@ -100,12 +115,15 @@ const chunks = (start, end, size) => { const out = []; for (let a = Date.parse(s
 /* garminFetch({ token, start, end }) → { summaries, sleeps, hrvs } (raw lists). A part Garmin refuses (404 for an
    endpoint this key does not cover) comes back empty and is named in `missing`, so the rest still arrives. */
 export const garminFetch = async ({ token, start, end, fetchImpl = fetch }) => {
-  const missing = [];
+  const missing = []; const probes = {};
   const get = async (path, q, name) => {
     const r = await fetchImpl(`${GARMIN}${path}${q ? `?${new URLSearchParams(q)}` : ""}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
     if (r.status === 401) { const e = new Error("Garmin afviste adgangsbilletten."); e.status = 401; throw e; }
     if (!r.ok) { missing.push(`${name} (${r.status})`); return []; }
-    try { return listOf(await r.json()); } catch { return []; }
+    let j; try { j = await r.json(); } catch { return []; }
+    const list = listOf(j);
+    if (!list.length && j != null) probes[name] ||= Array.isArray(j) ? [`liste(${j.length})`] : typeof j === "object" ? Object.keys(j).slice(0, 25) : [shapeOf(j)];
+    return list;
   };
   const all = (size, name, call) => Promise.all(chunks(start, end, size).map(([a, b]) => call(a, b))).then((p) => p.flat());
   const [summaries, sleeps, hrvs] = await Promise.all([
@@ -119,6 +137,7 @@ export const garminFetch = async ({ token, start, end, fetchImpl = fetch }) => {
     const last = Array.from({ length: 7 }, (_, i) => ymdUTC(Date.parse(end) - i * DAY)).filter((d) => d >= start);
     heartDays = (await Promise.all(last.map((d) => get("/wellness-service/wellness/dailyHeartRate", { date: d }, "dagspuls").then((x) => (x.length ? x : [])).catch(() => [])))).flat();
   }
+  if (!heartDays.length && probes.dagspuls) heartDays.probe = probes.dagspuls; // what the one-day endpoint answered instead
   return { summaries, sleeps, hrvs, heartDays, missing: [...new Set(missing)] };
 };
 
