@@ -788,3 +788,7 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 .paste textarea { width: 100%; margin: 8px 0; min-height: 96px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel-2); color: var(--text); border: 1px solid #3d3b38; border-radius: 10px; padding: 10px; resize: vertical; }
 .advice.update { border-left-color: var(--volt); display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 0; margin-bottom: 12px; }
 .advice.update .btn { flex: 0 0 auto; }
+
+/* Garmin key form (Mere → Garmin) */
+.garmin-key label { display: block; margin: 8px 0; }
+.garmin-key input { width: 100%; box-sizing: border-box; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

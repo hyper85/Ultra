@@ -1,6 +1,6 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, mergeWellnessDays, restingHRSeries, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY } from "./sync.js";
+import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, mergeWellnessDays, restingHRSeries, daysToWellnessCSV, wellnessIntoLog, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY, garminStatus, garminConnect, garminSync, garminDisconnect } from "./sync.js";
 import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
 // Loaded when first shown: the questionnaire (first run), race day and the stats page are not part of the start-up bundle.
 const Onboarding = lazy(() => import("./Onboarding.jsx"));
@@ -366,6 +366,49 @@ export default function App() {
     try { await stravaDisconnect(); setStrava({ connected: false, athlete: null, lastSync: null, busy: false, msg: { text: t("Strava er afbrudt. Dine ture bliver stående.") } }); }
     catch (e) { setStrava((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
   };
+  /* ---- Garmin (api/garmin.js): resting HR, sleep and HRV day by day from the runner's own Personal API key ---- */
+  const [garmin, setGarmin] = useState({ connected: null, lastSync: null, busy: false, msg: null, key: "" });
+  const garminRef = useRef({ synced: false });
+  const logRef = useRef(log); logRef.current = log;
+  // Days from Garmin take the file import's road: a 4-week-report-like table → weeks into the log, days into the store.
+  const applyGarminDays = (days) => {
+    const csv = daysToWellnessCSV(days); if (!csv) return 0;
+    let w; try { w = wellnessFromCSV(csv, "Garmin"); } catch { return 0; }
+    const wl = wellnessIntoLog(logRef.current, [w]); saveLog(wl.log);
+    if (Object.keys(w.days || {}).length) setP((prev) => ({ ...prev, wellness: mergeWellnessDays(prev.wellness, w.days) }));
+    return Object.keys(days).length;
+  };
+  const runGarminSync = async (silent = false) => {
+    setGarmin((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
+    try {
+      const r = await garminSync();
+      const n = applyGarminDays(r.days || {}); const f = r.found || {};
+      const parts = [f.hr ? tn(f.hr, "1 dag med hvilepuls", "{n} dage med hvilepuls") : null, f.sleep ? tn(f.sleep, "1 nat med søvn", "{n} nætter med søvn") : null, f.hrv ? tn(f.hrv, "1 nat med HRV", "{n} nætter med HRV") : null].filter(Boolean);
+      const unknown = r.fields ? Object.entries(r.fields).map(([k, v]) => `${k}: ${v.join(", ")}`).join(" · ") : "";
+      const text = n ? t("Hentede fra Garmin: {parts}.", { parts: parts.join(", ") }) : t("Garmin svarede, men der var ingen nye tal.");
+      setGarmin((x) => ({ ...x, connected: true, lastSync: r.lastSync || x.lastSync, busy: false, msg: silent && n === 0 && !unknown ? x.msg : { warn: !!unknown, text: text + (unknown ? " " + t("Appen genkendte ikke felterne ({fields}). Send gerne den linje, så bliver det rettet.", { fields: unknown }) : "") + (r.missing?.length ? " " + t("Ikke tilgængeligt med din nøgle: {list}.", { list: r.missing.join(", ") }) : "") } }));
+    } catch (e) { setGarmin((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
+  };
+  const connectGarmin = async () => {
+    const key = garmin.key.trim(); if (!key) return;
+    setGarmin((x) => ({ ...x, busy: true, msg: null }));
+    try { await garminConnect(key); setGarmin((x) => ({ ...x, connected: true, key: "", busy: false })); await runGarminSync(); }
+    catch (e) { setGarmin((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
+  };
+  const disconnectGarmin = async () => {
+    setGarmin((x) => ({ ...x, busy: true }));
+    try { await garminDisconnect(); setGarmin({ connected: false, lastSync: null, busy: false, key: "", msg: { text: t("Garmin er afbrudt, og nøglen er slettet her. Slet den også i Garmin Connect. Dine tal bliver stående.") } }); }
+    catch (e) { setGarmin((x) => ({ ...x, busy: false, msg: { warn: true, text: e.message } })); }
+  };
+  // Once per load, after login and the cloud pull: is Garmin connected? Then fetch what is new.
+  useEffect(() => {
+    if (!user || !ready || !pulled || garminRef.current.synced) return;
+    garminRef.current.synced = true;
+    (async () => {
+      try { const st = await garminStatus(); setGarmin((x) => ({ ...x, connected: st.connected, lastSync: st.lastSync })); if (st.connected) await runGarminSync(true); }
+      catch { setGarmin((x) => ({ ...x, connected: false })); }
+    })();
+  }, [user?.id, ready, pulled]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back from Strava (?code=…&state=…): exchange the code once the session is known, then sync.
   useEffect(() => {
     if (!user || !ready || !pulled) return;
@@ -601,19 +644,10 @@ export default function App() {
         if (!gotSheet) errors.push(...sheetErrors);
       } catch (err) { errors.push(err?.message || t("{name}: kunne ikke læses.", { name: f.name })); console.error("import", f.name, err); }
     }
-    let logBase = log; const got = {}; const skippedCols = []; let daysN = 0;
+    let logBase = log; let got = {}; let skippedCols = []; let daysN = 0;
     if (wellness.length) {
-      const n = { ...log };
-      for (const w of wellness) {
-        for (const [k, v] of Object.entries(w.weeks)) {
-          const l = { ...(n[k] || {}) };
-          // imported values win where the user has not typed a number
-          for (const [key, val] of Object.entries(v)) if (l[key] == null || l[key] === "" || l[`${key}Auto`]) { l[key] = val; l[`${key}Auto`] = true; }
-          n[k] = l;
-        }
-        for (const [key, c] of Object.entries(w.counts)) got[key] = { n: Math.max(got[key]?.n || 0, c), label: w.labels[key] };
-        skippedCols.push(...w.skipped);
-      }
+      // imported values win where the user has not typed a number (import.js wellnessIntoLog)
+      const wl = wellnessIntoLog(log, wellness); const n = wl.log; got = wl.got; skippedCols = wl.skipped;
       logBase = n; if (!parsed.length) saveLog(n);
       // Daily rows (a 4-week report) go to the profile's day store, for the day-by-day chart and the coach.
       const days = Object.assign({}, ...wellness.map((w) => w.days || {}));
@@ -1204,6 +1238,29 @@ export default function App() {
             )}
           {strava.msg && <div className={`advice ${strava.msg.warn ? "warn" : ""}`}>{strava.msg.text}</div>}
           {strava.msg && !strava.msg.warn && <button type="button" className="btn ghost small" style={{ marginTop: 8 }} onClick={() => { setView("log"); setOpenMore(null); window.scrollTo(0, 0); }}>{t("Se loggen")}</button>}
+        </div>
+      </details>
+      <details className="panel acc" id="garmin" open={openMore === "garmin"}>
+        <summary><h2>Garmin</h2><span className="acc-sum">{!syncEnabled || !user ? t("Kræver login") : garmin.connected ? `${t("forbundet")}${garmin.lastSync ? ` · ${t("synk")} ${new Date(garmin.lastSync).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : t("Ikke forbundet")}</span><span className="chev" aria-hidden="true">›</span></summary>
+        <div className="import">
+          {!syncEnabled ? <p className="muted">{t("Garmin kræver login, og login er ikke sat op i denne udgave.")}</p>
+            : !user ? <><p className="muted">{t("Garmin kræver login. Appen henter så hvilepuls, søvn og HRV selv.")}</p><button className="btn" type="button" onClick={() => setOpenMore("konto")}>{t("Log ind")}</button></>
+            : garmin.connected ? (
+              <>
+                <p className="muted">{t("Hvilepuls, søvn og HRV hentes dag for dag, hver gang du åbner appen. Ture kommer stadig fra Strava.")}</p>
+                <div className="import-row">
+                  <button className="btn" type="button" disabled={garmin.busy} onClick={() => runGarminSync()}>{garmin.busy ? t("Henter…") : t("Hent nu")}</button>
+                  <button className="btn ghost" type="button" disabled={garmin.busy} onClick={disconnectGarmin}>{t("Afbryd Garmin")}</button>
+                </div>
+              </>
+            ) : (
+              <form className="garmin-key" onSubmit={(e) => { e.preventDefault(); connectGarmin(); }}>
+                <p className="muted">{t("Lav en personlig API-nøgle i Garmin Connect (Indstillinger → Personal API, gyldig 1 år) og sæt den ind her. Den sendes én gang til appens server, gemmes dér og vises aldrig igen. Del den ikke andre steder.")}</p>
+                <label>{t("Garmin-nøgle")}<input type="password" autoComplete="off" spellCheck={false} value={garmin.key} onChange={(e) => setGarmin((x) => ({ ...x, key: e.target.value }))} placeholder={t("indsæt nøglen")} /></label>
+                <button className="btn" type="submit" disabled={garmin.busy || garmin.connected === null || garmin.key.trim().length < 20}>{garmin.busy ? t("Et øjeblik…") : t("Forbind Garmin")}</button>
+              </form>
+            )}
+          {garmin.msg && <div className={`advice ${garmin.msg.warn ? "warn" : ""}`}>{garmin.msg.text}</div>}
         </div>
       </details>
       <details className="panel acc" id="files" open={openMore === "files"}>
