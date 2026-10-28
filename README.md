@@ -27,7 +27,7 @@ med step-ups, B = ryg og core (træk, rygstræk, to core-øvelser, bæring). Tr�
 
 ## Hvilepuls dag for dag
 
-Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag.
+Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag. Årsrapporten (1 år) har ét ugesnit pr. række og lægges kun i ugeloggen, så dagsværdierne bliver stående.
 Overblik viser de sidste 28 dage mod din normal (medianen) og siger, når dagens tal ligger 4 eller 7 slag over; AI-træneren
 får samme serie og bruger den som restitutionsmål. Ugernes gennemsnit lander stadig i loggen. Skærmbilleder kan ikke
 læses, og appen siger hvor CSV-filen hentes.
