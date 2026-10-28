@@ -1,5 +1,6 @@
 import { ymd, parseLocal, addDays, mondayOf, kind, restingHRSeries } from "./import.js";
 import { t } from "./i18n.js";
+import { hrAt, hrShare, karvonen } from "./hr.js";
 
 /* ================= insights: what the app has learned about the runner =================
    Pure functions over the plan, the weekly log and the activities. Everything here is deterministic and
@@ -112,8 +113,8 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const longDone = longWeeks.filter((r) => dayKm(r.key, r.longDay) >= r.lng * 0.8).length;
   const longRate = longWeeks.length >= 3 ? longDone / longWeeks.length : null;
 
-  // Easy runs: heart rate against the easy cap (70 % of max).
-  const cap = maxHR ? Math.round(maxHR * 0.7) : null;
+  // Easy runs: heart rate against the easy cap (the top of Z2: 70 % of the heart-rate reserve, or of max without a resting HR).
+  const cap = hrAt(0.7, { maxHR, restHR: p.restHR });
   const easyRuns = [];
   for (const r of done) for (const i of [0, 1, 2, 3, 4, 5, 6]) {
     if (i === r.longDay || i === r.qDay) continue;
@@ -216,10 +217,11 @@ export function hrPeak(acts = {}, { until, days = 365 } = {}) {
   const top = list[0];
   return { hr: top.maxHr, day: top.day, name: top.name || "", n: list.length, skipped: skipped.map((a) => ({ hr: a.maxHr, day: a.day })) };
 }
-// Run minutes per week by the zone of each run's average heart rate (% of max): easy Z1–Z2 (< 70 %), Z3 (70–80 %),
-// hard Z4–Z5 (>= 80 %). The watch's own time-in-zone is not in its exports, so a run counts whole in its average's zone.
+// Run minutes per week by the zone of each run's average heart rate, as a share of the heart-rate reserve (Karvonen,
+// hr.js; % of max without a resting HR): easy Z1–Z2 (< 70 %), Z3 (70–80 %), hard Z4–Z5 (>= 80 %). The watch's own
+// time-in-zone is not in its exports, so a run counts whole in its average's zone.
 export const ZONE_BANDS = [["easy", 0, 0.7], ["mid", 0.7, 0.8], ["hard", 0.8, 9]];
-export function hrZoneWeeks(acts = {}, { maxHR, until, weeks = 12, includeHikes = false } = {}) {
+export function hrZoneWeeks(acts = {}, { maxHR, restHR, until, weeks = 12, includeHikes = false } = {}) {
   if (!maxHR || !until) return { rows: [], last4: null };
   const end = mondayOf(parseLocal(until));
   const keys = Array.from({ length: weeks }, (_, i) => ymd(addDays(end, -7 * (weeks - 1 - i))));
@@ -230,7 +232,7 @@ export function hrZoneWeeks(acts = {}, { maxHR, until, weeks = 12, includeHikes 
     if (!(k === "run" || (includeHikes && k === "hike")) || a.day > until) continue;
     const r = at[ymd(mondayOf(parseLocal(a.day)))]; if (!r) continue;
     const min = a.min || Math.round((a.km || 0) * 6.5); if (!(min > 0)) continue;
-    const pct = a.hr ? a.hr / maxHR : null;
+    const pct = a.hr ? hrShare(a.hr, { maxHR, restHR }) : null;
     const z = pct == null ? "none" : ZONE_BANDS.find(([, lo, hi]) => pct >= lo && pct < hi)[0];
     r[z] += min; r.n++;
   }
@@ -264,10 +266,11 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
   };
   const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr });
   const hvilepuls_dagligt = daily.rows.length ? { normal_28d: daily.normal, seneste: daily.rows[daily.rows.length - 1], sidste_28_dage: daily.rows.map((r) => [r.day, r.hr]) } : null;
-  const zw = hrZoneWeeks(acts, { maxHR, until: todayStr, weeks: 8, includeHikes: !!p.includeHikes });
+  const hp = { maxHR, restHR: p.restHR };
+  const zw = hrZoneWeeks(acts, { ...hp, until: todayStr, weeks: 8, includeHikes: !!p.includeHikes });
   const peak = hrPeak(acts, { until: todayStr });
   const pulszoner = zw.last4 ? {
-    grundlag: `makspuls ${maxHR}; hvert løb tæller i zonen for sin gennemsnitspuls (rolig < 70 %, Z3 70–80 %, hård >= 80 %)`,
+    grundlag: `${karvonen(hp) ? `pulsreserve (Karvonen): hvilepuls ${hp.restHR}, makspuls ${maxHR}` : `% af makspuls ${maxHR}`}; hvert løb tæller i zonen for sin gennemsnitspuls: rolig under ${hrAt(0.7, hp)}, z3 ${hrAt(0.7, hp)}–${hrAt(0.8, hp)}, hård fra ${hrAt(0.8, hp)}`,
     sidste_4_uger_pct: { rolig: zw.last4.easy, z3: zw.last4.mid, hård: zw.last4.hard },
     pr_uge_min: zw.rows.map((r) => ({ uge_fra: r.key, rolig: r.easy, z3: r.mid, hård: r.hard, uden_puls: r.none })),
   } : null;
@@ -276,6 +279,7 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
     status_nu,
     hvilepuls_dagligt,
     pulszoner,
+    pulszoner_grænser: maxHR ? { model: karvonen(hp) ? "pulsreserve (Karvonen)" : "% af makspuls", z1: [hrAt(0.5, hp), hrAt(0.6, hp)], z2: [hrAt(0.6, hp), hrAt(0.7, hp)], z3: [hrAt(0.7, hp), hrAt(0.8, hp)], z4: [hrAt(0.8, hp), hrAt(0.9, hp)], z5: [hrAt(0.9, hp), maxHR] } : null,
     makspuls_målt: peak ? { puls: peak.hr, dato: peak.day, sprunget_over_som_fejlmåling: peak.skipped } : null,
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
       hverdag: (p.sched?.A || []).map((d, i) => `${DAYS[i]}: ${d.avail}${d.time ? " " + d.time : ""}${d.note ? " (" + d.note + ")" : ""}`) },

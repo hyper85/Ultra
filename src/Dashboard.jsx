@@ -3,6 +3,7 @@ import { watchHistory, hrZoneWeeks } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { predictFinish, fmtTime } from "./race.js";
 import { t, tn, locale } from "./i18n.js";
+import { hrAt, karvonen } from "./hr.js";
 
 /* Fremskridt → Overblik: the runner's numbers on one screen (App.jsx renders the title and the Overblik · Log segment
    above). One grid of stat tiles (the ACWR tile scrolls to its chart), then the pictures: weekly km against the plan,
@@ -177,15 +178,15 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
           <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
           <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} />
         </div>}
-        {(() => { const zw = hrZoneWeeks(acts, { maxHR, until: todayKey, weeks: 12, includeHikes }); const withHR = zw.rows.filter((r) => r.easy + r.mid + r.hard > 0); if (withHR.length < 3) return null;
+        {(() => { const hp = { maxHR, restHR: p.restHR }; const zw = hrZoneWeeks(acts, { ...hp, until: todayKey, weeks: 12, includeHikes }); const withHR = zw.rows.filter((r) => r.easy + r.mid + r.hard > 0); if (withHR.length < 3) return null;
           const byKey = Object.fromEntries(plan.rows.map((r) => [r.key, r])); const rows = zw.rows.map((r) => ({ ...r, label: byKey[r.key] ? weekLabel(byKey[r.key]) : fmtDay(r.key) }));
-          const l = zw.last4; const cap = Math.round(maxHR * 0.7); const unknown = zw.rows.reduce((s, r) => s + r.none, 0); return (
+          const l = zw.last4; const cap = hrAt(0.7, hp); const unknown = zw.rows.reduce((s, r) => s + r.none, 0); return (
           <div className="panel" id="chart-zones">
             <h2 style={{ margin: 0 }}>{t("Pulszoner pr. uge")}</h2>
             <div className="muted legend">{ZONES.map(([z, n]) => <span key={z}><i className={`sw zone-${z}`} /> {t(n)}</span>)}</div>
             {l && <p className={`zone-sum ${l.easy >= 70 ? "good" : l.easy >= 50 ? "warn" : "bad"}`}>{t("Sidste 4 uger: {easy} % roligt, {mid} % Z3, {hard} % Z4–Z5.", l)} {l.easy >= 70 ? t("Godt: det meste er roligt.") : t("Målet er omkring 80 % roligt. Hold de rolige ture under {cap} i puls.", { cap })}</p>}
             <ZoneBars rows={rows} cur={cur.key} />
-            <p className="muted">{t("Minutter løb pr. uge. Hvert løb tæller i zonen for sin gennemsnitspuls, med makspuls {max}. Rolig er under {cap}, Z3 {cap}–{z4}, Z4–Z5 fra {z4}.", { max: maxHR, cap, z4: Math.round(maxHR * 0.8) })}{unknown > 0 ? " " + t("{n} min løb uden puls er ikke med.", { n: unknown }) : ""}</p>
+            <p className="muted">{karvonen(hp) ? t("Minutter løb pr. uge. Hvert løb tæller i zonen for sin gennemsnitspuls. Zonerne er pulsreserve (Karvonen) med hvilepuls {rest} og makspuls {max}: rolig under {cap}, Z3 {cap}–{z4}, Z4–Z5 fra {z4}.", { rest: hp.restHR, max: maxHR, cap, z4: hrAt(0.8, hp) }) : t("Minutter løb pr. uge. Hvert løb tæller i zonen for sin gennemsnitspuls, med makspuls {max}. Rolig er under {cap}, Z3 {cap}–{z4}, Z4–Z5 fra {z4}.", { max: maxHR, cap, z4: hrAt(0.8, hp) })}{unknown > 0 ? " " + t("{n} min løb uden puls er ikke med.", { n: unknown }) : ""}</p>
             <details className="zone-table"><summary>{t("Vis tallene")}</summary>
               <table><thead><tr><th>{t("Uge")}</th>{ZONES.map(([z, n]) => <th key={z} className="num">{t(n)}</th>)}</tr></thead>
                 <tbody>{rows.filter((r) => r.easy + r.mid + r.hard + r.none > 0).map((r) => <tr key={r.key}><td>{r.label}</td>{ZONES.map(([z]) => <td key={z} className="num">{r[z]}</td>)}</tr>)}</tbody></table>

@@ -136,6 +136,11 @@ RPE og tæller i ugens belastning som minutter × RPE med halv vægt i forhold t
 
 ### Garmin-aktiviteter og pulszoner
 
+Pulszonerne er pulsreserve (Karvonen), ligesom Garmin og Strava med "% af pulsreserve": hvilepuls + en procent af
+forskellen op til makspuls. Med hvilepuls 49 og makspuls 186 er grænserne 131, 145, 159 og 172, og rolige ture har
+loft ved 145. Uden hvilepuls i profilen bruger appen % af makspuls. Zonetabellen, dagens råd, sessionernes pulstal,
+Overblik og træneren regner alle sammen.
+
 Garmins Activities.csv (connect.garmin.com → Aktiviteter → Alle → Eksportér CSV) kan lægges ind oven på Strava. Et pas,
 appen allerede har fra Strava, bliver ikke en dublet: det får bare den puls, makspuls og stigning, Strava-kopien
 manglede. Indendørs pas (cykling, trappemaskine, MMA, cardio), hvor Garmin skriver bevægelsestid 0, tæller med deres
@@ -143,8 +148,8 @@ samlede tid. Stigning læses fra "Total Ascent" (også "1,091"), og løbebåndst
 
 Pulszoner-kortet under Mere viser den højeste puls, målt på et løb det seneste år. Én enlig top, mere end 4 slag over
 den næste, springes over som fejlmåling. Er den målte højere end makspulsen i brug, kan du bruge den med ét tryk.
-Overblik viser "Pulszoner pr. uge": løbeminutter pr. uge efter hvert løbs gennemsnitspuls, rolig under 70 % af
-makspuls, Z3 70–80 %, Z4–Z5 derover, og andelen roligt de sidste 4 uger mod målet på cirka 80 %. Garmins eksport har
+Overblik viser "Pulszoner pr. uge": løbeminutter pr. uge efter hvert løbs gennemsnitspuls, rolig under 70 %,
+Z3 70–80 %, Z4–Z5 derover, og andelen roligt de sidste 4 uger mod målet på cirka 80 %. Garmins eksport har
 ikke tid i zoner pr. pas, så et løb tæller helt i zonen for sit gennemsnit. Træneren får de samme tal.
 
 Kroppen ud over løbet: i spørgeskemaet vælger du, hvad du vil med kroppen (holde vægten, tabe dig, bygge muskler

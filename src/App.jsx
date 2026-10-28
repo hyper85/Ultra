@@ -14,6 +14,7 @@ import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
 import { buildInsights, coachContext, hrPeak } from "./insights.js";
+import { hrAt, karvonen } from "./hr.js";
 import { describeSession, describeLong, describeEasy, sessionName, longRunPlan } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 import { t, tn, locale, getLang } from "./i18n.js";
@@ -499,6 +500,7 @@ export default function App() {
   const liftName = (i) => { const l = liftLetter(i); return t(l ? `Styrke ${l}` : "Styrke"); };
   const liftShort = (i) => "S" + liftLetter(i); // "SA"/"SB" in the small week strip
   const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
+  const hp = { maxHR, restHR: p.restHR }; // zones by heart-rate reserve (Karvonen) when the resting HR is known – hr.js
   const bmr = Math.round(10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "f" ? -161 : 5));
   // Calendar days from today's date to the race date, not from the clock: counted from midnight, so the number only
   // changes when the date does (rounding absorbs the hour lost or gained when summer time starts or ends).
@@ -670,10 +672,10 @@ export default function App() {
       {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
-        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { maxHR, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
+        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { ...hp, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
         : null}
-      {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", maxHR, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
-      {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: Math.round(maxHR * 0.7), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
+      {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", ...hp, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
+      {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: hrAt(0.7, hp), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
       {full && !r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
       {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
       <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
@@ -724,14 +726,14 @@ export default function App() {
     const v = r.days[i] || 0; const d = r.sched?.[i] || {}; const lift = liftDays.includes(i);
     const long = i === r.longDay && v > 0, hard = i === r.qDay && v > 0, b2b = r.sun > 0 && i === (r.longDay + 1) % 7 && v > 0;
     const raceDay = day === p.raceDate;
-    const hrCap = Math.round(maxHR * 0.7); const carbs = r.phase === "Ultra-prep" ? "60–90" : "40–60";
+    const hrCap = hrAt(0.7, hp); const carbs = r.phase === "Ultra-prep" ? "60–90" : "40–60";
     const pace = insights.summary.easyPace;
     const lines = [];
     const ev = r.events?.[i];
     if (raceDay) lines.push([`${p.raceName || t("Løbet")} · ${p.raceKm} km`, t("Start absurd roligt, gå hver stigning, spis fra minut 30.")]);
     else if (ev) lines.push([`★ ${ev.name}${ev.km ? ` · ${ev.km} km` : ""}`, [ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null, ev.note || null].filter(Boolean).join(" · ")]);
-    else if (hard) { const g = describeSession(r.quality, { maxHR, easyPace: pace }); lines.push([t("Hård session {km} km · {quality}", { km: v, quality: sessionName(r.quality) }), g.zone]); }
-    else if (long) lines.push([t("Lang tur {km} km", { km: v }), t("Puls under {hr} · gå stigningerne · {carbs} g kulhydrat/t", { hr: Math.round(maxHR * 0.75), carbs })]);
+    else if (hard) { const g = describeSession(r.quality, { ...hp, easyPace: pace }); lines.push([t("Hård session {km} km · {quality}", { km: v, quality: sessionName(r.quality) }), g.zone]); }
+    else if (long) lines.push([t("Lang tur {km} km", { km: v }), t("Puls under {hr} · gå stigningerne · {carbs} g kulhydrat/t", { hr: hrAt(0.75, hp), carbs })]);
     else if (b2b) lines.push([t("Back-to-back {km} km", { km: v }), t("På trætte ben · puls under {hr}", { hr: hrCap })]);
     else if (v > 0) lines.push([t("Rolig tur {km} km", { km: v }), pace ? t("Snakketempo · puls under {hr} · ca. {pace}/km", { hr: hrCap, pace }) : t("Snakketempo · puls under {hr}", { hr: hrCap })]);
     if (lift && !raceDay && !ev) { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (ses) lines.push([`${ses.name}${ses.focus ? ` · ${ses.focus}` : ""}${ses.minutes ? ` · ${t("ca. {n} min", { n: ses.minutes })}` : ""}`, ses.exercises.map((e) => e.label || e.name).join(" · ")]); }
@@ -1018,7 +1020,7 @@ export default function App() {
   const upcoming = planRows.filter((r) => r.key >= cur.key);
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
-  const hrCap70 = Math.round(maxHR * 0.7);
+  const hrCap70 = hrAt(0.7, hp);
   let advice = [cur.qDay != null ? t("Hård session {day}: {quality}", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : t("Kun roligt"), cur.longDay != null && cur.lng > 0 ? t("lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) }) : null].filter(Boolean).join(" · ") + ".";
   let warn = false;
   if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
@@ -1305,7 +1307,7 @@ export default function App() {
           const raceDay = todayStr === p.raceDate;
           const ev = !raceDay ? cur.events?.[ti] || null : null; // an event from the coach plan replaces the plan's day
           const kind = ev ? ev.name : raceDay ? t("Løbsdag") : v ? (long ? t("Lang tur") : hard ? t("Hård session") : b2b ? t("Back-to-back") : t("Rolig tur")) : lift ? liftName(ti) : t("Hvile");
-          const easy = v > 0 && !long && !hard && !b2b && !ev; const hrCap = Math.round(maxHR * 0.7);
+          const easy = v > 0 && !long && !hard && !b2b && !ev; const hrCap = hrAt(0.7, hp);
           const carbs = cur.phase === "Ultra-prep" ? "60–90" : "40–60";
           const session = lift ? sessionFor(ti) : null;
           const todayNut = nutritionFor(dayTypeOf({ km: v, isLong: long, isHard: hard, isRace: raceDay, lift }), { time: d.time || "", km: v, carbsPerHour: carbs });
@@ -1385,14 +1387,14 @@ export default function App() {
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{sessionName(cur.quality)}</b></div>}
-                {hard && <div className="today-guide">{describeSession(cur.quality, { maxHR, easyPace: insights.summary.easyPace }).text}</div>}
-                {easy && <div className="today-sub">{describeEasy({ km: v, maxHR, easyPace: insights.summary.easyPace })}</div>}
+                {hard && <div className="today-guide">{describeSession(cur.quality, { ...hp, easyPace: insights.summary.easyPace }).text}</div>}
+                {easy && <div className="today-sub">{describeEasy({ km: v, ...hp, easyPace: insights.summary.easyPace })}</div>}
                 {ev && <div className="today-sub"><b>{[ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null].filter(Boolean).join(" · ")}</b></div>}
                 {ev && ev.result && <div className="today-ran">✓ {t("Gennemført")}: {[ev.result.km ? `${ev.result.km} km` : null, ev.result.total || null, ev.result.ascent ? `${ev.result.ascent} m+` : null, ev.result.avgHR ? `${t("puls")} ${ev.result.avgHR}` : null].filter(Boolean).join(" · ")}</div>}
                 {ev && (ev.note || !ev.done) && <div className="today-sub">{ev.note || (ev.kind === "walk" ? t("Spis fra første time, drik før du er tørstig, og tjek fødderne ved hver post. Eventet erstatter planens tur i dag.") : t("Start roligt, gå de stejle stigninger, og spis fra minut 30. Eventet erstatter planens tur i dag."))}</div>}
                 {ev && (ev.hours || 0) > 6 && <div className="today-sub muted">{t("Over 6 timer: næste uge er sat til restitution.")}</div>}
                 {raceDay && <div className="today-sub">{t("Start absurd roligt, gå hver stigning, spis fra minut 30. Ingen nye sko, intet nyt mad.")}</div>}
-                {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, maxHR, phase: cur.phase })}</div>}
+                {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, ...hp, phase: cur.phase })}</div>}
                 {long && !raceDay && !(ran > 0) && (() => { const l = longRunPlan({ km: v, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: cur.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <div className="today-sub fuel">{l}</div> : null; })()}
                 {b2b && <div className="today-sub">{t("Back-to-back på trætte ben. Puls under {hr}. {carbs} g kulhydrat/t.", { hr: hrCap, carbs })}</div>}
                 {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
@@ -1805,6 +1807,7 @@ export default function App() {
               <details className="panel acc">
                 <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
+                <p className="muted">{karvonen(hp) ? t("Zonerne er pulsreserve (Karvonen): hvilepuls + en procent af forskellen op til makspuls ({reserve} slag). Det er det samme som Garmin og Strava med indstillingen % af pulsreserve.", { reserve: maxHR - hp.restHR }) : t("Zonerne er % af makspuls. Skriv din hvilepuls ind under Dig, så bruger appen pulsreserven (Karvonen) ligesom Garmin og Strava.")}</p>
                 {(() => { const pk = hrPeak(acts, { until: todayKey }); if (!pk) return null; const higher = pk.hr > maxHR; return (
                   <div className={`hr-peak${higher || !p.maxHR ? " offer" : ""}`}>
                     <p>{t("Højeste puls målt på et løb det seneste år: {hr} ({d}).", { hr: pk.hr, d: parseLocal(pk.day).toLocaleDateString(locale(), { day: "numeric", month: "short" }) })}
@@ -1812,7 +1815,7 @@ export default function App() {
                       {higher ? ` ${t("Den er over den makspuls, appen bruger, så dine zoner er sat for lavt.")}` : !p.maxHR ? ` ${t("Din rigtige makspuls er mindst så høj.")}` : ""}</p>
                     {pk.hr !== +p.maxHR && (higher || !p.maxHR) && <button type="button" className="ghost" onClick={() => setP({ ...p, maxHR: pk.hr })}>{t("Brug {hr} som makspuls", { hr: pk.hr })}</button>}
                   </div>); })()}
-                <table><tbody>{zones.map(([n, lo, hi, txt]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{Math.round(maxHR * lo)}–{Math.round(maxHR * hi)}</td><td className="muted">{txt}</td></tr>)}</tbody></table>
+                <table><tbody>{zones.map(([n, lo, hi, txt]) => <tr key={n}><td><b>{n}</b></td><td className="num" style={{ whiteSpace: "nowrap" }}>{hrAt(lo, hp)}–{hrAt(hi, hp)}</td><td className="muted">{txt}</td></tr>)}</tbody></table>
               </details>
               </>
             )}
