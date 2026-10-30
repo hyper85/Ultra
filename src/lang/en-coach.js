@@ -42,7 +42,7 @@ export default {
   // coach advice
   "ACWR {v} denne uge": "ACWR {v} this week",
   "Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.": "Coach advice ({reason}): the week is cut to {km} km. Easy only, heart rate below {hr}.",
-  "Hvilepuls {hr} er {d} over din normal: hold igen og sov mere. Ved +7 skæres ugen ned.": "Resting HR {hr} is {d} above your normal: hold back and sleep more. At +7 the week is cut.",
+  "Hvilepuls {hr} er {d} over din normal ({n}): hold igen og sov mere. Ved +7 skæres ugen ned.": "Resting HR {hr} is {d} above your normal ({n}): hold back and sleep more. At +7 the week is cut.",
   "Trænerråd": "Coach advice",
   "ingen hård session": "no hard session",
   "Restitution efter {name}: {km} km, kun roligt. {acwr}": "Recovery after {name}: {km} km, easy only. {acwr}",
