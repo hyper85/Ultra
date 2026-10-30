@@ -95,3 +95,17 @@ export const garminStatus = () => garminCall("status");
 export const garminConnect = (key) => garminCall("connect", { key });
 export const garminSync = (opts = {}) => garminCall("sync", opts); // { full: true } fetches the whole first range again
 export const garminDisconnect = () => garminCall("disconnect");
+
+/* Delete the account (api/account.js): Strava and Garmin connections, the synced data and the login itself. */
+export const deleteMyAccount = async () => {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error(t("Log ind igen for at slette din konto."));
+  let r;
+  try { r = await fetch("/api/account", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ op: "delete" }) }); }
+  catch { throw new Error(t("Kunne ikke kontakte serveren. Tjek din internetforbindelse.")); }
+  let body = null; try { body = await r.json(); } catch { /* not json */ }
+  if (!r.ok) throw new Error(body?.error || t("Kontoen kunne ikke slettes ({status}).", { status: r.status }));
+  try { await supabase.auth.signOut(); } catch { /* the login is gone already */ }
+  return body;
+};

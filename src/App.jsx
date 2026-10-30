@@ -1,8 +1,10 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, mergeWellnessDays, restingHRSeries, daysToWellnessCSV, wellnessIntoLog, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY, garminStatus, garminConnect, garminSync, garminDisconnect } from "./sync.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY, garminStatus, garminConnect, garminSync, garminDisconnect, deleteMyAccount } from "./sync.js";
 import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
 // Loaded when first shown: the questionnaire (first run), race day and the stats page are not part of the start-up bundle.
+import ErrorBoundary from "./ErrorBoundary.jsx";
+import { cleanActs, cleanLog, cleanProfile } from "./sanitize.js";
 const Onboarding = lazy(() => import("./Onboarding.jsx"));
 const RaceDay = lazy(() => import("./RaceDay.jsx"));
 const Dashboard = lazy(() => import("./Dashboard.jsx"));
@@ -279,8 +281,10 @@ export default function App() {
   useEffect(() => { (async () => {
     const meta = await store.get("ultraplan-meta"); if (meta?.updatedAt) metaRef.current = meta;
     const sp = await store.get("ultraplan-profile");
-    if (sp) setPRaw(migrateProfile(sp));
-    const sl = await store.get("ultraplan-log");
+    if (sp) setPRaw(migrateProfile(cleanProfile(sp)));
+    const slRaw = await store.get("ultraplan-log");
+    // Legacy logs keyed by week number are re-keyed below before cleaning (cleanLog keeps date keys only).
+    const sl = slRaw && typeof slRaw === "object" && Object.keys(slRaw).some((k) => /^\d+$/.test(k)) ? slRaw : slRaw ? cleanLog(slRaw) : slRaw;
     if (sl) {
       // Logs saved before v2 were keyed by week number; re-key them by the week's Monday using the start date they were logged against.
       const legacy = Object.keys(sl).some((k) => /^\d+$/.test(k));
@@ -288,10 +292,10 @@ export default function App() {
         const start = parseLocal(sp?.startDate || PLAN_START);
         const n = {};
         for (const [k, v] of Object.entries(sl)) n[/^\d+$/.test(k) ? ymd(addDays(start, (+k - 1) * 7)) : k] = v;
-        setLog(n); store.set("ultraplan-log", n);
+        const cn = cleanLog(n); setLog(cn); store.set("ultraplan-log", cn);
       } else setLog(sl);
     }
-    const sa = await store.get("ultraplan-activities"); if (sa) setActs(sa);
+    const sa = await store.get("ultraplan-activities"); if (sa) setActs(cleanActs(sa));
     setReady(true);
   })(); }, []);
   useEffect(() => { if (ready) store.set("ultraplan-profile", p); }, [p, ready]);
@@ -478,6 +482,14 @@ export default function App() {
     for (const k of ["ultraplan-profile", "ultraplan-log", "ultraplan-activities", "ultraplan-meta", "ultraplan-owner"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
   };
   const logout = async () => { await signOut(); clearLocal(); setSyncMsg(""); setAuthMsg(null); };
+  // Delete the account (Mere → Konto): two taps, then the server deletes connections, synced data and the login, and
+  // the device is wiped. Required by app stores; also simply the runner's right.
+  const [delAcc, setDelAcc] = useState({ ask: false, busy: false, msg: null });
+  const deleteAccount = async () => {
+    setDelAcc({ ask: true, busy: true, msg: null });
+    try { await deleteMyAccount(); clearLocal(); setSyncMsg(""); setAuthMsg(null); setDelAcc({ ask: false, busy: false, msg: null }); window.alert(t("Din konto og alle dine data er slettet. Husk også at slette Garmin-nøglen i Garmin Connect, hvis du havde forbundet Garmin.")); }
+    catch (e) { setDelAcc({ ask: true, busy: false, msg: e.message }); }
+  };
   // On login: newest copy wins. A device that has never been used keeps nothing local, so the cloud copy is taken.
   useEffect(() => {
     if (!user || !ready) { pulledRef.current = false; setPulled(false); return; }
@@ -496,8 +508,9 @@ export default function App() {
         const remote = await Promise.race([pullRemote(user.id), new Promise((_, rej) => setTimeout(() => rej(new Error(t("skyen svarede ikke – viser det, der ligger på enheden"))), 12000))]);
         const localAt = switched ? 0 : metaRef.current.updatedAt || 0;
         if (remote && remote.updatedAt >= localAt) {
-          setPRaw(migrateProfile(remote.profile || {})); setLog(remote.log || {}); setActs(remote.activities || {});
-          store.set("ultraplan-profile", remote.profile || {}); store.set("ultraplan-log", remote.log || {}); store.set("ultraplan-activities", remote.activities || {});
+          const rp = cleanProfile(remote.profile || {}), rl = cleanLog(remote.log || {}), ra = cleanActs(remote.activities || {});
+          setPRaw(migrateProfile(rp)); setLog(rl); setActs(ra);
+          store.set("ultraplan-profile", rp); store.set("ultraplan-log", rl); store.set("ultraplan-activities", ra);
           metaRef.current = { updatedAt: remote.updatedAt }; store.set("ultraplan-meta", metaRef.current);
           setSyncMsg(t("Hentet fra skyen {time}", { time: clock() }));
         } else if (localAt > 0) {
@@ -1187,8 +1200,8 @@ export default function App() {
     </div>
   );
 
-  if (!p.onboarded) return <Suspense fallback={null}><Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} buildPlan={buildPlan}
-    onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} /></Suspense>;
+  if (!p.onboarded) return <ErrorBoundary area="onboarding"><Suspense fallback={null}><Onboarding initial={p} rerun={!!p.rerun} DAYS={DAYS} AVAIL={AVAIL_T} LEVELS={LEVELS_T} buildPlan={buildPlan}
+    onDone={(final) => { const { rerun, ...rest } = final; setP({ ...rest, onboarded: true, v: PROFILE_VERSION }); window.scrollTo(0, 0); }} /></Suspense></ErrorBoundary>;
 
   // Fremskridt → Log: the week table alone, newest first; pre-plan weeks behind a button below it.
   const renderLog = () => (
@@ -1620,6 +1633,18 @@ export default function App() {
                     <button className="btn" type="submit" disabled={inviting || !inviteEmail.trim()}>{inviting ? t("Sender…") : t("Inviter")}</button>
                   </form>
                   {inviteMsg && <div className={`advice ${inviteMsg.warn ? "warn" : ""}`}>{inviteMsg.text}</div>}
+                  <h3 className="sub">{t("Slet konto")}</h3>
+                  {!delAcc.ask ? <>
+                    <p className="muted">{t("Sletter din konto, alt der er gemt i skyen, og forbindelserne til Strava og Garmin. Kan ikke fortrydes.")}</p>
+                    <button className="btn ghost danger" type="button" onClick={() => setDelAcc({ ask: true, busy: false, msg: null })}>{t("Slet min konto")}</button>
+                  </> : <div className="advice warn del-acc">
+                    <p>{t("Er du sikker? Konto, indstillinger, log, ture og forbindelserne til Strava og Garmin slettes for altid.")}</p>
+                    <div className="import-row">
+                      <button className="btn danger" type="button" disabled={delAcc.busy} onClick={deleteAccount}>{delAcc.busy ? t("Sletter…") : t("Ja, slet min konto")}</button>
+                      <button className="btn ghost" type="button" disabled={delAcc.busy} onClick={() => setDelAcc({ ask: false, busy: false, msg: null })}>{t("Fortryd")}</button>
+                    </div>
+                    {delAcc.msg && <p className="del-err">{delAcc.msg}</p>}
+                  </div>}
                 </>
               ) : (
                 <div>
@@ -1775,7 +1800,7 @@ export default function App() {
             <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
             <div className="seg" role="tablist">{[["overblik", "Overblik"], ["log", "Log"]].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo(0, 0); }}>{t(l)}</button>)}</div>
             {emptyCard}
-            {view === "log" ? renderLog() : <Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} maxHR={maxHR} /></Suspense>}
+            {view === "log" ? renderLog() : <ErrorBoundary area="overblik"><Suspense fallback={null}><Dashboard plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} maxHR={maxHR} /></Suspense></ErrorBoundary>}
           </section>
         )}
         <section className="stack">
@@ -1884,7 +1909,7 @@ export default function App() {
 
           <details className="panel acc" id="raceday" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
             <summary><h2>{t("Løbsdag")}</h2><span className="acc-sum">{t("pacing · mad · pakkeliste")}</span><span className="chev" aria-hidden="true">›</span></summary>
-            {openRace && <Suspense fallback={null}><RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} /></Suspense>}
+            {openRace && <ErrorBoundary area="raceday"><Suspense fallback={null}><RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} /></Suspense></ErrorBoundary>}
           </details>
           </>)}
 

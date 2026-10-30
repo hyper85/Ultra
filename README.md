@@ -229,3 +229,11 @@ alt andet via chat completions. Uden nøgle viser appen en venlig besked i stede
 hos udbyderen, står det i chatten.
 
 Samtalen gemmes kun på enheden. Ikke lægefaglig rådgivning.
+
+## Robusthed og Play Store
+
+`bash scripts/test-all.sh` kører alle tests: røgtest over hele appen (alle faner, dansk og engelsk, 360/390/1280 px),
+ødelagte data, fejlgrænsen, Garmin, FIT og resten. En fejl i én skærm viser et kort med "Prøv igen", aldrig en hvid
+side, og ødelagte data renses ved indlæsning. Mere → Konto → Slet min konto sletter konto, skydata og forbindelser.
+Tjeklisten til Google Play står i `docs/playstore.md`, udkastet til privatlivspolitik i `docs/privacy-draft.md`.
+

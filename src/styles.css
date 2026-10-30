@@ -745,6 +745,7 @@ h2.sub { font-size: 16px; font-weight: 700; margin: 14px 0 8px; text-transform: 
 .btn.ghost { background: transparent; }
 .strava-btn { background: var(--orange-btn); }
 .linkbtn, button.wk { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 0; }
+button.wk { min-width: 44px; padding-right: 8px; } /* the week number alone is ~20 px wide: a bigger tap target */
 .btn.small, .insight .btn, .finding .btn, .adj-badge .btn { min-height: 44px; }
 .langswitch button, .chips button { min-height: 44px; }
 .topbar-race, .brand { min-height: 44px; }
@@ -792,3 +793,13 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 /* Garmin key form (Mere → Garmin) */
 .garmin-key label { display: block; margin: 8px 0; }
 .garmin-key input { width: 100%; box-sizing: border-box; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Error boundary: a crash card instead of a white screen */
+.crash p { margin: 0 0 10px; }
+.crash-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.crash.full { max-width: 520px; margin: 15vh auto 0; padding: 24px 16px; color: var(--text); }
+.crash.full h1 { margin: 0 0 12px; }
+.crash details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+.crash code { display: block; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
+
+.del-acc p { margin: 0 0 8px; } .del-err { color: var(--red); margin-top: 8px !important; }
