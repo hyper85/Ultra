@@ -10,6 +10,8 @@ const session = { access_token: "sess", refresh_token: "ref", token_type: "beare
 const days = {}; for (let i = 0; i < 14; i++) { const d = new Date(Date.UTC(2026, 9, 15 + i)).toISOString().slice(0, 10); days[d] = { hr: 48 + (i % 3), sleep: 6 + (i % 4) / 2, hrv: 50 + i }; }
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "Europe/Copenhagen", serviceWorkers: "block" });
+// a movable clock: window.__skew (ms) is added to Date.now, to step past the foreground re-sync's 15 minutes
+await ctx.addInitScript(() => { const now = Date.now.bind(Date); window.__skew = 0; Date.now = () => now() + window.__skew; });
 await ctx.addInitScript(({ base, log, acts, session }) => {
   if (sessionStorage.getItem("seeded")) return; sessionStorage.setItem("seeded", "1");
   localStorage.setItem("ultraplan-profile", JSON.stringify(base)); localStorage.setItem("ultraplan-log", JSON.stringify(log)); localStorage.setItem("ultraplan-activities", JSON.stringify(acts)); localStorage.setItem("ultraplan-lang", "da");
@@ -64,6 +66,11 @@ ok(await page.locator("#chart-hr-days").count() === 1, "resting HR day by day on
 await page.reload({ waitUntil: "networkidle" }); await page.waitForTimeout(1200);
 const syncs = calls.filter((x) => x.op === "sync");
 ok(syncs.length === 2, `silent sync on load (${syncs.length})`);
+// back in the foreground: not again within 15 minutes, silently again after
+await page.evaluate(() => { document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); }); await page.waitForTimeout(500);
+ok(calls.filter((x) => x.op === "sync").length === 2, "foreground within 15 min: no new Garmin sync");
+await page.evaluate(() => { window.__skew = 16 * 60000; document.dispatchEvent(new Event("visibilitychange")); }); await page.waitForTimeout(800);
+ok(calls.filter((x) => x.op === "sync").length === 3, `foreground after 15 min: Garmin syncs by itself (${calls.filter((x) => x.op === "sync").length})`);
 ok(syncs[0].full === true && syncs[1].full === false, `the first sync after a parser update asks for the full range, the next does not (${syncs.map((x) => x.full)})`);
 await page.locator("nav.tabbar button").nth(4).click(); await page.waitForTimeout(300);
 await page.locator("details#garmin summary").click(); await page.waitForTimeout(200);
