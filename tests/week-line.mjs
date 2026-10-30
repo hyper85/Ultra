@@ -44,4 +44,13 @@ const days = (from, n, f) => Object.fromEntries(Array.from({ length: n }, (_, i)
   const b2 = insights.restingBaseline({ wellness: {}, log: {}, profileRest: 49, beforeKey: "2026-10-26" });
   ok(b1.source === "log" && b1.normal === 52 && b2.source === "profile" && b2.normal === 49, `baseline: log ${b1.normal}, then profile ${b2.normal}`);
 }
+// desktop: two independent columns – no gap under a short rest-day card; phone: today, week, food in that order
+for (const [width, at] of [[1930, "2026-10-30T09:00:00"], [1280, "2026-10-28T09:00:00"], [390, "2026-10-30T09:00:00"]]) {
+  const { browser, page } = await openApp({ lang: "da", width, height: 1000, at });
+  const r = await page.evaluate(() => { const b = (s) => document.querySelector(s).getBoundingClientRect(); const a = b("main .panel.today"), w = b("main .week-panel"), k = b("main .panel.kost"); return { a: [a.left, a.top, a.bottom], w: [w.left, w.top, w.bottom], k: [k.left, k.top] }; });
+  if (width > 1000) ok(r.k[0] === r.a[0] && r.k[1] - r.a[2] <= 20 && r.w[0] > r.a[0] && Math.abs(r.w[1] - r.a[1]) < 2, `${width}px: food right under today (${Math.round(r.k[1] - r.a[2])} px), the week beside it`);
+  else ok(r.w[1] > r.a[2] && r.k[1] > r.w[2] && r.k[1] - r.w[2] <= 16, `${width}px: today, week, food in order (${Math.round(r.k[1] - r.w[2])} px)`);
+  if (width === 1930) await page.screenshot({ path: process.env.SHOT || "/tmp/claude-0/-home-user-Ultra/a738c4a7-b731-54dc-b1ff-3ce9899054c5/scratchpad/today-desktop.png" });
+  await browser.close();
+}
 done();
