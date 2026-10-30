@@ -388,7 +388,9 @@ export default function App() {
   // Bumped when the Garmin parsing learns a field: the next sync then asks for the whole first range again, so days the
   // old parser missed (resting HR before v2) still arrive.
   const GARMIN_V = 4; // 3: heartRate.restingValue also wrapped or as text · 4: resting HR only from the day or its heartRate section
+  const garminLastAtRef = useRef(0); const garminBusyRef = useRef(false); // when this tab last asked Garmin, and whether it is asking now
   const runGarminSync = async (silent = false) => {
+    garminLastAtRef.current = Date.now(); garminBusyRef.current = true;
     setGarmin((x) => ({ ...x, busy: true, msg: silent ? x.msg : null }));
     try {
       const full = (p.garminV || 0) < GARMIN_V;
@@ -401,6 +403,7 @@ export default function App() {
       const text = (n ? t("Hentede fra Garmin: {parts}.", { parts: parts.join(", ") }) : t("Garmin svarede, men der var ingen nye tal.")) + (r.source?.hr ? " " + t("Hvilepuls fra feltet {field}.", { field: r.source.hr }) : "");
       setGarmin((x) => ({ ...x, connected: true, lastSync: r.lastSync || x.lastSync, busy: false, msg: silent && n === 0 && !unknown ? x.msg : { warn: !!unknown, text: text + (unknown ? " " + t("Appen genkendte ikke felterne ({fields}). Send gerne den linje, så bliver det rettet.", { fields: unknown }) : "") + (r.missing?.length ? " " + t("Ikke tilgængeligt med din nøgle: {list}.", { list: r.missing.join(", ") }) : "") } }));
     } catch (e) { setGarmin((x) => ({ ...x, busy: false, connected: e.connected === false ? false : x.connected, msg: silent && e.status === 404 ? null : { warn: true, text: e.message } })); }
+    finally { garminBusyRef.current = false; }
   };
   const connectGarmin = async () => {
     const key = garmin.key.trim(); if (!key) return;
@@ -422,6 +425,20 @@ export default function App() {
       catch { setGarmin((x) => ({ ...x, connected: false })); }
     })();
   }, [user?.id, ready, pulled]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Like Strava: a phone wakes the PWA instead of reloading it, so the once-per-load sync would not run again. Coming back
+  // to the app (visible, focused) asks Garmin again when the last ask is over 15 minutes old – resting HR and sleep
+  // arrive once a day, and each ask is a few calls to Garmin.
+  const garminFnRef = useRef(null); garminFnRef.current = runGarminSync;
+  useEffect(() => {
+    if (!garmin.connected) return;
+    const onBack = () => {
+      if (document.visibilityState !== "visible" || garminBusyRef.current) return;
+      if (Date.now() - garminLastAtRef.current < 15 * 60000) return;
+      garminFnRef.current?.(true);
+    };
+    document.addEventListener("visibilitychange", onBack); window.addEventListener("focus", onBack);
+    return () => { document.removeEventListener("visibilitychange", onBack); window.removeEventListener("focus", onBack); };
+  }, [garmin.connected]);
   // Back from Strava (?code=…&state=…): exchange the code once the session is known, then sync.
   useEffect(() => {
     if (!user || !ready || !pulled) return;
