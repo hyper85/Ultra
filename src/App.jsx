@@ -1505,6 +1505,9 @@ export default function App() {
                   {nextEvent.note && <div className="muted">{nextEvent.note}</div>}
                 </div>); })()}
               {missedYesterday && <div className="advice missed">{missedYesterday.other.length ? t("I går: {km} km planlagt, du lavede {what} i stedet. Lad turen ligge.", { km: missedYesterday.km, what: otherText(missedYesterday.other).toLowerCase() }) : t("I går: {km} km planlagt, ikke løbet. Lad den ligge, planens tal er et loft.", { km: missedYesterday.km })}</div>}
+              {/* Desktop: two independent columns (today + food | the week), so a short rest-day card never leaves a
+                  gap under it; on a phone both wrappers are display: contents and the order stays today, week, food. */}
+              <div className="today-a">
               <section className={`panel today ${done ? "done" : ""} kind-${raceDay || ev ? "race" : long ? "long" : hard ? "hard" : b2b ? "b2b" : v > 0 ? "easy" : lift ? "lift" : "rest"}`}>
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
@@ -1549,7 +1552,10 @@ export default function App() {
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               {shareMsg && <div className="advice">{shareMsg}</div>}
+              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} onMore={() => setMealShift((n) => n + 1)} />
+              </div>
 
+              <div className="today-b">
               <section className="panel week-panel">
                 <div className="panel-head"><h2>{t("Ugen")}</h2><span className="panel-num"><b>{curLog.km || 0}</b> / {cur.km} km</span></div>
                 <div className="progress"><span style={{ width: `${pct}%` }} /></div>
@@ -1573,8 +1579,7 @@ export default function App() {
                   <button type="button" className="btn ghost small" onClick={doShareWeek}>{t("Del ugen")}</button>
                 </div>
               </section>
-
-              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} onMore={() => setMealShift((n) => n + 1)} />
+              </div>
 
             </>
           );

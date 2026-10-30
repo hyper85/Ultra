@@ -330,13 +330,17 @@ h3.sub { font-size: 16px; margin: 14px 0 8px; text-transform: none; letter-spaci
 .import summary h3 { display: inline; }
 .import summary { cursor: pointer; }
 @media (max-width: 999px) { main.wrap { max-width: 720px; } .topbar-inner { max-width: 720px; } }
+/* phone: the column wrappers vanish, and the food card goes after the week as before */
+@media (max-width: 999px) { .today-a, .today-b { display: contents; } .today-a > .kost { order: 1; } main[data-view="today"] > .today-b ~ * { order: 2; } }
 @media (min-width: 1000px) {
   main.wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 24px; }
   main.wrap > * { min-width: 0; }
   main[data-view="today"] > .today-date { grid-column: 1 / -1; }
-  main[data-view="today"] { grid-auto-flow: dense; }
-  main[data-view="today"] > .today { grid-row: span 2; }
-  main[data-view="today"] > .kost { grid-column: 1; }
+  /* two independent columns: today + food on the left, the week on the right; notices above span both */
+  main[data-view="today"] > .today-a { grid-column: 1; }
+  main[data-view="today"] > .today-b { grid-column: 2; }
+  main[data-view="today"] > .today-a, main[data-view="today"] > .today-b { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  main[data-view="today"] > .advice { grid-column: 1 / -1; }
   main[data-view="plan"] > section.stack, main[data-view="log"] > section.stack, main[data-view="coach"] > section.stack { grid-column: 1 / -1; }
   main[data-view="plan"] > section.stack { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   main[data-view="plan"] > section.stack > h1 { grid-column: 1 / -1; }
