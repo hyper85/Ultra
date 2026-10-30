@@ -15,7 +15,7 @@ import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
-import { buildInsights, coachContext, hrPeak } from "./insights.js";
+import { buildInsights, coachContext, hrPeak, restingBaseline } from "./insights.js";
 import { hrAt, karvonen } from "./hr.js";
 import { describeSession, describeLong, describeEasy, sessionName, longRunPlan } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
@@ -977,8 +977,12 @@ export default function App() {
   const curA = acwrFor(curBase.key)?.v ?? null;
   const overKm = !!(lastLog?.km && lastRow && lastLog.km > 1.4 * lastRow.km);
   const hrNow = +(log[curBase.key]?.hr || lastLog?.hr || 0) || null;
-  const hrHigh = !!(hrNow && p.restHR && hrNow >= +p.restHR + 7);
-  const hrWatch = !!(hrNow && p.restHR && !hrHigh && hrNow >= +p.restHR + 4);
+  // Judged against the MEASURED normal before this week (Garmin days, else the log), not the profile value, which also
+  // sets the zones and may be kept low on purpose. Otherwise a normal week reads as "+4" and +7 would cut the week.
+  const rhrBase = useMemo(() => restingBaseline({ wellness: p.wellness, log, profileRest: p.restHR, beforeKey: curBase.key }), [p.wellness, log, p.restHR, curBase.key]);
+  const restNormal = rhrBase?.normal ?? null;
+  const hrHigh = !!(hrNow && restNormal && hrNow >= restNormal + 7);
+  const hrWatch = !!(hrNow && restNormal && !hrHigh && hrNow >= restNormal + 4);
   const todayIdx = curBase.key === todayKey ? (new Date().getDay() + 6) % 7 : 0;
   // A recovery week after a long event is already cut (by the coach, or by the app at 60 %). The event's load makes
   // ACWR high on purpose, so only resting HR ≥ normal + 7 cuts such a week further – never ACWR or km a second time.
@@ -1058,7 +1062,7 @@ export default function App() {
   // Yesterday had plan km, no run, no event (same week, not Monday): I dag says so, and the coach gets a question for it.
   const missedYesterday = (() => { const ti = (new Date().getDay() + 6) % 7; if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; return { km: yKm, other: otherByDay[ymd(addDays(parseLocal(cur.key), y))] || [] }; })();
   // Suggested questions: the ones the week calls for first, then the standing four, four in all.
-  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr }); const latest = daily.rows[daily.rows.length - 1]; const hrNow = latest && latest.day >= ymd(addDays(parseLocal(todayStr), -2)) ? latest.hr : log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); const normal = daily.rows.length >= 7 ? daily.normal : p.restHR; if (normal && hrNow >= normal + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
+  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr }); const latest = daily.rows[daily.rows.length - 1]; const hrNow = latest && latest.day >= ymd(addDays(parseLocal(todayStr), -2)) ? latest.hr : log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); const normal = restNormal ?? (daily.rows.length >= 7 ? daily.normal : p.restHR); if (normal && hrNow >= normal + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
   /* ---- "Send uge til træner": a compact text of one week, copied to the clipboard ---- */
   const num = (x, d = 1) => (x == null || x === "" ? null : Number(x).toLocaleString(locale(), { maximumFractionDigits: d }));
   const weekText = (r) => {
@@ -1100,7 +1104,23 @@ export default function App() {
 
   const lastIdx = [...plan.rows.keys()].reverse().find((i) => loads[i] != null && plan.rows[i].key < todayKey); // last completed week
   const hrCap70 = hrAt(0.7, hp);
-  let advice = [cur.qDay != null ? t("Hård session {day}: {quality}", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : t("Kun roligt"), cur.longDay != null && cur.lng > 0 ? t("lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) }) : null].filter(Boolean).join(" · ") + ".";
+  // The week's two key sessions, as they stand: still ahead, done (a run that day of at least 70 % of the plan) or
+  // missed (the day has passed without one). Once the hard session is done the line points at what comes next.
+  const keyDay = (i, planKm) => {
+    const d = ymd(addDays(parseLocal(cur.key), i)); const km = (actsByDay[d] || []).reduce((s, a) => s + (a.km || 0), 0);
+    return km > 0 && km >= 0.7 * (planKm || 0) ? "done" : d < todayStr ? "missed" : "ahead"; // todayKey is the Monday
+  };
+  const qState = cur.qDay != null && cur.days[cur.qDay] > 0 ? keyDay(cur.qDay, cur.days[cur.qDay]) : null;
+  const lState = cur.longDay != null && cur.lng > 0 ? keyDay(cur.longDay, cur.lng) : null;
+  const qText = qState === "done" ? t("✓ Hård session {day} er løbet", { day: dayLow(cur.qDay) })
+    : qState === "missed" ? t("Hård session {day} blev ikke løbet – lad den ligge", { day: dayLow(cur.qDay) })
+    : qState ? t("Hård session {day}: {quality}", { day: dayLow(cur.qDay), quality: sessionName(cur.quality) }) : t("Kun roligt");
+  const lText = !lState ? null : lState === "done" ? t("✓ lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) })
+    : lState === "missed" ? t("lang tur {day} blev ikke løbet", { day: dayLow(cur.longDay) })
+    : qState && qState !== "ahead" ? t("Næste: lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) })
+    : t("lang tur {km} km {day}", { km: cur.lng, day: dayLow(cur.longDay) });
+  const rest = qState !== "ahead" && lState === "done" ? t("Resten af ugen roligt") : null;
+  let advice = [qText, lText, rest].filter(Boolean).join(" · ") + ".";
   let warn = false;
   if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
   else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
@@ -1109,7 +1129,7 @@ export default function App() {
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = t("ACWR sidste uge var {acwr} – rødt. Hold denne uge på max {km} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.", { acwr: a.toFixed(2), km: Math.round(plan.rows[lastIdx].km * 0.75) }); warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = t("Du løb {km} km mod {plan} planlagt. Planens tal er et loft. Ram ugens {week} km – og ikke mere.", { km: l.km, plan: plan.rows[lastIdx].km, week: cur.km }); warn = true; }
-    else if (l?.hr && p.restHR && l.hr >= p.restHR + 7) { advice = t("Hvilepuls {hr} er 7+ over din normal. Skær 30–50 % af ugens km, sov mere, spis mere.", { hr: l.hr }); warn = true; }
+    else if (l?.hr && (restingBaseline({ wellness: p.wellness, log, profileRest: p.restHR, beforeKey: plan.rows[lastIdx].key })?.normal ?? Infinity) + 7 <= l.hr) { advice = t("Hvilepuls {hr} er 7+ over din normal. Skær 30–50 % af ugens km, sov mere, spis mere.", { hr: l.hr }); warn = true; }
   }
 
   /* ---- what the app has learned about the runner (deterministic, see insights.js) ---- */
@@ -1545,7 +1565,7 @@ export default function App() {
                 </div>
                 {dayEdit?.key === cur.key && dayEdit.i !== ti && renderDayForm(cur.days[dayEdit.i])}
                 <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
-                {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal: hold igen og sov mere. Ved +7 skæres ugen ned.", { hr: hrNow, d: hrNow - p.restHR, n: p.restHR })}</div>}
+                {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal ({n}): hold igen og sov mere. Ved +7 skæres ugen ned.", { hr: hrNow, d: hrNow - restNormal, n: restNormal })}</div>}
                 {sendBox(cur)}
                 {shareMsg && <div className="advice">{shareMsg}</div>}
                 <div className="panel-foot">

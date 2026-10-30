@@ -11,12 +11,12 @@ export const acts = Object.fromEntries([["2026-09-01", 8, 50], ["2026-09-03", 10
 const clock = ({ T }) => { const RD = Date; const off = T - RD.now(); globalThis.Date = class extends RD { constructor(...a) { super(...(a.length ? a : [RD.now() + off])); } static now() { return RD.now() + off; } }; };
 
 /* openApp({ lang, width, at, todayRun, patch, extraActs }) → { browser, ctx, page, errors }: the seeded runner at local time `at`. */
-export async function openApp({ lang = "da", width = 390, height = 844, at = "2026-10-08T09:00:00", todayRun = false, patch = {}, extraActs = {} } = {}) {
+export async function openApp({ lang = "da", width = 390, height = 844, at = "2026-10-08T09:00:00", todayRun = false, patch = {}, extraActs = {}, logPatch = {} } = {}) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width, height }, timezoneId: "Europe/Copenhagen", acceptDownloads: true, serviceWorkers: "block" }); // page.route cannot see requests the service worker makes
   const a = { ...acts, ...extraActs }; if (todayRun) a[`${at.slice(0, 10)}-Run`] = mk(at.slice(0, 10), 5.2, 33, "Run");
   await ctx.addInitScript(clock, { T: new Date(at).getTime() });
-  await ctx.addInitScript(({ base, log, acts, lang }) => { localStorage.setItem("ultraplan-profile", JSON.stringify(base)); localStorage.setItem("ultraplan-log", JSON.stringify(log)); localStorage.setItem("ultraplan-activities", JSON.stringify(acts)); localStorage.setItem("ultraplan-lang", lang); }, { base: { ...base, ...patch }, log, acts: a, lang });
+  await ctx.addInitScript(({ base, log, acts, lang }) => { localStorage.setItem("ultraplan-profile", JSON.stringify(base)); localStorage.setItem("ultraplan-log", JSON.stringify(log)); localStorage.setItem("ultraplan-activities", JSON.stringify(acts)); localStorage.setItem("ultraplan-lang", lang); }, { base: { ...base, ...patch }, log: { ...log, ...logPatch }, acts: a, lang });
   const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.ULTRA_URL || "http://localhost:4174/", { waitUntil: "networkidle" });
   return { browser, ctx, page, errors };

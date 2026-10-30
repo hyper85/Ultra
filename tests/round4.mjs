@@ -91,7 +91,8 @@ for (const [at, want] of [["2026-10-21T09:00:00", /★ Eventyrsport BakkeTrail o
   const chips = await page.locator(".ask-chips button").allInnerTexts();
   ok(chips.length === 4 && chips[0] === "Hvordan skal jeg gribe Eventyrsport BakkeTrail an?" && chips[1] === "Jeg sprang gårsdagens tur over – hvad nu?", `chips: ${chips.join(" | ")}`);
   await browser.close();
-  const b = await openApp({ lang: "da", width: 390, patch: { restHR: 44 } }); // this week's 50 is 6 over the normal 44
+  // the MEASURED normal (earlier log weeks at 44) makes this week's 50 high – the profile value alone no longer does
+  const b = await openApp({ lang: "da", width: 390, logPatch: { "2026-09-07": { km: 21.1, hr: 44 }, "2026-09-14": { km: 15, hr: 44 }, "2026-09-21": { km: 33, hr: 44 }, "2026-09-28": { km: 20, hr: 44, xmin: 663 } } });
   await tab(b.page, 3);
   const c2 = await b.page.locator(".ask-chips button").allInnerTexts();
   ok(c2[0] === "Min hvilepuls er høj – skal jeg løbe i dag?" && c2.length === 4, `chips with a high resting HR: ${c2.join(" | ")}`);

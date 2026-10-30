@@ -645,4 +645,11 @@ export default {
   "Sletter…": "Deleting…",
   "Ja, slet min konto": "Yes, delete my account",
   "Fortryd": "Cancel",
+  // The week's key sessions as they stand
+  "✓ Hård session {day} er løbet": "✓ Hard session {day} done",
+  "Hård session {day} blev ikke løbet – lad den ligge": "Hard session {day} was not run – let it go",
+  "✓ lang tur {km} km {day}": "✓ long run {km} km {day}",
+  "lang tur {day} blev ikke løbet": "long run {day} was not run",
+  "Næste: lang tur {km} km {day}": "Next: long run {km} km {day}",
+  "Resten af ugen roligt": "Easy for the rest of the week",
 };

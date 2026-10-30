@@ -13,6 +13,21 @@ const r2 = (x) => Math.round(x * 100) / 100; // ACWR with two decimals, as Overb
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const median = (xs) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
+/* The runner's MEASURED resting-HR normal before a week (YYYY-MM-DD Monday): Garmin's daily values (median of the 28
+   days before the week, at least 10 of them), else the weekly log (median of up to 8 weeks before, at least 3), else
+   the number typed in the profile. The profile value also sets the heart-rate zones, and a runner may keep it low on
+   purpose (to match Strava's zones), so warnings about a high resting HR must not be judged against it when
+   measurements exist. Returns { normal, source: "garmin" | "log" | "profile", n } or null. */
+export function restingBaseline({ wellness, log = {}, profileRest, beforeKey }) {
+  if (beforeKey) {
+    const d = restingHRSeries(wellness || {}, { days: 28, until: ymd(addDays(parseLocal(beforeKey), -1)) });
+    if (d.rows.length >= 10) return { normal: d.normal, source: "garmin", n: d.rows.length };
+    const ws = Object.keys(log || {}).filter((k) => k < beforeKey && +log[k]?.hr > 0).sort().slice(-8).map((k) => +log[k].hr);
+    if (ws.length >= 3) return { normal: Math.round(median(ws)), source: "log", n: ws.length };
+  }
+  return +profileRest > 0 ? { normal: +profileRest, source: "profile", n: 0 } : null;
+}
+
 // Activities that count as running, grouped by day.
 const runsByDay = (acts, includeHikes) => {
   const m = {};
@@ -143,8 +158,9 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (eff.length >= 6) { const h = eff.length >> 1; const a = mean(eff.slice(0, h)), b = mean(eff.slice(-h)); if (a > 0) efficiencyPct = Math.round(((b - a) / a) * 100); }
 
   // Resting heart rate: the last 3 logged weeks against the runner's normal.
-  const hrs = weeks.slice(-3).map((w) => w.hr).filter((x) => x > 0);
-  const restHRDelta = hrs.length >= 2 && p.restHR ? r1(mean(hrs) - p.restHR) : null;
+  const last3 = weeks.slice(-3); const hrs = last3.map((w) => w.hr).filter((x) => x > 0);
+  const base = last3.length ? restingBaseline({ wellness: p.wellness, log, profileRest: p.restHR, beforeKey: last3[0].key }) : null;
+  const restHRDelta = hrs.length >= 2 && base?.normal ? r1(mean(hrs) - base.normal) : null;
 
   // Runs per week against what the runner said they could do.
   const runsPerWeek = withActs.length ? r1(mean(withActs.map((r) => [0, 1, 2, 3, 4, 5, 6].filter((i) => dayKm(r.key, i) > 0).length))) : null;
@@ -281,6 +297,7 @@ export function coachContext({ p, plan, cur, log, acts = {}, acwrFor, insights, 
     pulszoner,
     pulszoner_grænser: maxHR ? { model: karvonen(hp) ? "pulsreserve (Karvonen)" : "% af makspuls", z1: [hrAt(0.5, hp), hrAt(0.6, hp)], z2: [hrAt(0.6, hp), hrAt(0.7, hp)], z3: [hrAt(0.7, hp), hrAt(0.8, hp)], z4: [hrAt(0.8, hp), hrAt(0.9, hp)], z5: [hrAt(0.9, hp), maxHR] } : null,
     makspuls_målt: peak ? { puls: peak.hr, dato: peak.day, sprunget_over_som_fejlmåling: peak.skipped } : null,
+    hvilepuls_normal_målt: (() => { const b = restingBaseline({ wellness: p.wellness, log, profileRest: p.restHR, beforeKey: cur.key }); return b && b.source !== "profile" ? { puls: b.normal, kilde: b.source === "garmin" ? "Garmin, 28 dage før ugen" : "ugeloggen, op til 8 uger før" } : null; })(),
     løber: { alder: p.age, køn: p.sex, vægt_kg: p.weight, højde_cm: p.height, hvilepuls: p.restHR, makspuls: maxHR, niveau: p.level, mål: p.goal, krop: p.injury, skadested: p.injuryArea || null, kost: p.diet, tåler_ikke: p.intol || [], familie: p.family, løbedage_max: p.maxRunDays,
       hverdag: (p.sched?.A || []).map((d, i) => `${DAYS[i]}: ${d.avail}${d.time ? " " + d.time : ""}${d.note ? " (" + d.note + ")" : ""}`) },
     løb: { navn: p.raceName, dato: p.raceDate, km: p.raceKm, højdemeter: p.raceVert },
