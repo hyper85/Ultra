@@ -627,4 +627,22 @@ export default {
   "Telefonen vil kun vise billeder, eller filen er spærret af en arbejdsprofil:": "The phone only offers pictures, or a work profile blocks the file:",
   "åbn CSV-filen i en tekstviser, kopiér alt, og brug Indsæt teksten ovenfor.": "open the CSV in a text viewer, copy everything, and use Paste the text above.",
   "I morgen: {what}": "Tomorrow: {what}",
+  // Error boundary
+  "Der er kommet en ny udgave af appen. Genindlæs for at fortsætte.": "A new version of the app is out. Reload to continue.",
+  "Noget gik galt her. Dine data er gemt og ikke rørt.": "Something went wrong here. Your data is saved and untouched.",
+  "Genindlæs": "Reload",
+  "Kopiér fejlen": "Copy the error",
+  "Detaljer": "Details",
+  "Prøv igen": "Try again",
+  // Delete the account
+  "Log ind igen for at slette din konto.": "Log in again to delete your account.",
+  "Kontoen kunne ikke slettes ({status}).": "The account could not be deleted ({status}).",
+  "Din konto og alle dine data er slettet. Husk også at slette Garmin-nøglen i Garmin Connect, hvis du havde forbundet Garmin.": "Your account and all your data are deleted. If you had connected Garmin, also delete the key in Garmin Connect.",
+  "Slet konto": "Delete account",
+  "Sletter din konto, alt der er gemt i skyen, og forbindelserne til Strava og Garmin. Kan ikke fortrydes.": "Deletes your account, everything stored in the cloud, and the connections to Strava and Garmin. Cannot be undone.",
+  "Slet min konto": "Delete my account",
+  "Er du sikker? Konto, indstillinger, log, ture og forbindelserne til Strava og Garmin slettes for altid.": "Are you sure? Account, settings, log, runs and the connections to Strava and Garmin are deleted for good.",
+  "Sletter…": "Deleting…",
+  "Ja, slet min konto": "Yes, delete my account",
+  "Fortryd": "Cancel",
 };
