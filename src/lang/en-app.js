@@ -652,4 +652,9 @@ export default {
   "lang tur {day} blev ikke løbet": "long run {day} was not run",
   "Næste: lang tur {km} km {day}": "Next: long run {km} km {day}",
   "Resten af ugen roligt": "Easy for the rest of the week",
+  // The week's RPE
+  "Ugens RPE": "Week RPE",
+  "Ugens RPE er sat til {typed}, men dine ture siger cirka {auto}. Ugens belastning og ACWR regnes med {typed}.": "The week's RPE is set to {typed}, but your runs say about {auto}. The week's load and ACWR use {typed}.",
+  "Brug {n}": "Use {n}",
+  "Ugens RPE ser forkert ud – åbn ugen": "The week's RPE looks off – open the week",
 };
