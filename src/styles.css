@@ -807,3 +807,8 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 .crash code { display: block; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
 
 .del-acc p { margin: 0 0 8px; } .del-err { color: var(--red); margin-top: 8px !important; }
+
+/* the week's RPE far from what its runs say (rpeNote / rpeFlag) */
+.rpe-off { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rpe-off .btn { flex: 0 0 auto; }
+.rpe-flag { background: var(--amber); color: #111; border: none; border-radius: 999px; font-weight: 800; min-width: 32px; min-height: 32px; margin-right: 6px; cursor: pointer; }

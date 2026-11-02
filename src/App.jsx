@@ -950,14 +950,27 @@ export default function App() {
   const cls = (v) => (v == null ? "l" : v > 1.5 ? "r" : v > 1.3 ? "a" : v < 0.8 ? "l" : "g");
   // One cell of the week log (km, RPE, resting HR, weight, sleep). The week in progress is typed on I dag → Ugen, so the
   // table shows it read-only; typing anywhere clears the "from the watch / report" flag.
+  // The week's RPE as its runs give it (each run's typed RPE, else one from its heart rate), km-weighted. A number typed
+  // in the week's RPE field overrides it for the load and ACWR – easy to mistake for one run's RPE ("2, it felt easy"),
+  // which makes a week with a tempo and a 26 km long run count as very light. So: the runs' value shows as the field's
+  // placeholder, clearing the field goes back to it, and a typed value 3+ away from it (heart-rate RPE is rough) gets a note with "Brug {n}".
+  const autoRpe = useMemo(() => { const w = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR }); return Object.fromEntries(Object.entries(w).filter(([, v]) => v.rpe).map(([k, v]) => [k, v.rpe])); }, [acts, p.includeHikes, maxHR]);
+  const rpeOff = (key) => { const l = log[key]; const a = autoRpe[key]; return l && l.rpe !== "" && l.rpe != null && !l.rpeAuto && a && Math.abs(+l.rpe - a) >= 3 ? { typed: +l.rpe, auto: a } : null; };
+  const applyRunsRpe = (key) => { const l = log[key] || {}; const a = autoRpe[key]; saveLog({ ...log, [key]: { ...l, rpe: a ?? "", rpeAuto: a != null } }); };
+  const rpeNote = (key) => { const o = rpeOff(key); return o ? (
+    <div className="advice amber rpe-off">
+      <span>{t("Ugens RPE er sat til {typed}, men dine ture siger cirka {auto}. Ugens belastning og ACWR regnes med {typed}.", o)}</span>
+      <button type="button" className="btn small" onClick={() => applyRunsRpe(key)}>{t("Brug {n}", { n: o.auto })}</button>
+    </div>) : null; };
   const logCell = (key, k, readOnly = false) => {
     const l = log[key] || {};
     const tag = ((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) ? <i className="tag" aria-label={t("importeret")}>⌚</i> : null;
     if (readOnly) return <span className="cellval muted" title={t("Skrives på I dag")}>{l[k] == null || l[k] === "" ? "–" : l[k]}{tag}</span>;
     return (
       <span className="cellwrap">
-        <input type="number" aria-label={`${LOG_FIELD[k] ? t(LOG_FIELD[k]) : k} · ${fmt(parseLocal(key))}`} inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
-          onChange={(e) => saveLog({ ...log, [key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } })} />
+        <input type="number" aria-label={`${LOG_FIELD[k] ? t(LOG_FIELD[k]) : k} · ${fmt(parseLocal(key))}`} inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} placeholder={k === "rpe" && autoRpe[key] != null ? String(autoRpe[key]) : undefined} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
+          onChange={(e) => (k === "rpe" && e.target.value === "" ? applyRunsRpe(key) // empty = the runs' RPE again
+            : saveLog({ ...log, [key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } }))} />
         {tag}
       </span>
     );
@@ -1245,13 +1258,14 @@ export default function App() {
               <td className="num">{r.pre ? (ld == null && baseline ? <span className="muted" title={t("Antaget: km/uge nu × RPE 5")}>~{p.currentKm}</span> : "") : r.km}</td>
               <td>{logCell(r.key, "km")}</td><td className="hide-phone">{logCell(r.key, "rpe", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "hr", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "wt", r.key === cur.key)}</td><td className="hide-phone">{logCell(r.key, "sleep", r.key === cur.key)}</td>
               <td className="num hide-phone">{ld ?? (r.pre && baseline ? <span className="muted" title={t("Antaget belastning")}>~{baseline}</span> : "")}</td>
-              <td className="num">{r.key === todayKey ? <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>–</span> : <span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span>}</td>
+              <td className="num">{rpeOff(r.key) && r.key !== todayKey && <button type="button" className="rpe-flag" onClick={() => setOpenWeek(r.key)} title={t("Ugens RPE ser forkert ud – åbn ugen")} aria-label={t("Ugens RPE ser forkert ud – åbn ugen")}>!</button>}{r.key === todayKey ? <span className="pill l" title={t("Ugen er ikke slut – tallene er foreløbige")}>–</span> : <span className={`pill ${cls(a?.v)}`} title={a?.est ? t("Bygger delvist på estimater (antaget baseline eller RPE fra puls)") : undefined}>{a ? (a.est ? "~" : "") + a.v.toFixed(2) : "–"}</span>}</td>
             </tr>
             {open && (
               <tr className="dayrow"><td colSpan={9}>
                 <div className="phone-only weekfields">
-                  <label>RPE{logCell(r.key, "rpe", r.key === cur.key)}</label><label>{t("Hvilepuls")}{logCell(r.key, "hr", r.key === cur.key)}</label><label>{t("Søvn t")}{logCell(r.key, "sleep", r.key === cur.key)}</label><label>{t("Vægt")}{logCell(r.key, "wt", r.key === cur.key)}</label>
+                  <label>{t("Ugens RPE")}{logCell(r.key, "rpe", r.key === cur.key)}</label><label>{t("Hvilepuls")}{logCell(r.key, "hr", r.key === cur.key)}</label><label>{t("Søvn t")}{logCell(r.key, "sleep", r.key === cur.key)}</label><label>{t("Vægt")}{logCell(r.key, "wt", r.key === cur.key)}</label>
                 </div>
+                {rpeNote(r.key)}
                 {renderDayGrid(r)}
                 {log[r.key]?.xmin > 0 && <div className="muted" style={{ marginTop: 6 }}>{t("Andre pas: {n} · {min} min.", { n: log[r.key].xn, min: log[r.key].xmin, load: Math.round(log[r.key].xload / 12) })}</div>}
                 {!r.pre && <div className="import-row" style={{ marginTop: 8 }}><button type="button" className="btn ghost small" onClick={() => sendWeek(r)}>{t("Send uge til træner")}</button></div>}
@@ -1567,8 +1581,9 @@ export default function App() {
                   ))}
                 </div>
                 <div className="weekfields four">
-                  <label>RPE{logCell(cur.key, "rpe")}</label><label>{t("Hvilepuls")}{logCell(cur.key, "hr")}</label><label>{t("Søvn t")}{logCell(cur.key, "sleep")}</label><label>{t("Vægt")}{logCell(cur.key, "wt")}</label>
+                  <label>{t("Ugens RPE")}{logCell(cur.key, "rpe")}</label><label>{t("Hvilepuls")}{logCell(cur.key, "hr")}</label><label>{t("Søvn t")}{logCell(cur.key, "sleep")}</label><label>{t("Vægt")}{logCell(cur.key, "wt")}</label>
                 </div>
+                {rpeNote(cur.key)}
                 {dayEdit?.key === cur.key && dayEdit.i !== ti && renderDayForm(cur.days[dayEdit.i])}
                 <div className={`advice ${warn ? "warn" : ""}`}>{advice}</div>
                 {hrWatch && <div className="advice amber">{t("Hvilepuls {hr} er {d} over din normal ({n}): hold igen og sov mere. Ved +7 skæres ugen ned.", { hr: hrNow, d: hrNow - restNormal, n: restNormal })}</div>}
