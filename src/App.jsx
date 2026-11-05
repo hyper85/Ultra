@@ -72,8 +72,9 @@ export const defaultSched = () => [day("normal", "morning"), day("none"), day("n
 // Build a schedule from the old Mon–Fri run-day toggles so existing profiles keep their plan.
 const schedFromLegacy = (runDays = [0, 2, 3], longDay = 5) => [0, 1, 2, 3, 4, 5, 6].map((d) => d === longDay ? day("long") : d >= 5 ? day("normal") : day(runDays.includes(d) ? "normal" : "none"));
 const schedFor = (p, wkStart) => {
-  const A = p.sched?.A || defaultSched();
-  if (!p.altWeeks || !p.sched?.B) return { sched: A, label: "" };
+  // An empty or short week (a profile edited by hand, an old version) falls back to the default week, not to 7 rest days.
+  const A = p.sched?.A?.length === 7 ? p.sched.A : defaultSched();
+  if (!p.altWeeks || p.sched?.B?.length !== 7) return { sched: A, label: "" };
   const diff = Math.round((wkStart - parseLocal(p.altStart || p.startDate)) / 86400000 / 7);
   const isA = ((diff % 2) + 2) % 2 === 0;
   return { sched: isA ? A : p.sched.B, label: isA ? "A" : "B" };
@@ -136,7 +137,10 @@ export function buildPlan(p) {
   const peakTarget = Math.round(Math.max(45, raceKm * 0.95, restart * 1.2) * (injured ? 0.9 : sore ? 0.95 : 1));
   // The model's scale (Minimum 0.8 / Balanceret 1.0 / Volumen 1.15) applies to the final top, after the experience cap,
   // so the three models always differ. Never below a small step above the restart volume, never above 120 km.
-  const peak = Math.min(120, Math.max(Math.round(restart * 1.1), Math.round(Math.min(peakTarget, restart * PEAK_MULT[level]) * (p.peakScale || 1))));
+  // Hybrid (opt-in): the strength sessions are a goal of their own, so the running top is 15 % lower to leave room
+  // for recovery. The ultra style (the default) is untouched.
+  const styleScale = p.style === "hybrid" ? 0.85 : 1;
+  const peak = Math.min(120, Math.max(Math.round(restart * 1.1), Math.round(Math.min(peakTarget, restart * PEAK_MULT[level]) * (p.peakScale || 1) * styleScale)));
   const longCap = Math.min(Math.round(raceKm * LONG_FRAC[level]), 50);
   const taper = 3;
   const rebuild = p.breakWeeks >= 2 || injured ? 4 : 0;
@@ -223,6 +227,9 @@ export function buildPlan(p) {
 }
 
 /* ================= app ================= */
+// Training style. Ultra: running first, strength supports it (2–3 sessions). Hybrid: strength is a goal too –
+// up to 5 sessions as a split, a 15 % lower running top. Only for the app's own plan, never the coach plan.
+export const STYLES = [["ultra", "Ultra – løb først", "Styrken støtter løbet: 2–3 korte pas om ugen."], ["hybrid", "Hybrid – løb og styrke", "Styrke er et mål i sig selv: op til 5 pas som split (ben, overkrop, træk, kraft), og løbetoppen er 15 % lavere, så du kan restituere. Benpas lægges ikke dagen før den lange tur eller den hårde session."]];
 const PLAN_START = "2026-08-24"; // mandag i uge 35
 const PROFILE_VERSION = 5;
 const DEFAULT = {
@@ -582,7 +589,9 @@ export default function App() {
   const plan = useMemo(() => (p.coachMode !== false ? buildCoachPlan(p) : buildPlan(p)), [p]);
   const CP = useMemo(() => activeCoachPlan(p), [p.coachPlan]); // eslint-disable-line react-hooks/exhaustive-deps
   const liftDays = plan.coach ? CP.week.liftDays : p.liftDays;
-  const liftLetter = (i) => { if (plan.coach && CP.strength.byDay[i]) return CP.strength.byDay[i].key; const k = liftDays.indexOf(i); return k >= 0 && k < 3 ? "ABC"[k] : ""; };
+  // Hybrid is an opt-in style for the app's own plan; the coach plan ignores it (its days, km and sessions stay).
+  const hybrid = !plan.coach && p.style === "hybrid";
+  const liftLetter = (i) => { if (plan.coach && CP.strength.byDay[i]) return CP.strength.byDay[i].key; const k = liftDays.indexOf(i); return k >= 0 && k < (hybrid ? 5 : 3) ? "ABCDE"[k] : ""; };
   const liftName = (i) => { const l = liftLetter(i); return t(l ? `Styrke ${l}` : "Styrke"); };
   const liftShort = (i) => "S" + liftLetter(i); // "SA"/"SB" in the small week strip
   const maxHR = p.maxHR || Math.round(p.sex === "f" ? 206 - 0.88 * p.age : 211 - 0.64 * p.age);
@@ -1024,7 +1033,9 @@ export default function App() {
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
   // One generator for every week: the week number rotates the exercises. On the coach plan the sessions are the trail
   // pair (A legs, B back + core) and keep the coach's day letters (B Tuesday, A Wednesday) via coachOrder().
-  const genStrength = (r) => buildStrength({ body: p.body, gear: p.gear || (plan.coach ? "gym" : "home"), phase: r.phase, deload: r.deload, isRace: r.isRace, count: plan.coach ? 2 : liftDays.length, week: r.i, focus: plan.coach ? "trail" : "default" });
+  // Hybrid: a leg session is kept off the day before the long run or the hard session, and off the long-run day.
+  const legGuard = (r) => liftDays.map((d) => { const next = (d + 1) % 7; return d === r.longDay || next === r.longDay || (r.qDay != null && next === r.qDay); });
+  const genStrength = (r) => buildStrength({ body: p.body, gear: p.gear || (plan.coach ? "gym" : "home"), phase: r.phase, deload: r.deload, isRace: r.isRace, count: plan.coach ? 2 : liftDays.length, week: r.i, focus: plan.coach ? "trail" : "default", style: hybrid ? "hybrid" : "ultra", guard: hybrid ? legGuard(r) : [] });
   const coachOrder = (gen) => { const st = CP.strength; const byKey = Object.fromEntries(gen.sessions.map((x) => [x.key, x])); return { ...gen, sessions: liftDays.map((d, i) => st.byDay[d] || st.sessions[i]).filter(Boolean).map((x) => byKey[x.key] || gen.sessions[0]).filter(Boolean) }; };
   const strengthPlan = useMemo(() => {
     if (plan.coach) {
@@ -1035,7 +1046,7 @@ export default function App() {
       return { ...coachOrder(genStrength(cur)), daily: st.daily.map(coachLabel), note: t("Trænerens dage. Øvelserne skifter uge for uge: ben, hofte, core og ryg til Bornholm."), rule: st.rule ? t(st.rule) : "" };
     }
     return genStrength(cur);
-  }, [plan.coach, CP, p.body, p.gear, cur.phase, cur.deload, cur.isRace, liftDays.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.coach, CP, p.body, p.gear, cur.phase, cur.deload, cur.isRace, cur.i, cur.longDay, cur.qDay, liftDays.join(), hybrid]); // eslint-disable-line react-hooks/exhaustive-deps
   // Strength for any plan week: the coach's fixed sessions, or the app's program dosed for that week's phase.
   const strengthFor = (r) => (r.key === cur.key ? strengthPlan : plan.coach ? coachOrder(genStrength(r)) : genStrength(r));
   const sessionFor = (ti) => { const k = liftDays.indexOf(ti); if (k < 0 || !strengthPlan.sessions.length) return null; return strengthPlan.sessions[k % strengthPlan.sessions.length]; };
@@ -1108,7 +1119,7 @@ export default function App() {
     : <div className="advice warn">{t("Kunne ikke kopiere automatisk. Markér teksten og kopiér den:")}<textarea className="send-text" readOnly value={sendMsg.text} onFocus={(e) => e.target.select()} /></div>);
   const [mealShift, setMealShift] = useState(0); // "Andre forslag": rolls the day's meal ideas
   const nutritionFor = (dayType, around = {}) => {
-    const targets = dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType });
+    const targets = dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType, hybrid });
     return { targets, meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body, protein: targets.protein, weight: p.weight, shift: mealShift, ...around }) };
   };
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
@@ -1155,7 +1166,7 @@ export default function App() {
   const [coachQ, setCoachQ] = useState("");
   const coachQRef = useRef(null); // the composer textarea: grows with the text, shrinks back after a send
   // Body goal, strength and today's nutrition targets, so the coach can answer about lifting and food too.
-  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.fitnessAge } : null, krop_mål: p.body || "keep", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
+  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.fitnessAge } : null, krop_mål: p.body || "keep", træningsstil: hybrid ? "hybrid (styrke og løb vægtes lige, egen plan)" : plan.coach ? "trænerplan" : "ultra (løb først)", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachErr, setCoachErr] = useState(null);
   // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.
@@ -1798,8 +1809,11 @@ export default function App() {
           </details>
           <details className="panel acc" id="strength" open={openMore === "strength"}>
             <summary><h2>{t("Styrke")}</h2><span className="acc-sum">{liftDays.length ? liftDays.map((i) => DAYS[i]).join(" + ") : t("ingen")}</span><span className="chev" aria-hidden="true">›</span></summary>
-            {!plan.coach && (
+            {plan.coach ? <div className="muted" style={{ marginTop: 10 }}>{t("Trænerplanen bestemmer styrken. Hybrid kan vælges, når du bruger appens egen plan.")}</div> : (
               <>
+                <label>{t("Træningsstil")}</label>
+                <div className="chips" style={{ marginTop: 6 }}>{STYLES.map(([k, n]) => <button key={k} type="button" className={(p.style || "ultra") === k ? "on" : ""} aria-pressed={(p.style || "ultra") === k} onClick={() => setP({ ...p, style: k })}>{t(n)}</button>)}</div>
+                <div className="muted" style={{ margin: "6px 0 10px" }}>{t(STYLES.find(([k]) => k === (p.style || "ultra"))[2])}</div>
                 <label>{t("Hvad vil du med kroppen?")}</label>
                 <div className="chips" style={{ marginTop: 6 }}>{BODY.map(([k, n]) => <button key={k} type="button" className={(p.body || "keep") === k ? "on" : ""} onClick={() => setP({ ...p, body: k })}>{t(n)}</button>)}</div>
                 <div className="muted" style={{ margin: "6px 0 10px" }}>{t(BODY.find(([k]) => k === (p.body || "keep"))?.[2])}</div>

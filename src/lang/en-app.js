@@ -657,4 +657,10 @@ export default {
   "Ugens RPE er sat til {typed}, men dine ture siger cirka {auto}. Ugens belastning og ACWR regnes med {typed}.": "The week's RPE is set to {typed}, but your runs say about {auto}. The week's load and ACWR use {typed}.",
   "Brug {n}": "Use {n}",
   "Ugens RPE ser forkert ud – åbn ugen": "The week's RPE looks off – open the week",
+  "Træningsstil": "Training style",
+  "Ultra – løb først": "Ultra – running first",
+  "Hybrid – løb og styrke": "Hybrid – running and strength",
+  "Styrken støtter løbet: 2–3 korte pas om ugen.": "Strength supports the running: 2–3 short sessions a week.",
+  "Styrke er et mål i sig selv: op til 5 pas som split (ben, overkrop, træk, kraft), og løbetoppen er 15 % lavere, så du kan restituere. Benpas lægges ikke dagen før den lange tur eller den hårde session.": "Strength is a goal in itself: up to 5 sessions as a split (legs, upper body, pull, power), and the running top is 15 % lower so you can recover. Leg sessions are never put the day before the long run or the hard session.",
+  "Trænerplanen bestemmer styrken. Hybrid kan vælges, når du bruger appens egen plan.": "The coach plan decides the strength. Hybrid can be chosen when you use the app's own plan.",
 };

@@ -25,6 +25,15 @@ Styrkepassene er bygget af bevægelsesmønstre (squat, hoftebøj, ét ben, læg,
 uge vælger sin variant, så to uger aldrig er ens. På trænerplanen er passene rettet mod et bjergultra: A = ben og hofte
 med step-ups, B = ryg og core (træk, rygstræk, to core-øvelser, bæring). Trænerens dage, ankelrutine og regel beholdes.
 
+## Hybrid – løb og styrke
+
+Under Mere → Styrke kan du vælge træningsstil. "Ultra – løb først" (standard) er som altid: 2–3 korte pas, der støtter
+løbet. "Hybrid – løb og styrke" gør styrken til et mål i sig selv: op til 5 pas om ugen som split (1 hele kroppen ·
+2 ben/overkrop · 3 ben/overkrop/hele kroppen · 4 ben/overkrop/kraft/træk · 5 ben/bryst-skuldre/træk/kraft/hele kroppen),
+tungere dosis (4×5–8 i opbygningen), og løbetoppen er 15 % lavere, så der er plads til at restituere. Et benpas lægges
+aldrig dagen før den lange tur eller den hårde session, hvis et overkropspas kan tage dagen. Styrkedage kostes med
+150 kcal ekstra (ikke ved vægttab). Hybrid gælder kun appens egen plan: trænerplanen beholder sine dage, km og pas.
+
 ## Hvilepuls dag for dag
 
 Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag. Årsrapporten (1 år) har ét ugesnit pr. række og lægges kun i ugeloggen, så dagsværdierne bliver stående.

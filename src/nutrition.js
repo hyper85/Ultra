@@ -25,11 +25,12 @@ const KCAL = { long: (b) => b * 1.95, quality: (b) => b * 1.7, easy: (b) => b * 
 const CARB = { all: { long: 7, quality: 5, easy: 4, lift: 4, rest: 3 }, lowcarb: { long: 5, quality: 3, easy: 2, lift: 2, rest: 1.5 } };
 
 /* dayTargets({ bmr, weight, body, goal, diet, dayType }) -> { kcal, protein, carbs, fat, note } in kcal and grams. */
-export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", diet = "all", dayType = "rest" }) {
+export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", diet = "all", dayType = "rest", hybrid = false }) {
   const k = KCAL[dayType] ? dayType : "rest";
   let kcal = KCAL[k](bmr);
   if (body === "lean") kcal -= 300;
   if (body === "muscle" && (k === "lift" || k === "quality")) kcal += 200;
+  else if (hybrid && body !== "lean" && k === "lift") kcal += 150; // hybrid: heavy lifting days need a little more
   if (goal === "perform" && k === "quality") kcal += 100;
   kcal = Math.max(bmr * 1.15, kcal);
   kcal = Math.round(kcal / 10) * 10;
