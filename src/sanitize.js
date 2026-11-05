@@ -64,6 +64,7 @@ export function cleanProfile(p) {
     if (!isObj(c.wellness)) delete c.wellness;
     else c.wellness = Object.fromEntries(Object.entries(c.wellness).filter(([d, v]) => validDay(d) && isObj(v)));
   }
+  if ("style" in c && c.style !== "ultra" && c.style !== "hybrid") delete c.style;
   if ("coachPlan" in c && c.coachPlan != null && !isObj(c.coachPlan)) delete c.coachPlan;
   return c;
 }

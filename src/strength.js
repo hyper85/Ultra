@@ -156,14 +156,16 @@ const DOSE = {
 
 const fmt = (sets, reps, ex) => ({ ...ex, sets, reps, label: `${ex.name} ${sets}×${reps}` });
 
+// The week picks the variant; a different offset per pattern, so two patterns do not flip together.
+const OFF = { squat: 0, hinge: 1, single: 2, pull: 1, back: 0, core: 2, carry: 1, calf: 0, hip: 2, push: 0, press: 0, curl: 0, hop: 0 };
+const picker = (gear, week) => { const g = EX.squat[gear] ? gear : "home"; return (k, extra = 0) => { const list = EX[k][g]; const ex = list[(Math.max(0, week) + (OFF[k] || 0) + extra) % list.length]; return { ...ex, name: t(ex.name), how: t(ex.how), pattern: k }; }; };
+
 /* buildStrength({ body, gear, phase, deload, isRace, count })
    -> { sessions: [{ key, name, focus, minutes, exercises: [{ name, how, sets, reps, label }] }], daily, note }
    `week` rotates the variants (the plan's week number); focus "trail" makes session B back + core. */
-export function buildStrength({ body = "keep", gear = "home", phase = "Opbygning", deload = false, isRace = false, count = 2, week = 0, focus = "default" } = {}) {
-  const g = EX.squat[gear] ? gear : "home";
-  // The week picks the variant; a different offset per pattern, so two patterns do not flip together.
-  const OFF = { squat: 0, hinge: 1, single: 2, pull: 1, back: 0, core: 2, carry: 1, calf: 0, hip: 2, push: 0, press: 0, curl: 0, hop: 0 };
-  const pick = (k, extra = 0) => { const list = EX[k][g]; const ex = list[(Math.max(0, week) + (OFF[k] || 0) + extra) % list.length]; return { ...ex, name: t(ex.name), how: t(ex.how), pattern: k }; };
+export function buildStrength({ body = "keep", gear = "home", phase = "Opbygning", deload = false, isRace = false, count = 2, week = 0, focus = "default", style = "ultra", guard = [] } = {}) {
+  if (style === "hybrid") return buildHybrid({ body, gear, phase, deload, isRace, count, week, guard });
+  const pick = picker(gear, week);
   const n = Math.max(0, Math.min(3, count));
   const daily = DAILY_ANKLE.map((x) => t(x));
   if (isRace || n === 0) return { sessions: [], daily, note: isRace ? t("Løbsuge: ingen styrke. Kun ankelrutinen og hvile.") : t("Ingen styrkepas valgt. Ankelrutinen hver dag er stadig en god idé.") };
@@ -200,4 +202,52 @@ export function pickLiftDays(sched = [], { longDay = 5, qualityDay = 2, count = 
   const free = order.filter((i) => (sched[i]?.avail || "normal") !== "none" && i !== longDay && i !== qualityDay && i !== before);
   const some = free.length >= n ? free : order.filter((i) => i !== longDay);
   return some.slice(0, n).sort((a, b) => a - b);
+}
+
+/* Hybrid (opt-in, the app's own plan only – never the coach plan): strength counts as much as the running, in the
+   spirit of hybrid athletes who lift heavy and run a lot in the same week. Up to five sessions, as a split that
+   rotates with the number of days: 1 full body · 2 legs/upper · 3 legs/upper/full · 4 legs/upper/legs power/pull ·
+   5 legs/push/pull/legs power/full. Heavier than the ultra dose (strength is a goal, not only support), and still
+   following the phase: lighter in the taper, nothing in race week.
+   `guard[k]` is true when lift day k is the day before the long run or the hard session (or that day itself): a leg
+   session never lands there if an upper-body session can take the day instead. */
+const HYBRID_DOSE = {
+  Genopbygning: { sets: 3, reps: "8–10", rest: "75 s", note: "Hybrid: ren teknik og moderat vægt. Kroppen vænner sig til at løbe og løfte i samme uge." },
+  Opbygning: { sets: 4, reps: "5–8", rest: "2 min", note: "Hybrid: tungt. De sidste 2 gentagelser er hårde, men teknikken holder. Løb roligt dagen efter et benpas." },
+  "Ultra-prep": { sets: 3, reps: "5–6", rest: "2 min", note: "Hybrid: tungt og kort, så benene stadig har noget til de lange ture." },
+  Nedtrapning: { sets: 2, reps: "6", rest: "90 s", note: "Let. Bevægelserne holdes ved lige, intet må gøre ømt." },
+};
+const SPLITS = { 1: ["full"], 2: ["legs", "upper"], 3: ["legs", "upper", "full"], 4: ["legs", "upper", "power", "pull"], 5: ["legs", "push", "pull", "power", "full"] };
+export const HYBRID_MAX = 5;
+
+const sessionName = (k) => ({ A: t("Styrke A"), B: t("Styrke B"), C: t("Styrke C"), D: t("Styrke D"), E: t("Styrke E") })[k];
+
+function buildHybrid({ body, gear, phase, deload, isRace, count, week, guard }) {
+  const pick = picker(gear, week);
+  const n = Math.max(0, Math.min(HYBRID_MAX, count));
+  const daily = DAILY_ANKLE.map((x) => t(x));
+  if (isRace || n === 0) return { sessions: [], daily, note: isRace ? t("Løbsuge: ingen styrke. Kun ankelrutinen og hvile.") : t("Ingen styrkepas valgt. Ankelrutinen hver dag er stadig en god idé.") };
+  const base = HYBRID_DOSE[phase] || HYBRID_DOSE.Opbygning;
+  let { sets, reps, rest, note } = base;
+  if (body === "muscle" && phase !== "Nedtrapning") { reps = "6–10"; note = "Hybrid til muskler: 6–10 gentagelser, og spis protein efter passet."; }
+  if (body === "lean") { reps = phase === "Nedtrapning" ? "8" : "8–12"; rest = "60 s"; note = "Hybrid og vægttab: lidt lettere, kortere pause. Styrken holder musklerne, mens vægten går ned."; }
+  if (deload) { sets = Math.max(1, sets - 1); note = "Let uge: et sæt mindre. Teknik, ikke træthed."; }
+  const perLeg = t("{reps}/ben", { reps }), perSide = "8/side", calf = t("12/ben"), hip = "20 s/side";
+  const acc = Math.max(2, sets - 1);
+  const T = {
+    legs: { focus: "Ben – styrke", legs: true, ex: () => [fmt(sets, reps, pick("squat")), fmt(sets, reps, pick("hinge")), fmt(acc, perLeg, pick("single")), fmt(3, calf, pick("calf")), fmt(3, perSide, pick("core"))] },
+    upper: { focus: "Overkrop – pres og træk", legs: false, ex: () => [fmt(sets, reps, pick("push")), fmt(sets, reps, pick("pull")), fmt(acc, reps, pick("press")), fmt(acc, "10–12", pick("pull", 1)), fmt(3, "40 m", pick("carry"))] },
+    full: { focus: "Hele kroppen", legs: true, ex: () => [fmt(sets, reps, pick("hinge", 1)), fmt(sets, reps, pick("push")), fmt(acc, perLeg, pick("single", 1)), fmt(sets, reps, pick("pull")), fmt(3, perSide, pick("core", 1))] },
+    power: { focus: "Ben – kraft og fjedre", legs: true, ex: () => [fmt(3, "20 s", pick("hop")), fmt(sets, reps, pick("hinge", 2)), fmt(acc, perLeg, pick("single", 2)), fmt(3, hip, pick("hip")), fmt(3, calf, pick("calf", 1))] },
+    pull: { focus: "Ryg og træk", legs: false, ex: () => [fmt(sets, reps, pick("pull", 2)), fmt(acc, "10–12", pick("back")), fmt(acc, "10–12", pick("pull", 1)), fmt(3, "40 m", pick("carry", 1)), fmt(3, "10–12", pick("curl"))] },
+    push: { focus: "Bryst og skuldre", legs: false, ex: () => [fmt(sets, reps, pick("push")), fmt(sets, reps, pick("press")), fmt(3, perSide, pick("core")), fmt(3, "40 m", pick("carry", 2)), fmt(3, perSide, pick("core", 2))] },
+  };
+  // Leg sessions away from the guarded days: an upper-body session takes a guarded day when one is left.
+  const kinds = [...SPLITS[n]];
+  const slots = new Array(n).fill(null);
+  for (let k = 0; k < n; k++) if (guard[k]) { const j = kinds.findIndex((x) => !T[x].legs); if (j >= 0) slots[k] = kinds.splice(j, 1)[0]; }
+  for (let k = 0; k < n; k++) if (!slots[k]) slots[k] = kinds.shift();
+  const sessions = slots.map((kind, k) => { const s = T[kind]; const exercises = s.ex(); const key = "ABCDE"[k];
+    return { key, kind, legs: s.legs, name: sessionName(key), focus: t(s.focus), exercises, minutes: 15 + 7 * exercises.length, rest }; });
+  return { sessions, daily, note: t(note), rotates: true, hybrid: true };
 }
