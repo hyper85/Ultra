@@ -382,11 +382,23 @@ export default function App() {
   /* ---- Garmin (api/garmin.js): resting HR, sleep and HRV day by day from the runner's own Personal API key ---- */
   const [garmin, setGarmin] = useState({ connected: null, lastSync: null, busy: false, msg: null, key: "" });
   const garminRef = useRef({ synced: false });
+  const wellnessRef = useRef(p.wellness); wellnessRef.current = p.wellness;
   // Days from Garmin take the file import's road: a 4-week-report-like table → weeks into the log, days into the store.
   // replaceHr = the range of a full sync that found resting HR: inside it Garmin's day values replace the stored ones,
   // and a stored resting HR on a day Garmin has none for goes (it came from an older, looser parser).
+  // A sync only brings the days since the last one (from two days before it), so the week's resting HR, sleep and HRV
+  // are averaged over every stored day of the touched weeks with the new days on top – not over the new days alone.
   const applyGarminDays = (days, replaceHr = null) => {
-    const csv = daysToWellnessCSV(days); if (!csv) return 0;
+    const mondays = new Set(Object.keys(days).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).map((d) => ymd(mondayOf(parseLocal(d)))));
+    const all = {};
+    for (const [d, v] of Object.entries(wellnessRef.current || {})) {
+      if (!mondays.has(ymd(mondayOf(parseLocal(d))))) continue;
+      const x = { hr: v?.hr, sleep: v?.sleep, hrv: v?.hrv };
+      if (replaceHr && d >= replaceHr.start && d <= replaceHr.end && !(days[d]?.hr > 0)) delete x.hr;
+      all[d] = x;
+    }
+    for (const [d, v] of Object.entries(days)) all[d] = { ...(all[d] || {}), ...v };
+    const csv = daysToWellnessCSV(all); if (!csv) return 0;
     let w; try { w = wellnessFromCSV(csv, "Garmin"); } catch { return 0; }
     const wl = wellnessIntoLog(logRef.current, [w]); saveLog(wl.log);
     setP((prev) => {
@@ -971,13 +983,16 @@ export default function App() {
       <span>{t("Ugens RPE er sat til {typed}, men dine ture siger cirka {auto}. Ugens belastning og ACWR regnes med {typed}.", o)}</span>
       <button type="button" className="btn small" onClick={() => applyRunsRpe(key)}>{t("Brug {n}", { n: o.auto })}</button>
     </div>) : null; };
+  // The week's resting HR and sleep are the week's average; today's own value from the watch sits under the field when
+  // it differs, so "52" next to Garmin's "51 today" reads as what it is.
+  const todayVal = (k) => { const v = p.wellness?.[todayStr]?.[k]; const w = log[cur.key]?.[k]; if (!(v > 0) || w === "" || w == null || +w === v) return null; return <small className="today-val">{t("i dag {n}", { n: String(Math.round(v * 10) / 10) })}</small>; };
   const logCell = (key, k, readOnly = false) => {
     const l = log[key] || {};
     const tag = ((k === "km" && l.auto) || (k !== "km" && l[`${k}Auto`])) ? <i className="tag" aria-label={t("importeret")}>⌚</i> : null;
     if (readOnly) return <span className="cellval muted" title={t("Skrives på I dag")}>{l[k] == null || l[k] === "" ? "–" : l[k]}{tag}</span>;
     return (
       <span className="cellwrap">
-        <input type="number" aria-label={`${LOG_FIELD[k] ? t(LOG_FIELD[k]) : k} · ${fmt(parseLocal(key))}`} inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} placeholder={k === "rpe" && autoRpe[key] != null ? String(autoRpe[key]) : undefined} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? t("Fra dit ur") : undefined}
+        <input type="number" aria-label={`${LOG_FIELD[k] ? t(LOG_FIELD[k]) : k} · ${fmt(parseLocal(key))}`} inputMode={k === "km" || k === "sleep" || k === "wt" ? "decimal" : "numeric"} min={k === "rpe" ? 1 : 0} max={k === "rpe" ? 10 : undefined} step={k === "km" || k === "sleep" ? 0.1 : 1} value={l[k] ?? ""} placeholder={k === "rpe" && autoRpe[key] != null ? String(autoRpe[key]) : undefined} title={k === "km" && l.auto ? t("Fra dit ur ({n} ture)", { n: l.n }) : k === "rpe" && l.rpeAuto ? t("Gættet ud fra puls – ret gerne") : l[`${k}Auto`] ? (k === "hr" || k === "sleep" || k === "hrv" ? t("Ugens snit fra dit ur") : t("Fra dit ur")) : undefined}
           onChange={(e) => (k === "rpe" && e.target.value === "" ? applyRunsRpe(key) // empty = the runs' RPE again
             : saveLog({ ...log, [key]: { ...l, [k]: e.target.value === "" ? "" : +e.target.value, ...(k === "rpe" ? { rpeAuto: false } : {}), ...(k === "km" ? { auto: false } : { [`${k}Auto`]: false }) } }))} />
         {tag}
@@ -1592,7 +1607,7 @@ export default function App() {
                   ))}
                 </div>
                 <div className="weekfields four">
-                  <label>{t("Ugens RPE")}{logCell(cur.key, "rpe")}</label><label>{t("Hvilepuls")}{logCell(cur.key, "hr")}</label><label>{t("Søvn t")}{logCell(cur.key, "sleep")}</label><label>{t("Vægt")}{logCell(cur.key, "wt")}</label>
+                  <label>{t("Ugens RPE")}{logCell(cur.key, "rpe")}</label><label>{t("Hvilepuls")}{logCell(cur.key, "hr")}{todayVal("hr")}</label><label>{t("Søvn t")}{logCell(cur.key, "sleep")}{todayVal("sleep")}</label><label>{t("Vægt")}{logCell(cur.key, "wt")}</label>
                 </div>
                 {rpeNote(cur.key)}
                 {dayEdit?.key === cur.key && dayEdit.i !== ti && renderDayForm(cur.days[dayEdit.i])}
