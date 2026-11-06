@@ -663,4 +663,6 @@ export default {
   "Styrken støtter løbet: 2–3 korte pas om ugen.": "Strength supports the running: 2–3 short sessions a week.",
   "Styrke er et mål i sig selv: op til 5 pas som split (ben, overkrop, træk, kraft), og løbetoppen er 15 % lavere, så du kan restituere. Benpas lægges ikke dagen før den lange tur eller den hårde session.": "Strength is a goal in itself: up to 5 sessions as a split (legs, upper body, pull, power), and the running top is 15 % lower so you can recover. Leg sessions are never put the day before the long run or the hard session.",
   "Trænerplanen bestemmer styrken. Hybrid kan vælges, når du bruger appens egen plan.": "The coach plan decides the strength. Hybrid can be chosen when you use the app's own plan.",
+  "i dag {n}": "today {n}",
+  "Ugens snit fra dit ur": "The week's average from your watch",
 };
