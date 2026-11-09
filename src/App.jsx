@@ -1035,35 +1035,44 @@ export default function App() {
   const adjRow = useMemo(() => {
     if (!trigger) return null;
     const f = hrHigh ? 0.6 : 0.75;
-    const ranSoFar = dayKm.slice(0, todayIdx).reduce((a, b) => a + b, 0);
+    // A trigger that already held on Monday (last week's ACWR or km) cuts the whole week from Monday, so a day the
+    // runner skips is not moved onto the days after it. A trigger that appears during the week (this week's ACWR,
+    // resting HR) cuts from today; the days before it stay as planned and what was run counts against the cap.
+    const from = (lastA != null && lastA > 1.5) || overKm ? 0 : todayIdx;
+    const ranSoFar = dayKm.slice(0, from).reduce((a, b) => a + b, 0);
     const cap = lastRow && !recWeek ? Math.round(lastRow.km * f) : null;
     const b2b = curBase.sun > 0 && curBase.longDay != null ? (curBase.longDay + 1) % 7 : -1;
     const ev = curBase.events || {};
-    // The week is taken down to the cap (last week's plan × 0.75, or × 0.6 on the resting-HR trigger) – not further.
-    // The back-to-back run goes; the long run stays but is at most half of what is left; the rest is spread over the
-    // planned easy days (at most 1.6 × their plan, never under 3 km). Earlier the 4 km floor dropped every short day
-    // and a 61 km week ended at 28 km (ACWR from 1.6 to 0.6: a crash, not a balance).
-    const open = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= todayIdx && !ev[i] && i !== b2b && curBase.days[i] > 0);
+    /* The week is taken down to the cap (last week's plan × 0.75, or × 0.6 on the resting-HR trigger) – not further.
+       The back-to-back run goes; the long run stays but is at most half of what is left; the rest is spread over the
+       planned easy days (at most 1.6 × their plan, never under 3 km). The day after last week's long run or
+       back-to-back (Monday after a Sunday) is the lightest: at most its plan × f, never more. Earlier the 4 km floor
+       dropped every short day and a 61 km week ended at 28 km (ACWR from 1.6 to 0.6: a crash, not a balance). */
+    const open = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= from && !ev[i] && i !== b2b && curBase.days[i] > 0);
     // what is left of the week's plan (the back-to-back run included) × f, and never above the cap
-    const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= todayIdx && !ev[i]).reduce((a, i) => a + curBase.days[i], 0);
+    const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= from && !ev[i]).reduce((a, i) => a + curBase.days[i], 0);
     const left = Math.max(0, Math.round(cap != null ? Math.min(cap - ranSoFar, planned * f) : planned * f));
-    let days = curBase.days.map((v, i) => (i < todayIdx || ev[i] ? v : 0));
+    let days = curBase.days.map((v, i) => (i < from || ev[i] ? v : 0));
     const ld = curBase.longDay != null && open.includes(curBase.longDay) ? curBase.longDay : null;
     const long = ld != null ? Math.min(curBase.days[ld], Math.round(left * (open.length > 1 ? 0.5 : 1))) : 0;
     if (ld != null) days[ld] = long;
-    const easy = open.filter((i) => i !== ld).sort((a, b) => curBase.days[b] - curBase.days[a]);
+    const lastBig = lastRow?.longDay != null ? (lastRow.longDay + (lastRow.sun > 0 ? 1 : 0)) % 7 : null;
+    const tired = lastBig === 6 ? 0 : -1; // last week ended with its long run or back-to-back on Sunday: Monday is tired
+    const easy = open.filter((i) => i !== ld);
+    const max = (i) => Math.round(curBase.days[i] * (i === tired ? f : 1.6));
     let rest = left - long;
     const easyPlan = easy.reduce((a, i) => a + curBase.days[i], 0);
-    for (const i of easy) {
-      const share = easyPlan ? Math.round(((left - long) * curBase.days[i]) / easyPlan) : 0;
-      const v = Math.min(rest, Math.round(curBase.days[i] * 1.6), share);
-      if (v >= 3) { days[i] = v; rest -= v; }
+    for (const i of easy) days[i] = Math.min(max(i), easyPlan ? Math.round(((left - long) * curBase.days[i]) / easyPlan) : 0);
+    rest -= easy.reduce((a, i) => a + days[i], 0);
+    for (let pass = 0; pass < 3 && rest > 0; pass++) { // what a capped day could not take goes to the others with room
+      for (const i of easy) { if (rest <= 0) break; const add = Math.min(rest, max(i) - days[i]); if (add > 0) { days[i] += add; rest -= add; } }
     }
+    for (const i of easy) if (days[i] > 0 && days[i] < 3) { rest += days[i]; days[i] = 0; }
     if (rest > 0 && ld != null) { const add = Math.min(rest, curBase.days[ld] - days[ld]); days[ld] += add; rest -= add; }
     const km = days.reduce((x, y) => x + y, 0);
     const reason = hrHigh ? t("hvilepuls {hr}", { hr: hrNow }) : curA != null && curA > 1.5 ? t("ACWR {v} denne uge", { v: curA.toFixed(2) }) : lastA != null && lastA > 1.5 ? `ACWR ${lastA.toFixed(2)}` : t("{km} km mod {plan} planlagt", { km: lastLog.km, plan: lastRow.km });
     return { ...curBase, days, km, target: curBase.km, lng: ev[curBase.longDay] ? 0 : days[curBase.longDay ?? 5] || 0, sun: 0, quality: "Rolig – ingen hård session", qDay: null,
-      adjusted: { cap: cap ?? km, reason, acwr: curA != null && curA > 1.5 ? curA : lastA, original: curBase.days, originalKm: curBase.km, originalQuality: curBase.quality, from: todayIdx } };
+      adjusted: { cap: cap ?? km, reason, acwr: curA != null && curA > 1.5 ? curA : lastA, original: curBase.days, originalKm: curBase.km, originalQuality: curBase.quality, from } };
   }, [trigger, recWeek, lastRow?.km, hrHigh, hrNow, lastA, curA, curBase, todayIdx, dayKm.join(","), lastLog?.km]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = adjRow && !showOriginal ? adjRow : curBase;
   // Strength this week: the coach's fixed sessions, or the app's program dosed by phase, body goal and equipment.
