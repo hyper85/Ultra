@@ -665,4 +665,5 @@ export default {
   "Trænerplanen bestemmer styrken. Hybrid kan vælges, når du bruger appens egen plan.": "The coach plan decides the strength. Hybrid can be chosen when you use the app's own plan.",
   "i dag {n}": "today {n}",
   "Ugens snit fra dit ur": "The week's average from your watch",
+  "Belastningen steg for hurtigt – ugen her tages ned.": "The load rose too fast – this week is taken down.",
 };

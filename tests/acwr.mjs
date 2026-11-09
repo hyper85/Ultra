@@ -23,4 +23,20 @@ const logPatch = { "2026-10-19": w(40), "2026-10-26": w(40), "2026-11-02": w(40)
   ok(/1[.,]25/.test((await page.locator("main").innerText()).replace(/\s+/g, " ")), "Fremskridt shows 1.25");
   await browser.close();
 }
+{ // the cut is a balance, not a crash: coach week of 9 Nov (7 · 5 · 5 · long 30 · back-to-back 14 = 61 km) after a
+  // jump to 60 km. Down to last week's plan × 0.75 (56 → 42), the back-to-back goes, the short days stay, the long run
+  // is at most half. Before: every day under 4 km was dropped and the week ended at 28 km.
+  const r6 = (km) => ({ km, rpe: 6 });
+  const { browser, page, errors } = await openApp({ lang: "da", at: "2026-11-09T09:00:00", logPatch: { "2026-10-05": r6(30), "2026-10-12": r6(40), "2026-10-19": r6(45), "2026-10-26": r6(42), "2026-11-02": r6(60) } });
+  const txt = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+  const km = +((txt.match(/ugen er skåret ned til (\d+) km/) || [])[1] || 0);
+  ok(km >= 38 && km <= 42, `the week is cut to about 75 % of last week's plan (${km} km)`);
+  const strip = (txt.match(/UGEN 0 \/ \d+ km (Man .*?Søn \S+)/) || [])[1] || "";
+  const day = (d) => +((strip.match(new RegExp(`${d} (\\d+)`)) || [])[1] || 0);
+  ok(day("Ons") >= 3 && day("Tor") >= 3, `the short weekday runs stay (${strip})`);
+  ok(day("Lør") > 0 && day("Lør") <= Math.ceil(km / 2) && day("Søn") === 0, `long run kept at most half the week, no back-to-back (${strip})`);
+  ok(/Belastningen steg for hurtigt/.test(txt) && !/Lige på planen/.test(txt), "last week's line says the load rose too fast, not 'on plan'");
+  ok(errors.length === 0, `no errors ${errors.join(";")}`);
+  await browser.close();
+}
 done();

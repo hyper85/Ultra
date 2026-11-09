@@ -1009,9 +1009,9 @@ export default function App() {
   /* ---- trænerråd: principle 2, the advice overrides the plan for the week in progress ----
      Triggers: ACWR > 1.5 (last completed week, or this week so far), ran > 1.4 × last week's plan, or resting HR
      ≥ normal + 7 (the newest weekly value: this week's if typed, else last week's). The days already behind us stay
-     as they were; the remaining days are scaled to 75 % (60 % on the resting-HR trigger), days under 4 km dropped,
-     and never more than last week's plan × the same factor minus what is already run this week. The hard session
-     and the back-to-back run go. Resting HR ≥ normal + 4 gives a yellow note only. Nothing is written to the log. */
+     as they were; what is left of the week becomes 75 % of its plan (60 % on the resting-HR trigger), never more than
+     last week's plan × the same factor minus what is already run this week. The hard session and the back-to-back
+     run go, the long run stays at most half of what is left, the easy days share the rest (3 km or more). Resting HR ≥ normal + 4 gives a yellow note only. Nothing is written to the log. */
   const [showOriginal, setShowOriginal] = useState(false);
   const lastKey = ymd(addDays(parseLocal(curBase.key), -7));
   const lastRow = plan.rows.find((r) => r.key === lastKey) || null;
@@ -1039,12 +1039,27 @@ export default function App() {
     const cap = lastRow && !recWeek ? Math.round(lastRow.km * f) : null;
     const b2b = curBase.sun > 0 && curBase.longDay != null ? (curBase.longDay + 1) % 7 : -1;
     const ev = curBase.events || {};
-    let days = curBase.days.map((v, i) => (i < todayIdx || ev[i] ? v : i === b2b ? 0 : (v * f >= 4 ? Math.round(v * f) : 0)));
-    const rem = () => days.reduce((a, v, i) => a + (i >= todayIdx && !ev[i] ? v : 0), 0);
-    if (cap != null && rem() > Math.max(0, cap - ranSoFar)) {
-      const k = Math.max(0, cap - ranSoFar) / rem();
-      days = days.map((v, i) => (i < todayIdx || ev[i] ? v : v * k >= 4 ? Math.round(v * k) : 0));
+    // The week is taken down to the cap (last week's plan × 0.75, or × 0.6 on the resting-HR trigger) – not further.
+    // The back-to-back run goes; the long run stays but is at most half of what is left; the rest is spread over the
+    // planned easy days (at most 1.6 × their plan, never under 3 km). Earlier the 4 km floor dropped every short day
+    // and a 61 km week ended at 28 km (ACWR from 1.6 to 0.6: a crash, not a balance).
+    const open = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= todayIdx && !ev[i] && i !== b2b && curBase.days[i] > 0);
+    // what is left of the week's plan (the back-to-back run included) × f, and never above the cap
+    const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= todayIdx && !ev[i]).reduce((a, i) => a + curBase.days[i], 0);
+    const left = Math.max(0, Math.round(cap != null ? Math.min(cap - ranSoFar, planned * f) : planned * f));
+    let days = curBase.days.map((v, i) => (i < todayIdx || ev[i] ? v : 0));
+    const ld = curBase.longDay != null && open.includes(curBase.longDay) ? curBase.longDay : null;
+    const long = ld != null ? Math.min(curBase.days[ld], Math.round(left * (open.length > 1 ? 0.5 : 1))) : 0;
+    if (ld != null) days[ld] = long;
+    const easy = open.filter((i) => i !== ld).sort((a, b) => curBase.days[b] - curBase.days[a]);
+    let rest = left - long;
+    const easyPlan = easy.reduce((a, i) => a + curBase.days[i], 0);
+    for (const i of easy) {
+      const share = easyPlan ? Math.round(((left - long) * curBase.days[i]) / easyPlan) : 0;
+      const v = Math.min(rest, Math.round(curBase.days[i] * 1.6), share);
+      if (v >= 3) { days[i] = v; rest -= v; }
     }
+    if (rest > 0 && ld != null) { const add = Math.min(rest, curBase.days[ld] - days[ld]); days[ld] += add; rest -= add; }
     const km = days.reduce((x, y) => x + y, 0);
     const reason = hrHigh ? t("hvilepuls {hr}", { hr: hrNow }) : curA != null && curA > 1.5 ? t("ACWR {v} denne uge", { v: curA.toFixed(2) }) : lastA != null && lastA > 1.5 ? `ACWR ${lastA.toFixed(2)}` : t("{km} km mod {plan} planlagt", { km: lastLog.km, plan: lastRow.km });
     return { ...curBase, days, km, target: curBase.km, lng: ev[curBase.longDay] ? 0 : days[curBase.longDay ?? 5] || 0, sun: 0, quality: "Rolig – ingen hård session", qDay: null,
@@ -1101,7 +1116,7 @@ export default function App() {
     const l = log[prev.key] || {}; const a = acwrFor(prev.key);
     if (!(l.km > 0) && !(l.xn > 0)) return null;
     const pct = prev.km ? Math.round(((l.km || 0) / prev.km) * 100) : null;
-    const verdict = pct == null ? "" : pct >= 85 && pct <= 120 ? t("Lige på planen.") : pct > 120 ? t("Over planen – planens tal er et loft.") : pct >= 60 ? t("Lidt under planen, det er fint.") : t("Langt under planen – passer dagene?");
+    const verdict = pct == null ? "" : a?.v > 1.5 ? t("Belastningen steg for hurtigt – ugen her tages ned.") : pct >= 85 && pct <= 120 ? t("Lige på planen.") : pct > 120 ? t("Over planen – planens tal er et loft.") : pct >= 60 ? t("Lidt under planen, det er fint.") : t("Langt under planen – passer dagene?");
     return { i: prev.i, km: l.km || 0, plan: prev.km, pct, acwr: a?.v ?? null, xn: l.xn || 0, xmin: l.xmin || 0, sleep: l.sleep, verdict };
   }, [plan.rows, cur.key, log]); // eslint-disable-line react-hooks/exhaustive-deps
   // Yesterday had plan km, no run, no event (same week, not Monday): I dag says so, and the coach gets a question for it.
