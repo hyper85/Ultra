@@ -33,10 +33,19 @@ const logPatch = { "2026-10-19": w(40), "2026-10-26": w(40), "2026-11-02": w(40)
   ok(km >= 38 && km <= 42, `the week is cut to about 75 % of last week's plan (${km} km)`);
   const strip = (txt.match(/UGEN 0 \/ \d+ km (Man .*?Søn \S+)/) || [])[1] || "";
   const day = (d) => +((strip.match(new RegExp(`${d} (\\d+)`)) || [])[1] || 0);
-  ok(day("Ons") >= 3 && day("Tor") >= 3, `the short weekday runs stay (${strip})`);
+  ok(day("Ons") >= 6 && day("Tor") >= 6, `the short weekday runs stay and take the extra km (${strip})`);
+  ok(day("Man") > 0 && day("Man") <= 5, `Monday after last week's Sunday back-to-back is the lightest day: at most its plan × 0.75 (${strip})`);
   ok(day("Lør") > 0 && day("Lør") <= Math.ceil(km / 2) && day("Søn") === 0, `long run kept at most half the week, no back-to-back (${strip})`);
   ok(/Belastningen steg for hurtigt/.test(txt) && !/Lige på planen/.test(txt), "last week's line says the load rose too fast, not 'on plan'");
   ok(errors.length === 0, `no errors ${errors.join(";")}`);
   await browser.close();
+}
+{ // Tuesday after a skipped Monday: the week is the same (cut from Monday), Monday's km are not moved onto other days
+  const r6 = (km) => ({ km, rpe: 6 });
+  const lp = { "2026-10-05": r6(30), "2026-10-12": r6(40), "2026-10-19": r6(45), "2026-10-26": r6(42), "2026-11-02": r6(60) };
+  const view = async (at) => { const { browser, page } = await openApp({ lang: "da", at, logPatch: lp }); const t = (await page.locator("main").innerText()).replace(/\s+/g, " "); await browser.close(); return { x: (t.match(/UGEN 0 \/ (\d+ km Man .*?Søn \S+)/) || [])[1] || "", t }; };
+  const mon = await view("2026-11-09T09:00:00"), tue = await view("2026-11-10T09:00:00");
+  ok(mon.x && mon.x === tue.x, `same week on Monday and Tuesday after a skipped Monday (${mon.x} / ${tue.x})`);
+  ok(/I går: \d+ km planlagt, ikke løbet\. Lad den ligge/.test(tue.t), "Tuesday: yesterday's run is let go, not made up");
 }
 done();
