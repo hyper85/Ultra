@@ -946,6 +946,10 @@ export default function App() {
   // Climb counts in the load: a week's effort km (km + vertical metres / 100) × RPE when the runs carry elevation.
   const loadOf = (l) => { if (!l) return null; const run = l.km ? (l.ekm > l.km ? l.ekm : l.km) * (l.rpe || 5) : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
   const baseline = (+p.currentKm || 0) * 5;
+  // The first week with any load in the log: from there on (inside the plan) a week with nothing logged is a week
+  // without training, and it counts as 0 in the chronic load. Skipping it made the chronic load too high after a sick
+  // or lost week, so the jump back read as green (40, 40, –, 50 km gave 1.25 instead of 1.67).
+  const firstLoadKey = useMemo(() => Object.keys(log).filter((k) => loadOf(log[k]) != null).sort()[0] || null, [log]); // eslint-disable-line react-hooks/exhaustive-deps
   const acwrFor = (key) => {
     const own = loadOf(log[key]);
     if (own == null) return null;
@@ -954,9 +958,11 @@ export default function App() {
       const pk = ymd(addDays(d, -7 * k)); const l = log[pk]; const v = loadOf(l);
       if (v != null) { prev.push(v); if (l.rpeAuto || (l.km && !l.rpe)) est = true; }
       else if (pk < p.startDate && baseline) { prev.push(baseline); est = true; }
+      else if (pk >= p.startDate && firstLoadKey && pk >= firstLoadKey) prev.push(0);
     }
     const ownEst = !!(log[key]?.rpeAuto || (log[key]?.km && !log[key]?.rpe));
-    return prev.length ? { v: own / (prev.reduce((a, b) => a + b, 0) / prev.length), est: est || ownEst } : null;
+    const chronic = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
+    return chronic > 0 ? { v: own / chronic, est: est || ownEst } : null;
   };
   const nPre = useMemo(() => {
     const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < p.startDate);
