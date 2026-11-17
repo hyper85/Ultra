@@ -35,6 +35,11 @@ export const verifyCode = async (email, token) => {
   return data;
 };
 
+/* A 200 answer that is not JSON (a captive portal on hotel wifi, a proxy, a platform error page) is an error, not
+   "no data": the callers read fields of the answer, and a null read during a React state update crashed the app. */
+const unexpected = (status) => { const e = new Error(t("Serveren svarede ikke som forventet. Prøv igen om lidt.")); e.status = status; return e; };
+const isObj = (b) => !!b && typeof b === "object" && !Array.isArray(b);
+
 // Invite a friend: the signed-in user's token proves who is asking; api/invite.js sends the branded invitation mail.
 export const inviteFriend = async (email) => {
   const { data } = await supabase.auth.getSession();
@@ -46,6 +51,7 @@ export const inviteFriend = async (email) => {
   let body = null; try { body = await r.json(); } catch { /* not json */ }
   if (r.status === 404) throw new Error(t("Invitationer findes kun i den udgave, der kører på Vercel."));
   if (!r.ok) throw new Error(body?.error || t("Invitationen kunne ikke sendes ({status}).", { status: r.status }));
+  if (!isObj(body)) throw unexpected(r.status);
   return body;
 };
 
@@ -61,6 +67,7 @@ const stravaCall = async (op, extra = {}) => {
   let body = null; try { body = await r.json(); } catch { /* not json */ }
   if (r.status === 404 && !body) throw new Error(t("Strava findes kun i den udgave, der kører på Vercel."));
   if (!r.ok) { const e = new Error(body?.error || t("Strava-forbindelsen fejlede ({status}).", { status: r.status })); e.status = r.status; e.connected = body?.connected; throw e; }
+  if (!isObj(body)) throw unexpected(r.status);
   return body;
 };
 export const STRAVA_STATE_KEY = "ultraplan-strava-state";
@@ -89,6 +96,7 @@ const garminCall = async (op, extra = {}) => {
   let body = null; try { body = await r.json(); } catch { /* not json */ }
   if (r.status === 404 && !body) throw new Error(t("Garmin findes kun i den udgave, der kører på Vercel."));
   if (!r.ok) { const e = new Error(body?.error || t("Garmin-forbindelsen fejlede ({status}).", { status: r.status })); e.status = r.status; e.connected = body?.connected; e.keyRejected = !!body?.keyRejected; throw e; }
+  if (!isObj(body)) throw unexpected(r.status);
   return body;
 };
 export const garminStatus = () => garminCall("status");
@@ -106,6 +114,8 @@ export const deleteMyAccount = async () => {
   catch { throw new Error(t("Kunne ikke kontakte serveren. Tjek din internetforbindelse.")); }
   let body = null; try { body = await r.json(); } catch { /* not json */ }
   if (!r.ok) throw new Error(body?.error || t("Kontoen kunne ikke slettes ({status}).", { status: r.status }));
+  // Only the server's own "ok" means the account is gone; anything else must not sign out and wipe the device.
+  if (!isObj(body) || body.ok !== true) throw new Error(t("Kontoen kunne ikke slettes ({status}).", { status: r.status }));
   try { await supabase.auth.signOut(); } catch { /* the login is gone already */ }
   return body;
 };

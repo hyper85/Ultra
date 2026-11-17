@@ -17,6 +17,7 @@ export async function askCoach({ question, history, context }) {
   try { data = await r.json(); } catch { /* not json */ }
   if (r.status === 404) throw new CoachError(t("AI-træneren findes kun i den udgave, der kører på Vercel."), true);
   if (!r.ok) throw new CoachError(data?.error || t("AI-træneren svarede ikke ({status}).", { status: r.status }), r.status === 503);
+  if (typeof data?.text !== "string") throw new CoachError(t("AI-træneren svarede ikke som forventet. Prøv igen om lidt."));
   return data.text;
 }
 
