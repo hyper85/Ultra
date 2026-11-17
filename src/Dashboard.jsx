@@ -131,7 +131,8 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
   // Walks and hikes counted as km (the "Tæl vandring og gang med" switch) are named on the plan-so-far tile.
   const hikeKmDone = includeHikes && done.length ? Object.values(acts).filter((a) => kind(a.type) === "hike" && a.day >= done[0].key && a.day < cur.key).reduce((s, a) => s + (a.km || 0), 0) : 0;
   const last4 = done.slice(-4).map((r) => log[r.key]?.km).filter((v) => v > 0);
-  const d28 = ymd(addDays(parseLocal(todayKey), -28));
+  const todayStr = ymd(new Date()); // today's date – todayKey is this week's Monday
+  const d28 = ymd(addDays(parseLocal(todayStr), -28));
   const recent = runs.filter((a) => a.day >= d28);
   const longest = recent.length ? r1(Math.max(...recent.map((a) => a.km))) : null;
   const acwr = acwrFor(cur.key);
@@ -178,7 +179,7 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
           <div className="row-between"><h2 style={{ margin: 0 }}>ACWR</h2><span className="muted">{t("grønt bånd 0,8–1,3")}</span></div>
           <Line rows={loadRows} band={[0.8, 1.3]} color="acwr" format={(v) => v.toFixed(1)} cur={cur.key} />
         </div>}
-        {(() => { const hp = { maxHR, restHR: p.restHR }; const zw = hrZoneWeeks(acts, { ...hp, until: todayKey, weeks: 12, includeHikes }); const withHR = zw.rows.filter((r) => r.easy + r.mid + r.hard > 0); if (withHR.length < 3) return null;
+        {(() => { const hp = { maxHR, restHR: p.restHR }; const zw = hrZoneWeeks(acts, { ...hp, until: todayStr, weeks: 12, includeHikes }); const withHR = zw.rows.filter((r) => r.easy + r.mid + r.hard > 0); if (withHR.length < 3) return null;
           const byKey = Object.fromEntries(plan.rows.map((r) => [r.key, r])); const rows = zw.rows.map((r) => ({ ...r, label: byKey[r.key] ? weekLabel(byKey[r.key]) : fmtDay(r.key) }));
           const l = zw.last4; const cap = hrAt(0.7, hp); const unknown = zw.rows.reduce((s, r) => s + r.none, 0); return (
           <div className="panel" id="chart-zones">

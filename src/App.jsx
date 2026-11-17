@@ -125,11 +125,15 @@ export function buildCoachPlan(p) {
 export function buildPlan(p, { easyPaceMinKm } = {}) {
   const level = p.level || 2;
   const paceE = easyPaceMinKm > 0 ? easyPaceMinKm : easyPaceFor(level);
-  const start = parseLocal(p.startDate || PLAN_START);
+  let start = parseLocal(p.startDate || PLAN_START);
   // A profile without a race yet (the questionnaire is not done): plan 16 weeks for 50 km, so nothing divides by NaN.
   const raceD = p.raceDate ? parseLocal(p.raceDate) : null;
-  const race = raceD && !isNaN(raceD) && raceD > start ? raceD : addDays(start, 16 * 7);
-  const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
+  const realRace = !!(raceD && !isNaN(raceD) && raceD > start);
+  const race = realRace ? raceD : addDays(start, 16 * 7);
+  let weeks = Math.floor(Math.round((race - start) / 86400000) / 7) + 1;
+  // Under 8 weeks to the race: the plan is still 8 weeks, but it ENDS on the race – it starts earlier, so the runner
+  // joins it part of the way in. Stretching it instead put the taper and the race week after the real race.
+  if (weeks < 8) { if (realRace) start = addDays(mondayOf(race), -7 * 7); weeks = 8; }
   const raceKm = +p.raceKm > 0 ? +p.raceKm : 50;
   const injured = p.injury === "injured", sore = p.injury === "sore";
   // Never below a small floor: a runner who types 0 km still needs a plan that starts somewhere.
@@ -666,7 +670,8 @@ export default function App() {
     </div>
   );
   const afterRace = todayStr > p.raceDate;            // the race is behind us
-  const startD = parseLocal(p.startDate);
+  const startD = parseLocal(plan.rows[0]?.key || p.startDate); // the plan's own first Monday (the coach plan has its own start)
+  const planStartKey = ymd(startD);
   const curSchedLabel = curBase.schedLabel;
 
   /* ---- Strava / Garmin import ---- */
@@ -721,17 +726,19 @@ export default function App() {
         if (!gotSheet) errors.push(...sheetErrors);
       } catch (err) { errors.push(err?.message || t("{name}: kunne ikke læses.", { name: f.name })); console.error("import", f.name, err); }
     }
-    let logBase = log; let got = {}; let skippedCols = []; let daysN = 0;
+    // Built on the newest log/activities/profile, not the ones captured when the import started: coming back from the
+    // file picker starts a silent Strava sync, and its runs must not be lost to this import's older copy.
+    let logBase = logRef.current; let got = {}; let skippedCols = []; let daysN = 0;
     if (wellness.length) {
       // imported values win where the user has not typed a number (import.js wellnessIntoLog)
-      const wl = wellnessIntoLog(log, wellness); const n = wl.log; got = wl.got; skippedCols = wl.skipped;
+      const wl = wellnessIntoLog(logRef.current, wellness); const n = wl.log; got = wl.got; skippedCols = wl.skipped;
       logBase = n; if (!parsed.length) saveLog(n);
       // Daily rows (a 4-week report) go to the profile's day store, for the day-by-day chart and the coach.
       const days = Object.assign({}, ...wellness.map((w) => w.days || {}));
       daysN = Object.keys(days).length;
-      if (daysN) setP({ ...p, wellness: mergeWellnessDays(p.wellness, days) });
+      if (daysN) setP((prev) => ({ ...prev, wellness: mergeWellnessDays(prev.wellness, days) }));
     }
-    const merged = mergeActivities(acts, parsed);
+    const merged = mergeActivities(actsRef.current, parsed);
     const { next, removed } = dedupeStore(merged.next);
     const added = merged.added, swapped = merged.replaced + removed, enriched = merged.enriched;
     let weeks = {};
@@ -800,7 +807,7 @@ export default function App() {
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", ...hp, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: hrAt(0.7, hp), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
       {full && !r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
-      {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+      {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, ...hp, easyPace: insights.summary.easyPace })}</p></div>; })()}
       <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
     </div>
   ); };
@@ -980,19 +987,19 @@ export default function App() {
     for (let k = 1; k <= 4; k++) {
       const pk = ymd(addDays(d, -7 * k)); const l = log[pk]; const v = loadOf(l);
       if (v != null) { prev.push(v); if (l.rpeAuto || (l.km && !l.rpe)) est = true; }
-      else if (pk < p.startDate && baseline) { prev.push(baseline); est = true; }
-      else if (pk >= p.startDate && firstLoadKey && pk >= firstLoadKey) prev.push(0);
+      else if (pk < planStartKey && baseline) { prev.push(baseline); est = true; }
+      else if (pk >= planStartKey && firstLoadKey && pk >= firstLoadKey) prev.push(0);
     }
     const ownEst = !!(log[key]?.rpeAuto || (log[key]?.km && !log[key]?.rpe));
     const chronic = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
     return chronic > 0 ? { v: own / chronic, est: est || ownEst } : null;
   };
   const nPre = useMemo(() => {
-    const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < p.startDate);
+    const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < planStartKey);
     const earliest = keys.length ? keys.reduce((a, b) => (a < b ? a : b)) : null;
     const back = earliest ? Math.round((startD - parseLocal(earliest)) / 86400000 / 7) : 0;
     return Math.min(30, Math.max(4, back));
-  }, [log, acts, p.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [log, acts, planStartKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const preRows = Array.from({ length: nPre }, (_, j) => nPre - j).map((k) => { const d = addDays(startD, -7 * k); return { i: -k, key: ymd(d), wkStart: d, iso: isoWeek(d), pre: true }; });
   const preLogged = preRows.filter((r) => loadOf(log[r.key]) != null).length;
   const loads = plan.rows.map((r) => loadOf(log[r.key]));
@@ -1217,7 +1224,7 @@ export default function App() {
   if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
   else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
   else if (cur.unplaced >= 3) { advice = t('Din hverdag giver plads til {km} af de {target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de {km} km – det er ikke en fejl at leve et normalt liv.', { km: cur.km, target: cur.target }); warn = true; }
-  if (lastIdx != null && !adjRow && !cur.recovery) {
+  if (lastIdx != null && plan.rows[lastIdx].key === lastKey && !adjRow && !cur.recovery) { // only last week, not one further back
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = t("ACWR sidste uge var {acwr} – rødt. Hold denne uge på max {km} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.", { acwr: a.toFixed(2), km: Math.round(plan.rows[lastIdx].km * 0.75) }); warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = t("Du løb {km} km mod {plan} planlagt. Planens tal er et loft. Ram ugens {week} km – og ikke mere.", { km: l.km, plan: plan.rows[lastIdx].km, week: cur.km }); warn = true; }
@@ -2045,7 +2052,7 @@ export default function App() {
                 <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
                 <p className="muted">{karvonen(hp) ? t("Zonerne er pulsreserve (Karvonen): hvilepuls + en procent af forskellen op til makspuls ({reserve} slag). Det er det samme som Garmin og Strava med indstillingen % af pulsreserve.", { reserve: maxHR - hp.restHR }) : t("Zonerne er % af makspuls. Skriv din hvilepuls ind under Dig, så bruger appen pulsreserven (Karvonen) ligesom Garmin og Strava.")}</p>
-                {(() => { const pk = hrPeak(acts, { until: todayKey }); if (!pk) return null; const higher = pk.hr > maxHR; return (
+                {(() => { const pk = hrPeak(acts, { until: todayStr }); if (!pk) return null; const higher = pk.hr > maxHR; return (
                   <div className={`hr-peak${higher || !p.maxHR ? " offer" : ""}`}>
                     <p>{t("Højeste puls målt på et løb det seneste år: {hr} ({d}).", { hr: pk.hr, d: parseLocal(pk.day).toLocaleDateString(locale(), { day: "numeric", month: "short" }) })}
                       {pk.skipped.length > 0 && ` ${tn(pk.skipped.length, "En enlig top på {hr} er sprunget over som fejlmåling.", "{n} enlige toppe (højest {hr}) er sprunget over som fejlmålinger.", { hr: pk.skipped[0].hr })}`}

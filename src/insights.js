@@ -150,7 +150,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
     }
     if (plain.length >= 3) { easyPaceMinKm = median(plain); easyPaceEst = true; }
   }
-  const easyPace = easyPaceMinKm ? `${Math.floor(easyPaceMinKm)}:${String(Math.round((easyPaceMinKm % 1) * 60)).padStart(2, "0")}` : null;
+  const easyPace = easyPaceMinKm ? (() => { const s = Math.round(easyPaceMinKm * 60); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; })() : null; // round first: 5.995 is 6:00, not 5:60
 
   // Aerobic efficiency: speed per heartbeat on easy runs, first half of the window vs the last half.
   const eff = easyRuns.filter((a) => a.min > 0 && a.hr > 0).sort((a, b) => (a.day < b.day ? -1 : 1)).map((a) => (a.km / (a.min / 60)) / a.hr);
@@ -198,7 +198,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (efficiencyPct != null && efficiencyPct <= -5) add("slower", "info", t("{pct} % mindre fart ved samme puls end i starten. Varme, søvn eller for meget belastning? Hold igen en uge og se, om det retter sig.", { pct: Math.abs(efficiencyPct) }));
   if (restHRDelta != null && restHRDelta >= 5) add("resthr-high", "warn", t("Hvilepulsen har ligget {n} slag over din normal de sidste uger. Kroppen beder om søvn og mad før den beder om km.", { n: restHRDelta }));
   if (restHRDelta != null && restHRDelta <= -3) add("resthr-low", "good", t("Hvilepulsen er faldet {n} slag under din normal. Konditionen stiger.", { n: Math.abs(restHRDelta) }),
-    { label: t("Sæt normal hvilepuls til {hr}", { hr: Math.round(p.restHR + restHRDelta) }), patch: { restHR: Math.round(p.restHR + restHRDelta) } });
+    { label: t("Sæt normal hvilepuls til {hr}", { hr: Math.round(mean(hrs)) }), patch: { restHR: Math.round(mean(hrs)) } }); // the measured value: the delta is against the measured normal, not the profile
   if (runsPerWeek != null && p.maxRunDays && runsPerWeek <= p.maxRunDays - 1.5 && withActs.length >= 4) add("fewer-days", "info", t("Du løber {n} dage om ugen, planen regner med {max}. Færre, lidt længere ture passer måske bedre.", { n: runsPerWeek, max: p.maxRunDays }),
     coach ? null : { label: t("Sæt løbedage til {n}", { n: Math.max(2, Math.round(runsPerWeek)) }), patch: { maxRunDays: Math.max(2, Math.round(runsPerWeek)) } });
   // Sleep: the last 3 logged weeks with hours.
@@ -249,7 +249,7 @@ export function hrZoneWeeks(acts = {}, { maxHR, restHR, until, weeks = 12, inclu
     const r = at[ymd(mondayOf(parseLocal(a.day)))]; if (!r) continue;
     const min = a.min || Math.round((a.km || 0) * 6.5); if (!(min > 0)) continue;
     const pct = a.hr ? hrShare(a.hr, { maxHR, restHR }) : null;
-    const z = pct == null ? "none" : ZONE_BANDS.find(([, lo, hi]) => pct >= lo && pct < hi)[0];
+    const z = pct == null ? "none" : (ZONE_BANDS.find(([, lo, hi]) => pct >= lo && pct < hi)?.[0] ?? (pct < ZONE_BANDS[0][1] ? ZONE_BANDS[0][0] : ZONE_BANDS[ZONE_BANDS.length - 1][0])); // below resting HR (sensor dropout) = easy, above max = hard
     r[z] += min; r.n++;
   }
   for (const r of rows) for (const z of ["easy", "mid", "hard", "none"]) r[z] = Math.round(r[z]);

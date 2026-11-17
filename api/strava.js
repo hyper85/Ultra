@@ -83,7 +83,7 @@ export default async function handler(req, res) {
         row = { ...row, access_token: t.access_token, refresh_token: t.refresh_token, expires_at: t.expires_at };
         await admin.from("strava_tokens").update({ access_token: row.access_token, refresh_token: row.refresh_token, expires_at: row.expires_at }).eq("user_id", uid);
       }
-      const since = Math.floor((body?.since ? new Date(body.since).getTime() : row.last_sync ? new Date(row.last_sync).getTime() - 3 * 86400_000 : Date.now() - LOOKBACK_DAYS * 86400_000) / 1000);
+      const since = Math.floor((body?.since ? new Date(body.since).getTime() : row.last_sync ? new Date(row.last_sync).getTime() - 14 * 86400_000 /* runs reach Strava days late; ids dedupe */ : Date.now() - LOOKBACK_DAYS * 86400_000) / 1000);
       const out = [];
       for (let page = 1; page <= 10; page++) {
         const r = await fetch(`${STRAVA}/api/v3/athlete/activities?after=${since}&per_page=200&page=${page}`, { headers: { Authorization: `Bearer ${row.access_token}` }, signal: AbortSignal.timeout(20_000) });

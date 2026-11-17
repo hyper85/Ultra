@@ -145,7 +145,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
           </div>
           <label>{t("Højdemeter (valgfri)")}<input type="number" inputMode="numeric" value={d.raceVert} onChange={set("raceVert")} placeholder={t("fx 1200")} /></label>
           {d.raceDate && !raceOk && <div className="advice warn">{t("Datoen skal ligge efter i dag.")}</div>}
-          {raceOk && weeksToRace < 8 && <div className="advice warn">{t("Kun {n} uger til løbet. Planen bliver komprimeret til minimum 8 uger, så hold igen med ambitionerne.", { n: weeksToRace })}</div>}
+          {raceOk && weeksToRace < 8 && <div className="advice warn">{t("Kun {n} uger til løbet. Planen er 8 uger og slutter på løbsdagen, så du starter et stykke inde i den. Hold igen med ambitionerne.", { n: weeksToRace })}</div>}
           {raceOk && weeksToRace >= 8 && <div className="muted" style={{ marginTop: 8 }}>{t("{n} uger fra mandag {date} til løbet.", { n: weeksToRace, date: shortDate(parseLocal(d.startDate)) })}</div>}
           <div className="muted" style={{ marginTop: 12 }}>{t("Hvad vil du med det?")}</div>
           <div className="ob-cards">
