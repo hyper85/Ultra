@@ -28,7 +28,10 @@ ok(sessionSteps("Kun roligt") === null && sessionSteps("Stigninger 6×20 s") ===
 {
   const { browser, page, errors } = await openApp({ lang: "da", at: "2026-11-18T07:00:00" });
   const txt = (await page.locator(".today").innerText()).replace(/\s+/g, " ");
-  ok(/\b7 km\b/.test(txt) && /min rolig opvarmning \(Z1–Z2\)\. Derefter 4–6 stigninger/.test(txt) && /min rolig nedjog/.test(txt) && /I alt ca\. 7 km/.test(txt), `Wed 18 Nov: 7 km and the steps say 7 km (${txt.slice(0, 200)})`);
+  const steps = await page.locator(".today .step").allInnerTexts();
+  const mins = steps.map((x) => +(x.match(/(\d+) min/) || [])[1]); const kms = steps.map((x) => +((x.match(/([\d,]+) km/) || [])[1] || "0").replace(",", "."));
+  ok(/^Opvarmning/.test(steps[0]) && /^Stigninger/.test(steps[1]) && /^10 min tempo/.test(steps[2]) && /^Nedjog/.test(steps[3]) && mins[0] === 15 && mins[3] === 10, `Wed 18 Nov: step list warm-up 15 · strides · tempo · cool-down 10 (${steps.map((x) => x.replace(/\s+/g, " ")).join(" | ")})`);
+  ok(/\b7\s*km\b/.test(txt) && /I alt ca\. 7 km/.test(txt) && Math.abs(kms.reduce((a, b) => a + b, 0) - 7) <= 0.3, `Wed 18 Nov: 7 km and the steps add up to it (${kms.join(" + ")})`);
   ok(errors.length === 0, `no errors ${errors.join(";")}`);
   await browser.close();
 }
@@ -39,7 +42,7 @@ ok(sessionSteps("Kun roligt") === null && sessionSteps("Stigninger 6×20 s") ===
   const { browser, page, errors } = await openApp({ lang: "da", at: "2026-11-18T07:00:00", patch: { coachMode: false, qualityDay: 2, longDay: 5, maxRunDays: 4, sched: { A: week, B: week } } });
   const txt = (await page.locator(".today").innerText()).replace(/\s+/g, " ");
   const shown = +((txt.match(/(\d+(?:\.\d)?)\s*km/) || [])[1]); const said = +(((txt.match(/I alt ca\. (\d+(?:,\d)?) km/) || [])[1] || "").replace(",", "."));
-  ok(/opvarmning/.test(txt) && shown > 0 && shown === said, `app plan: the hard day shows ${shown} km and its steps say ${said} km`);
+  ok(/opvarmning/i.test(txt) && shown > 0 && shown === said, `app plan: the hard day shows ${shown} km and its steps say ${said} km`);
   ok(errors.length === 0, `no errors ${errors.join(";")}`);
   await browser.close();
 }

@@ -780,12 +780,22 @@ export default function App() {
   // How to run the week: the hard session with its zone, the long run, the easy runs with the runner's own pace.
   // Used for the current week on Plan and for any week unfolded under "Alle uger".
   const [guideFull, setGuideFull] = useState({}); // weeks whose how-to text is unfolded (titles always show)
+  // A hard session as its steps: warm-up, strides, the work, cool-down – each with time and km – then the total and
+  // how it should feel. Falls back to the plain text for days that are not step sessions.
+  const kmFmt = (x) => x.toLocaleString(locale(), { maximumFractionDigits: 1 });
+  const stepList = (g) => (g.parts ? (
+    <div className="steps-wrap">
+      <ol className="steps">{g.parts.map((pt) => <li key={pt.key} className={`step step-${pt.key}`}><span className="step-name"><b>{pt.label}</b><small>{pt.zone}</small></span><span className="step-meta"><b>{t("{min} min", { min: pt.min })}</b><small>{kmFmt(pt.km)} km</small></span></li>)}</ol>
+      <p className={`step-total ${g.over ? "warn" : ""}`}>{g.total}</p>
+      <p className="step-about">{g.about}</p>
+    </div>
+  ) : <p>{g.text}</p>);
   const renderGuide = (r) => { const full = !!guideFull[r.key]; return (
     <div className={`guide ${full ? "" : "compact"}`}>
       {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
-        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: r.days[r.qDay] }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
+        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: r.days[r.qDay] }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span>{stepList(g)}</div>; })()
         : null}
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", ...hp, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: hrAt(0.7, hp), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
@@ -1596,7 +1606,7 @@ export default function App() {
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{sessionName(cur.quality)}</b></div>}
-                {hard && <div className="today-guide">{describeSession(cur.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: v }).text}</div>}
+                {hard && <div className="today-guide">{stepList(describeSession(cur.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: v }))}</div>}
                 {easy && <div className="today-sub">{describeEasy({ km: v, ...hp, easyPace: insights.summary.easyPace })}</div>}
                 {ev && <div className="today-sub"><b>{[ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null].filter(Boolean).join(" · ")}</b></div>}
                 {ev && ev.result && <div className="today-ran">✓ {t("Gennemført")}: {[ev.result.km ? `${ev.result.km} km` : null, ev.result.total || null, ev.result.ascent ? `${ev.result.ascent} m+` : null, ev.result.avgHR ? `${t("puls")} ${ev.result.avgHR}` : null].filter(Boolean).join(" · ")}</div>}
@@ -1612,7 +1622,7 @@ export default function App() {
                 {!v && !lift && !raceDay && !ev && tomorrow && <div className="today-sub muted">{t("I morgen: {what}", { what: tomorrow })}</div>}
                 {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Justeret af trænerråd ({reason}).", { reason: adjRow.adjusted.reason })} {t("Original:")} {adjRow.adjusted.original[ti] || t("hvile")}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
-                {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
+                {v > 0 && lift && session && <div className="today-also"><b>{t("+ {name} i dag efter løbet:", { name: session.name })}</b><ul>{session.exercises.map((e, k) => <li key={k}>{e.label || e.name}</li>)}</ul></div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ {t("Logget")} · {ran} km{todayVert > 0 ? ` · ${todayVert} m+` : ""}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
                 {todayRuns.length > 0 && (
@@ -2014,7 +2024,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />● {t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
+            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />{t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
             <div className="import-row" style={{ marginTop: 10 }}>
               <button type="button" className="btn ghost" onClick={exportICS}>{t("Læg planen i din kalender (.ics)")}</button>
             </div>

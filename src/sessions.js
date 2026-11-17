@@ -62,7 +62,7 @@ function mainOf(q) {
   const tempoOf = (txt) => { const tr = reps(txt); if (tr) return { steps: repsOf(tr.n, minOf(tr), F.tempo, 3, F.jog, "work"), say: t("{n} × {dur} tempo med 3 min rolig jog imellem", { n: tr.n, dur: dur(tr) }) }; const d = oneMin(txt) || 20; return { steps: [{ key: "work", min: d, f: F.tempo }], say: t("{d} min tempo i ét stræk", { d }) }; };
   if (/^stigninger\s*\+/.test(ql)) {
     const tp = tempoOf(q.match(/\+\s*(.+)$/)?.[1] || "");
-    return { kind: "strides-tempo", zone: "Z3–Z4", steps: [...repsOf(5, 20 / 60, F.stride, 40 / 60, F.walk, "stride"), { key: "rest", min: 2, f: F.jog }, ...tp.steps],
+    return { kind: "strides-tempo", zone: "Z3–Z4", steps: [...repsOf(5, 20 / 60, F.stride, 40 / 60, F.walk, "stride"), { key: "rest", min: 2, f: F.jog }].map((x) => ({ ...x, g: "strides" })).concat(tp.steps),
       say: t("Derefter 4–6 stigninger à 20 s (glidende fart op til cirka 90 % af sprint, gang tilbage) og 2 min rolig jog. Så {tempo}.", { tempo: tp.say }) };
   }
   if (/stigninger/.test(ql)) return null; // strides at the end of an easy run
@@ -119,8 +119,17 @@ export function describeSession(quality, { maxHR, restHR, easyPace, easyPaceMinK
   };
   const kmTxt = (x) => x.toLocaleString(locale(), { maximumFractionDigits: 1 });
   const total = st.over ? t("Trinene fylder ca. {km} km – mere end planens {plan} km. Skær hellere et interval væk end opvarmningen.", { km: kmTxt(st.km), plan: kmTxt(km) }) : t("I alt ca. {km} km.", { km: kmTxt(km > 0 ? km : st.km) });
-  const text = [t("{min} min rolig opvarmning (Z1–Z2).", { min: st.wu }), st.say, t("Til sidst {min} min rolig nedjog (Z1–Z2).", { min: st.cd }), total, ABOUT[st.kind]()].join(" ");
-  return { kind: st.kind, zone: st.zone, text, steps: st.steps, km: km > 0 && !st.over ? km : st.km, over: st.over };
+  const about = ABOUT[st.kind]();
+  const text = [t("{min} min rolig opvarmning (Z1–Z2).", { min: st.wu }), st.say, t("Til sidst {min} min rolig nedjog (Z1–Z2).", { min: st.cd }), total, about].join(" ");
+  // The same steps grouped for the card's step list: warm-up, strides, the work (reps and recoveries), cool-down.
+  const group = (x) => (x.key === "warmup" || x.key === "cooldown" ? x.key : x.g || "main");
+  const parts = [];
+  for (const x of st.steps) { const k = group(x); const last = parts[parts.length - 1]; if (last && last.key === k) { last.min += x.min; last.km += x.km; } else parts.push({ key: k, min: x.min, km: x.km }); }
+  const mainLabel = sessionName(q.replace(/^stigninger\s*\+\s*/i, "")) || sessionName(q);
+  const LABEL = { warmup: t("Opvarmning"), strides: t("Stigninger 4–6 × 20 s"), main: mainLabel.charAt(0).toUpperCase() + mainLabel.slice(1), cooldown: t("Nedjog") };
+  const ZONE = { warmup: "Z1–Z2", strides: t("glidende fart"), main: st.zone, cooldown: "Z1–Z2" };
+  for (const pt of parts) { pt.label = LABEL[pt.key]; pt.zone = ZONE[pt.key]; pt.min = Math.round(pt.min); pt.km = Math.round(pt.km * 10) / 10; }
+  return { kind: st.kind, zone: st.zone, text, parts, total, about, steps: st.steps, km: km > 0 && !st.over ? km : st.km, over: st.over };
 }
 
 // Guidance for the two other kinds of days the plan has.

@@ -318,4 +318,9 @@ export default {
   "{min} min rolig opvarmning (Z1–Z2).": "{min} min easy warm-up (Z1–Z2).",
   "Til sidst {min} min rolig nedjog (Z1–Z2).": "Finally {min} min easy cool-down jog (Z1–Z2).",
   "Tærskel er den fart, du kan holde i cirka en time: puls 80–90 %{hr}, \"behageligt hårdt\", du kan sige korte sætninger.{hills} Første interval skal føles for let.": "Threshold is the pace you can hold for about an hour: heart rate 80–90 %{hr}, \"comfortably hard\", you can say short sentences.{hills} The first rep should feel too easy.",
+  "Opvarmning": "Warm-up",
+  "Nedjog": "Cool-down",
+  "Stigninger 4–6 × 20 s": "Strides 4–6 × 20 s",
+  "glidende fart": "build smoothly",
+  "{min} min": "{min} min",
 };

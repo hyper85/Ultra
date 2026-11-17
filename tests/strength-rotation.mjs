@@ -27,7 +27,8 @@ const tab = (page, i) => page.locator("nav.tabbar button").nth(i).click().then((
   const figs = await page.locator(".today .ex svg").count(); const page0figures = async () => figs === 5;
   await browser.close();
   // Wednesday is a run + strength day: the session is the "+ Styrke A i dag efter løbet:" line
-  const lineOf = async (pg) => ((await pg.locator(".today").innerText()).replace(/\n/g, " ").match(/\+ Styrke A i dag efter løbet: ([^|]*?)(?: Log| ✓|$)/) || [])[1] || "";
+  // (a list under "+ Styrke A i dag efter løbet:", one exercise per item)
+  const lineOf = async (pg) => (/\+ Styrke A i dag efter løbet:/.test(await pg.locator(".today-also").innerText().catch(() => "")) ? (await pg.locator(".today-also li").allInnerTexts()).join(", ") : "");
   const w10 = await openApp({ lang: "da", width: 390, at: "2026-10-28T07:00:00" });
   const ex10 = await lineOf(w10.page);
   ok(ex10.split(", ").length === 5, `Wednesday week 10: ${ex10}`);
