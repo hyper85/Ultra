@@ -668,4 +668,6 @@ export default {
   "Belastningen steg for hurtigt – ugen her tages ned.": "The load rose too fast – this week is taken down.",
   "Serveren svarede ikke som forventet. Prøv igen om lidt.": "The server did not answer as expected. Try again in a moment.",
   "AI-træneren svarede ikke som forventet. Prøv igen om lidt.": "The AI coach did not answer as expected. Try again in a moment.",
+  "Log ind under Mere → Konto for at bruge AI-træneren.": "Log in under More → Account to use the AI coach.",
+  "Nyere data fra en anden enhed er hentet og flettet med dine ændringer {time}.": "Newer data from another device was fetched and merged with your changes {time}.",
 };
