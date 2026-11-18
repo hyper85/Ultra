@@ -35,11 +35,12 @@ function LapPlan({ lp, raceVert }) {
   );
 }
 
-export default function RaceDay({ p, easyPace, onGoal, lapPlan }) {
+export default function RaceDay({ p, easyPace, racePace, raceBasis, onGoal, lapPlan }) {
   const [tab, setTab] = useState(lapPlan ? "laps" : "pace");
   const km = +p.raceKm > 0 ? +p.raceKm : 0;
   const vert = +p.raceVert || 0;
-  const easyPaceMinKm = paceToMin(easyPace);
+  const easyPaceMinKm = racePace || paceToMin(easyPace); // the long runs' pace when there are 2+ (insights racePaceMinKm)
+  const longBasis = raceBasis?.kind === "long";
   const predicted = km ? predictFinish({ km, vert, easyPaceMinKm, level: p.level || 2 }) : null;
   const goalMin = parseTime(p.raceGoal);
   const totalMin = goalMin || predicted;
@@ -61,7 +62,7 @@ export default function RaceDay({ p, easyPace, onGoal, lapPlan }) {
       {tab === "pace" && <>
       <div className="row2">
         <label>{t("Måltid (timer og minutter)")}<input type="text" inputMode="numeric" placeholder={predicted ? fmtTime(predicted) : "fx 1230"} value={p.raceGoal || ""} onChange={(e) => onGoal(e.target.value)} /></label>
-        <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
+        <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{longBasis ? t("ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+", { n: raceBasis.n, pace: fmtPace(easyPaceMinKm), km, vert }) : easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
       </div>
       {p.raceGoal && !goalMin && <div className="advice warn">{t("Skriv tiden som timer og minutter, fx 1230.")}</div>}
       {rows.length > 0 && (

@@ -2099,7 +2099,7 @@ export default function App() {
 
           <details className="panel acc" id="raceday" open={openRace} onToggle={(e) => setOpenRace(e.target.open)}>
             <summary><h2>{t("Løbsdag")}</h2><span className="acc-sum">{t("pacing · mad · pakkeliste")}</span><span className="chev" aria-hidden="true">›</span></summary>
-            {openRace && <ErrorBoundary area="raceday"><Suspense fallback={null}><RaceDay p={p} easyPace={insights.summary.easyPace} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} /></Suspense></ErrorBoundary>}
+            {openRace && <ErrorBoundary area="raceday"><Suspense fallback={null}><RaceDay p={p} easyPace={insights.summary.easyPace} racePace={insights.summary.racePaceMinKm} raceBasis={insights.summary.racePaceBasis} onGoal={(v) => setP({ ...p, raceGoal: v })} lapPlan={plan.coach || /hammer/i.test(p.raceName || "") ? CP.lapPlan : null} /></Suspense></ErrorBoundary>}
           </details>
           </>)}
 

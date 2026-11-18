@@ -2,6 +2,8 @@
    the runner (easy pace from the log, experience). Everything here is an estimate and is labelled as one; the
    goal time the runner types always wins over the prediction. */
 import { t } from "./i18n.js";
+import { ymd, parseLocal, addDays, kind } from "./import.js";
+import { hrAt } from "./hr.js";
 
 // "12:30", "1:05:00" or "12h30" -> minutes; null when it is not a time.
 export const parseTime = (s) => {
@@ -21,12 +23,29 @@ const LEVEL_PACE = { 1: 7.0, 2: 6.25, 3: 5.75, 4: 5.25 }; // easy pace when the 
 
 /* Predicted finish in minutes. Climb counts as distance (100 m ≈ 0.8 km of effort), and pace drifts with the
    distance: about +8 % per doubling past a half marathon, less for experienced runners. */
+export const driftFor = (km, level = 2) => 1 + (level >= 3 ? 0.06 : 0.08) * Math.max(0, Math.log2(Math.max(1, km / 21)));
 export const predictFinish = ({ km, vert = 0, easyPaceMinKm, level = 2 }) => {
   const pace = easyPaceMinKm || LEVEL_PACE[level] || 6.25;
   const effortKm = km + vert / 125;
-  const drift = 1 + (level >= 3 ? 0.06 : 0.08) * Math.max(0, Math.log2(Math.max(1, km / 21)));
-  return Math.round(effortKm * pace * drift);
+  return Math.round(effortKm * pace * driftFor(km, level));
 };
+
+/* The pace the runner actually holds over a long distance: the median "flat pace" of the long runs (18 km or more)
+   of the last 8 weeks at an easy-to-steady heart rate (under 75 % of the reserve + 3, the long-run cap; runs
+   without heart rate count), each run's time divided by its effort km (climb included) and its own drift – the
+   same model predictFinish uses, run backwards. Short easy runs are slower than a runner's long runs (recovery
+   jogs, treadmill runs whose watch distance is short), so the median of those made the forecast 12–17 % too slow.
+   null with fewer than 2 such runs. -> { pace, n } */
+export function longRunPace(acts = {}, { until, maxHR, restHR, level = 2, days = 56, minKm = 18 } = {}) {
+  const end = until || ymd(new Date()); const from = ymd(addDays(parseLocal(end), -days));
+  const cap = maxHR ? hrAt(0.75, { maxHR, restHR }) + 3 : null;
+  const paces = Object.values(acts).filter((a) => kind(a.type) === "run" && !a.treadmill && a.day >= from && a.day <= end && a.km >= minKm && a.min > 0 && (!cap || !a.hr || a.hr <= cap))
+    .map((a) => a.min / ((a.km + (a.vert || 0) / 125) * driftFor(a.km, level)))
+    .filter((x) => x > 3 && x < 12).sort((x, y) => x - y);
+  if (paces.length < 2) return null;
+  const mid = paces.length >> 1;
+  return { pace: paces.length % 2 ? paces[mid] : (paces[mid - 1] + paces[mid]) / 2, n: paces.length };
+}
 
 /* Splits: checkpoints every 5/10/20 km with a controlled start and a small planned fade (ultras are run by
    effort, and the last third is always slower). Cumulative time, pace and fuel by then. */

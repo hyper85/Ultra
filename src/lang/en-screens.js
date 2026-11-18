@@ -344,4 +344,6 @@ export default {
   "Forbind Garmin": "Connect Garmin",
   "Hvilepuls fra feltet {field}.": "Resting heart rate from the field {field}.",
   "Kun {n} uger til løbet. Planen er 8 uger og slutter på løbsdagen, så du starter et stykke inde i den. Hold igen med ambitionerne.": "Only {n} weeks to the race. The plan is 8 weeks and ends on race day, so you start some way into it. Keep your ambitions modest.",
+  "ud fra dine {n} lange ture de sidste 8 uger": "from your {n} long runs of the last 8 weeks",
+  "ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+": "from your {n} long runs of the last 8 weeks (equal to {pace}/km on the flat), {km} km and {vert} m+",
 };
