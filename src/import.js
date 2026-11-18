@@ -1,5 +1,6 @@
 import { t } from "./i18n.js";
 import { isFIT, fitActivities } from "./fit.js";
+import { karvonen, hrShare } from "./hr.js";
 
 /* ================= dates ================= */
 export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -41,7 +42,8 @@ const parseNum = (s) => {
 };
 
 // Whole numbers with a thousands comma ("1,091" m climb, "2,408" kcal in Garmin's CSV) are not decimals.
-const parseCount = (s) => { const t = String(s ?? "").trim(); return /^\d{1,3}(,\d{3})+$/.test(t) ? +t.replace(/,/g, "") : parseNum(t); };
+// Danish exports write the thousands with a dot ("1.091" m): a count is never a decimal with exactly three decimals.
+const parseCount = (s) => { const t = String(s ?? "").trim(); return /^\d{1,3}([,.]\d{3})+$/.test(t) ? +t.replace(/[,.]/g, "") : parseNum(t); };
 
 // "1:02:33", "45:30", "3612" (seconds) -> minutes
 const parseMinutes = (s) => {
@@ -49,7 +51,7 @@ const parseMinutes = (s) => {
   const t = String(s).trim();
   if (!t) return NaN;
   if (t.includes(":")) {
-    const parts = t.split(":").map(Number);
+    const parts = t.replace(",", ".").split(":").map(Number); // "00:58:12,6" (Danish decimal comma on the seconds)
     if (parts.some(isNaN)) return NaN;
     const [h, m, sec] = parts.length === 3 ? parts : [0, parts[0], parts[1]];
     return h * 60 + m + sec / 60;
@@ -486,15 +488,18 @@ export const dedupeStore = (acts) => {
   return { next, removed };
 };
 
-// RPE estimate (Foster scale) from average heart rate as a share of max.
-export const rpeFromHR = (hr, maxHR) => {
+/* RPE estimate (the app's 1–10 scale, where 4 is "let") from average heart rate. With a resting HR it uses the
+   heart-rate reserve like every zone in the app (hr.js): Z1 3, Z2 4, low Z3 5, high Z3 6, Z4 7, Z5 8. Without one it
+   falls back to % of max. (It used % of max always, so an easy Z2 run at the app's own easy cap got RPE 5.) */
+export const rpeFromHR = (hr, maxHR, restHR) => {
   if (!hr || !maxHR) return null;
+  if (karvonen({ maxHR, restHR })) { const s = hrShare(hr, { maxHR, restHR }); return s < 0.6 ? 3 : s < 0.7 ? 4 : s < 0.75 ? 5 : s < 0.8 ? 6 : s < 0.9 ? 7 : 8; }
   const pct = hr / maxHR;
   return pct < 0.65 ? 3 : pct < 0.72 ? 4 : pct < 0.78 ? 5 : pct < 0.84 ? 6 : pct < 0.9 ? 7 : 8;
 };
 
 // Group counted activities by the Monday of their week.
-export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
+export const weeklyTotals = (acts, { includeHikes = false, maxHR, restHR } = {}) => {
   const weeks = {};
   for (const a of Object.values(acts)) {
     const k = kind(a.type); // recomputed so improved classification also applies to activities imported earlier
@@ -502,12 +507,12 @@ export const weeklyTotals = (acts, { includeHikes = false, maxHR } = {}) => {
     const w = weeks[key] || (weeks[key] = { km: 0, min: 0, n: 0, rpeW: 0, rpeT: 0, xmin: 0, xn: 0, xload: 0, vert: 0 });
     if (k === "run" || (includeHikes && k === "hike")) {
       w.km += a.km; w.n++; w.min += a.min || 0; w.vert += a.vert || 0;
-      const rpe = a.rpe || rpeFromHR(a.hr, maxHR);
+      const rpe = a.rpe || rpeFromHR(a.hr, maxHR, restHR);
       if (rpe) { const wgt = a.min || a.km * 6; w.rpeW += rpe * wgt; w.rpeT += wgt; }
     } else if (a.min > 0) {
       // Strength, HIIT, cycling, walks and hikes (when they are not counted as run km): minutes × RPE (RPE 6 for
       // strength, 4 otherwise when none is given). Their km are not run km.
-      w.xmin += a.min; w.xn++; w.xload += a.min * (a.rpe || rpeFromHR(a.hr, maxHR) || (k === "strength" ? 6 : 4));
+      w.xmin += a.min; w.xn++; w.xload += a.min * (a.rpe || rpeFromHR(a.hr, maxHR, restHR) || (k === "strength" ? 6 : 4));
     }
   }
   // Effort km: climb counts as distance (100 m ≈ 1 km), the trail runner's rule of thumb; used for the week's load.
@@ -664,7 +669,9 @@ export const mergeWellnessDays = (store = {}, days = {}) => {
 /* restingHRSeries(store, { days = 28, until }) -> { rows: [{ day, hr }], normal } – the last `days` days with a resting
    HR (up to `until`), and the median of them as the runner's normal. */
 export const restingHRSeries = (store = {}, { days = 28, until } = {}) => {
-  const rows = Object.keys(store).filter((d) => store[d]?.hr > 0 && (!until || d <= until)).sort().slice(-days).map((d) => ({ day: d, hr: store[d].hr }));
+  // the last `days` CALENDAR days up to `until` (records from months ago are not "the last 28 days")
+  const from = until ? ymd(addDays(parseLocal(until), -(days - 1))) : "";
+  const rows = Object.keys(store).filter((d) => store[d]?.hr > 0 && (!until || (d <= until && d >= from))).sort().slice(-days).map((d) => ({ day: d, hr: store[d].hr }));
   const sorted = rows.map((r) => r.hr).sort((a, b) => a - b);
   const normal = sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : Math.round((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2)) : null;
   return { rows, normal };

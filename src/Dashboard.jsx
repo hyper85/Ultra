@@ -1,7 +1,7 @@
 import { ymd, parseLocal, addDays, kind, restingHRSeries } from "./import.js";
 import { watchHistory, hrZoneWeeks } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
-import { predictFinish, fmtTime } from "./race.js";
+import { predictFinish, fmtTime, stopMin } from "./race.js";
 import { t, tn, locale } from "./i18n.js";
 import { hrAt, karvonen } from "./hr.js";
 
@@ -132,7 +132,7 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
   const hikeKmDone = includeHikes && done.length ? Object.values(acts).filter((a) => kind(a.type) === "hike" && a.day >= done[0].key && a.day < cur.key).reduce((s, a) => s + (a.km || 0), 0) : 0;
   const last4 = done.slice(-4).map((r) => log[r.key]?.km).filter((v) => v > 0);
   const todayStr = ymd(new Date()); // today's date – todayKey is this week's Monday
-  const d28 = ymd(addDays(parseLocal(todayStr), -28));
+  const d28 = ymd(addDays(parseLocal(todayStr), -27)); // 28 days including today
   const recent = runs.filter((a) => a.day >= d28);
   const longest = recent.length ? r1(Math.max(...recent.map((a) => a.km))) : null;
   const acwr = acwrFor(cur.key);
@@ -165,8 +165,8 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
         {(() => { const v28 = recent.reduce((a, x) => a + (x.vert || 0), 0); const k28 = recent.reduce((a, x) => a + x.km, 0); const race = p.raceKm > 0 && p.raceVert > 0 ? Math.round(p.raceVert / p.raceKm) : null; const mine = k28 > 0 ? Math.round(v28 / k28) : null; return v28 > 0 ? <Tile label={t("Højdemeter, 4 uger")} value={v28} unit=" m+" sub={race ? t("{mine} m/km · løbet kræver {race} m/km", { mine, race }) : t("{mine} m/km", { mine })} cls={race && mine != null ? (mine >= race * 0.6 ? "good" : mine >= race * 0.3 ? "warn" : "bad") : ""} /> : null; })()}
         <Tile label={t("Planen indtil nu")} value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? t("{ran} af {plan} km i alt · uge for uge: {hit} på planen", { ran: Math.round(ranToDate), plan: Math.round(planKmToDate), hit }) + (over ? t(", {n} over", { n: over }) : "") + (under ? t(", {n} under", { n: under }) : "") + (hikeKmDone >= 5 ? t(" · heraf {km} km gang", { km: Math.round(hikeKmDone) }) : "") : t("første uge er i gang")} cls={rated.length && hit === 0 && over > 0 ? "warn" : ""} />
         {p.raceKm > 0 && (() => { const pace = insights.summary.racePaceMinKm; const basis = insights.summary.racePaceBasis; const min = predictFinish({ km: p.raceKm, vert: p.raceVert || 0, easyPaceMinKm: pace, level: p.level || 2 }); return (
-          <Tile label={t("Prognose")} value={fmtTime(min)} sub={`${p.raceGoal ? t("dit mål {goal} · ", { goal: p.raceGoal }) : ""}${basis?.kind === "long" ? t("ud fra dine {n} lange ture de sidste 8 uger", { n: basis.n }) : pace ? (insights.summary.easyPaceEst ? t("ud fra dit tempo (uden puls)") : t("ud fra dit rolige tempo")) : t("standardtempo, indtil loggen har rolige ture")}`} onClick={onRaceDay} title={onRaceDay ? t("Åbn Løbsdag") : undefined} />); })()}
-        {fitness && <Tile label={t("Fitnessalder")} value={fitness.fitnessAge} unit={` ${t("år")}`} sub={t("VO2 max {vo2}{est} · {cat}, bedre end {pct} %", { vo2: fitness.vo2, est, cat: category.toLowerCase(), pct: fitness.percentile })} cls={fitness.percentile >= 50 ? "good" : ""} />}
+          <Tile label={t("Prognose")} value={fmtTime(min)} sub={`${p.raceGoal ? t("dit mål {goal} · ", { goal: p.raceGoal }) : ""}${stopMin(+p.raceKm) ? t("inkl. ca. {n} min i depoter · ", { n: stopMin(+p.raceKm) }) : ""}${basis?.kind === "long" ? t("ud fra dine {n} lange ture de sidste 8 uger", { n: basis.n }) : pace ? (insights.summary.easyPaceEst ? t("ud fra dit tempo (uden puls)") : t("ud fra dit rolige tempo")) : t("standardtempo, indtil loggen har rolige ture")}`} onClick={onRaceDay} title={onRaceDay ? t("Åbn Løbsdag") : undefined} />); })()}
+        {fitness && <Tile label={t("Fitnessalder")} value={fitness.ageFloor ? t("under 20") : fitness.fitnessAge} unit={fitness.ageFloor ? "" : ` ${t("år")}`} sub={t("VO2 max {vo2}{est} · {cat}, bedre end {pct} %", { vo2: fitness.vo2, est, cat: category.toLowerCase(), pct: fitness.percentile })} cls={fitness.percentile >= 50 ? "good" : ""} />}
         {latest(vo2) != null && !fitness?.measured && <Tile label="VO2 max" value={latest(vo2)} sub={t("fra dit ur")} />}
       </div>
 
@@ -218,7 +218,7 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
             <Line rows={sleep} band={[7, 9]} color="sleep" cur={cur.key} />
           </div>
         )}
-        {(() => { const d = restingHRSeries(p.wellness, { days: 28, until: ymd(addDays(parseLocal(todayKey), 6)) }); if (d.rows.length < 7) return null; const rows = d.rows.map((r) => ({ key: r.day, label: String(+r.day.slice(8, 10)), v: r.hr })); const last = d.rows[d.rows.length - 1]; const diff = last.hr - d.normal; return (
+        {(() => { const d = restingHRSeries(p.wellness, { days: 28, until: todayStr }); if (d.rows.length < 7) return null; const rows = d.rows.map((r) => ({ key: r.day, label: String(+r.day.slice(8, 10)), v: r.hr })); const last = d.rows[d.rows.length - 1]; const diff = last.hr - d.normal; return (
           <div className="panel" id="chart-hr-days">
             <div className="row-between"><h2 style={{ margin: 0 }}>{t("Hvilepuls, dag for dag")}</h2><span className="muted">{t("{n} dage · normal {hr}", { n: d.rows.length, hr: d.normal })}</span></div>
             <p className="muted" style={{ margin: "4px 0 0" }}>{diff >= 7 ? t("Seneste {hr} ({d}): {delta} over normal. Hold igen og sov mere.", { hr: last.hr, d: fmtDay(last.day), delta: diff }) : diff >= 4 ? t("Seneste {hr} ({d}): {delta} over normal. Mærk efter.", { hr: last.hr, d: fmtDay(last.day), delta: diff }) : t("Seneste {hr} ({d}): på normalen.", { hr: last.hr, d: fmtDay(last.day) })}</p>

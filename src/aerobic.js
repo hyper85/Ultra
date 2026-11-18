@@ -31,7 +31,7 @@ export function aerobicEfficiency(acts, { today = new Date() } = {}) {
   const now = runs.filter((r) => r.ago < 28), then = runs.filter((r) => r.ago >= 28 && r.ago < 56);
   const nowPace = mean(now.map((r) => r.p130)), thenPace = mean(then.map((r) => r.p130));
   const first = parseLocal(runs[0].day).getTime();
-  const trend = fit(runs.map((r) => ({ x: (parseLocal(r.day).getTime() - first) / 86400000, y: r.pace })));
+  const trend = fit(runs.map((r) => ({ x: (parseLocal(r.day).getTime() - first) / 86400000, y: r.p130 }))); // pace at the same HR, like the now/then numbers
   return { runs, enough: runs.length >= 3, slope, nowPace, thenPace, nNow: now.length, nThen: then.length,
     deltaSec: nowPace != null && thenPace != null ? Math.round((nowPace - thenPace) * 60) : null,
     trend, trendPer4w: trend ? Math.round(trend.b * 28 * 60) : null, firstDay: runs[0].day };

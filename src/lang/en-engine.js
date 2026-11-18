@@ -237,7 +237,7 @@ export default {
   "God": "Good",
   "Fremragende": "Excellent",
   "VO2 max fra dit ur (Garmin-rapport).": "VO2 max from your watch (Garmin report).",
-  "VO2 max anslået fra hvile- og makspuls (15,3 × maks/hvile). Hent Garmins VO2 max-rapport for et bedre tal.": "VO2 max estimated from resting and max HR (15.3 × max/rest). Import Garmin's VO2 max report for a better number.",
+  "VO2 max anslået fra hvile- og makspuls (15,3 × maks/hvile, justeret for alder). Hent Garmins VO2 max-rapport for et bedre tal.": "VO2 max estimated from resting and max HR (15.3 × max/rest, adjusted for age). Import Garmin's VO2 max report for a better number.",
 
   // ---------- import.js ----------
   "Styrke": "Strength",

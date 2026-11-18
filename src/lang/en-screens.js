@@ -84,7 +84,6 @@ export default {
   "Rugbrød og havre byttes til glutenfri havre, ris og kartofler. Tjek gels for hvede.": "Swap rye bread and oats for gluten-free oats, rice and potatoes. Check gels for wheat.",
   "Frø (græskar, solsikke) i stedet for nødder.": "Seeds (pumpkin, sunflower) instead of nuts.",
   "Lang tur / løbsdag": "Long run / race day",
-  "Kvalitet / styrke": "Quality / strength",
   "Rolig løbedag": "Easy run day",
   "Hviledag": "Rest day",
 
@@ -346,4 +345,6 @@ export default {
   "Kun {n} uger til løbet. Planen er 8 uger og slutter på løbsdagen, så du starter et stykke inde i den. Hold igen med ambitionerne.": "Only {n} weeks to the race. The plan is 8 weeks and ends on race day, so you start some way into it. Keep your ambitions modest.",
   "ud fra dine {n} lange ture de sidste 8 uger": "from your {n} long runs of the last 8 weeks",
   "ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+": "from your {n} long runs of the last 8 weeks (equal to {pace}/km on the flat), {km} km and {vert} m+",
+  "under 20": "under 20",
+  "inkl. ca. {n} min i depoter · ": "incl. about {n} min at aid stations · ",
 };

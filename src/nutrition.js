@@ -21,13 +21,21 @@ export const dayTypeLabel = (k) => t(DAY_TYPES.find(([x]) => x === k)?.[1] || "H
 // What kind of day it is, from the plan's numbers for that weekday.
 export const dayTypeOf = ({ km = 0, isLong = false, isHard = false, isRace = false, lift = false }) => (isRace || (km > 0 && isLong) ? "long" : km > 0 && isHard ? "quality" : km > 0 ? "easy" : lift ? "lift" : "rest");
 
-const KCAL = { long: (b) => b * 1.95, quality: (b) => b * 1.7, easy: (b) => b * 1.45 - 400, lift: (b) => b * 1.5 - 300, rest: (b) => b * 1.3 - 450 };
+/* Energy: everyday life is BMR × 1.45 (FAO/WHO/UNU 2004, an office day), and the day's training comes on top –
+   running about 1 kcal per kg per km, a strength session about 250 kcal. The old table (rest BMR × 1.3 − 450,
+   easy × 1.45 − 400 …) sat 500–1100 kcal under maintenance for a runner meant to hold their weight, below the
+   low-energy line of the RED-S consensus. "Tabe mig" is −300 on top of maintenance, never under 1.15 × BMR. */
+const PAL = 1.45;
+const RUN_KM = { long: 22, quality: 10, easy: 8 }; // when the day's km is not known (the week table)
+const LIFT_KCAL = 250;
+const trainingKcal = (k, weight, km) => (k === "lift" ? LIFT_KCAL : RUN_KM[k] ? weight * (km > 0 ? km : RUN_KM[k]) : 0);
 const CARB = { all: { long: 7, quality: 5, easy: 4, lift: 4, rest: 3 }, lowcarb: { long: 5, quality: 3, easy: 2, lift: 2, rest: 1.5 } };
 
-/* dayTargets({ bmr, weight, body, goal, diet, dayType }) -> { kcal, protein, carbs, fat, note } in kcal and grams. */
-export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", diet = "all", dayType = "rest", hybrid = false }) {
-  const k = KCAL[dayType] ? dayType : "rest";
-  let kcal = KCAL[k](bmr);
+/* dayTargets({ bmr, weight, body, goal, diet, dayType, km }) -> { kcal, protein, carbs, fat, note } in kcal and grams.
+   km = the day's planned run km (else a typical day of that type). */
+export function dayTargets({ bmr, weight = 80, body = "keep", goal = "finish", diet = "all", dayType = "rest", hybrid = false, km = 0 }) {
+  const k = ["long", "quality", "easy", "lift", "rest"].includes(dayType) ? dayType : "rest";
+  let kcal = bmr * PAL + trainingKcal(k, weight, km);
   if (body === "lean") kcal -= 300;
   if (body === "muscle" && (k === "lift" || k === "quality")) kcal += 200;
   else if (hybrid && body !== "lean" && k === "lift") kcal += 150; // hybrid: heavy lifting days need a little more
@@ -96,8 +104,12 @@ export function mealIdeas({ diet = "all", intol = [], dayType = "rest", body = "
     const variant = key === post ? "recover" : key === pre ? "carb" : work ? "carb" : "protein";
     const list = lib[key][variant];
     const tag = key === pre ? (session === "lift" ? t("før styrken") : t("før turen")) : key === post ? (session === "lift" ? t("efter styrken") : t("efter turen")) : "";
-    return { meal: t(label), tag, text: swap(t(list[(n + i) % list.length]), intol), protein: Math.round((protein * share) / 5) * 5 };
+    return { meal: t(label), tag, text: swap(t(list[(n + i) % list.length]), intol), protein: Math.round((protein * share) / 5) * 5, share };
   });
+  // the meals add up to the day's protein: the rounding remainder goes to the smallest meal (the snack)
+  const small = rows.reduce((a, r) => (r.share < a.share ? r : a), rows[0]);
+  small.protein = Math.max(0, small.protein + protein - rows.reduce((s, r) => s + r.protein, 0));
+  for (const r of rows) delete r.share;
   const fuel = dayType === "long" ? (km >= 10 ? t("Undervejs: {g} g kulhydrat i timen, fx 2–3 geler eller banan og dadler, og 4–6 dl at drikke i timen.", { g: carbsPerHour }) : t("Undervejs: vand er nok under en time; tag en gel eller en banan med, hvis turen trækker ud.")) : null;
   const after = session && post ? t("Inden for en time efter: ca. {p} g protein og noget kulhydrat.", { p: Math.max(25, Math.min(40, Math.round(weight * 0.3 / 5) * 5)) }) : null;
   const hint = body === "lean" ? t("Halvdelen af tallerkenen er grønt, protein i hvert måltid, og drik vand før du spiser. Sulten efter en lang tur er ægte: spis, men vælg protein og grønt først.")
