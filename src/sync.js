@@ -23,6 +23,13 @@ export const pullRemote = async (userId) => {
   return data ? { ...data, updatedAt: new Date(data.updated_at).getTime() } : null;
 };
 
+// Only the cloud row's time stamp: is there something newer than what this device last saw?
+export const pullRemoteMeta = async (userId) => {
+  const { data, error } = await supabase.from("ultraplan_user_data").select("updated_at").eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data ? { updatedAt: new Date(data.updated_at).getTime() } : null;
+};
+
 export const pushRemote = async (userId, { profile, log, activities, updatedAt }) => {
   const { error } = await supabase.from("ultraplan_user_data").upsert({ user_id: userId, profile, log, activities, updated_at: new Date(updatedAt || Date.now()).toISOString() }, { onConflict: "user_id" });
   if (error) throw error;

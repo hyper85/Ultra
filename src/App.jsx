@@ -1,6 +1,7 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { ymd, parseLocal, addDays, mondayOf, parseFile, weeklyTotals, kind, mergeActivities, dedupeStore, manualActivity, isWellnessCSV, isReportCSV, wellnessFromCSV, mergeWellnessDays, restingHRSeries, daysToWellnessCSV, wellnessIntoLog, readExcel, decodeText, activitiesFromCSV, XTYPES, xLabel, activityFromStrava, withIncline } from "./import.js";
-import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY, garminStatus, garminConnect, garminSync, garminDisconnect, deleteMyAccount } from "./sync.js";
+import { emptyPending, hasPending, changedKeys, changedLogFields, addPending, mergeSync } from "./merge.js";
+import { supabase, syncEnabled, sendLoginLink, signOut, pullRemote, pullRemoteMeta, pushRemote, verifyCode, inviteFriend, stravaConnectURL, stravaExchange, stravaStatus, stravaSync, stravaDisconnect, STRAVA_STATE_KEY, garminStatus, garminConnect, garminSync, garminDisconnect, deleteMyAccount } from "./sync.js";
 import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
 // Loaded when first shown: the questionnaire (first run), race day and the stats page are not part of the start-up bundle.
 import ErrorBoundary from "./ErrorBoundary.jsx";
@@ -271,7 +272,12 @@ export default function App() {
   const metaRef = useRef({ updatedAt: 0 });
   const [dirty, setDirty] = useState(0);
   const touch = () => { metaRef.current = { updatedAt: Date.now() }; store.set("ultraplan-meta", metaRef.current); setDirty((x) => x + 1); };
-  const setP = (v) => { touch(); setPRaw(v); };
+  // What this device changed since it last saw the cloud (merge.js): profile fields, log week|field, activity ids.
+  // A device that was left open for days then lays only its own changes on top of a newer cloud row.
+  const pendingRef = useRef(emptyPending());
+  const remoteAtRef = useRef(0); // the cloud row's updated_at as this device last saw it (pulled or pushed); 0 = unknown
+  const markPending = (part, keys) => { if (!keys.length) return; pendingRef.current = addPending(pendingRef.current, part, keys); store.set("ultraplan-pending", pendingRef.current); };
+  const setP = (v) => { touch(); setPRaw((prev) => { const next = typeof v === "function" ? v(prev) : v; markPending("profile", changedKeys(prev, next)); return next; }); };
   const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const logRef = useRef(log); logRef.current = log; const actsRef = useRef(acts); actsRef.current = acts;
@@ -300,6 +306,8 @@ export default function App() {
   };
   useEffect(() => { (async () => {
     const meta = await store.get("ultraplan-meta"); if (meta?.updatedAt) metaRef.current = meta;
+    const pend = await store.get("ultraplan-pending"); if (pend && Array.isArray(pend.profile) && Array.isArray(pend.log) && Array.isArray(pend.acts)) pendingRef.current = pend;
+    const seen = await store.get("ultraplan-remote-at"); if (+seen > 0) remoteAtRef.current = +seen;
     const sp = await store.get("ultraplan-profile");
     if (sp) setPRaw(migrateProfile(cleanProfile(sp)));
     const slRaw = await store.get("ultraplan-log");
@@ -321,8 +329,9 @@ export default function App() {
   useEffect(() => { if (ready) store.set("ultraplan-profile", p); }, [p, ready]);
   // The refs follow every save at once (not only on the next render), so two syncs finishing close together (Strava and
   // Garmin on app start) each build on the other's result instead of an older copy of the log.
-  const saveLog = (n) => { touch(); logRef.current = n; setLog(n); store.set("ultraplan-log", n); };
-  const saveActs = (n) => { touch(); actsRef.current = n; setActs(n); store.set("ultraplan-activities", n); };
+  const saveLog = (n) => { markPending("log", changedLogFields(logRef.current, n)); touch(); logRef.current = n; setLog(n); store.set("ultraplan-log", n); };
+  const saveActs = (n) => { markPending("acts", changedKeys(actsRef.current, n)); touch(); actsRef.current = n; setActs(n); store.set("ultraplan-activities", n); };
+  const pRef = useRef(p); pRef.current = p;
 
   /* ---- account & cloud sync (Supabase, optional) ---- */
   const [user, setUser] = useState(null);
@@ -507,11 +516,49 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
   const clock = () => new Date().toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  // The cloud row replaces this device's copy (nothing unsynced here).
+  const sawRemote = (at) => { remoteAtRef.current = at; store.set("ultraplan-remote-at", at); };
+  const adoptRemote = (remote) => {
+    const rp = cleanProfile(remote.profile || {}), rl = cleanLog(remote.log || {}), ra = cleanActs(remote.activities || {});
+    setPRaw(migrateProfile(rp)); logRef.current = rl; setLog(rl); actsRef.current = ra; setActs(ra);
+    store.set("ultraplan-profile", rp); store.set("ultraplan-log", rl); store.set("ultraplan-activities", ra);
+    metaRef.current = { updatedAt: remote.updatedAt }; store.set("ultraplan-meta", metaRef.current);
+    pendingRef.current = emptyPending(); store.set("ultraplan-pending", pendingRef.current); sawRemote(remote.updatedAt);
+    setSyncMsg(t("Hentet fra skyen {time}", { time: clock() }));
+  };
+  /* Push this device's data. If the cloud is newer than what this device last saw (another device wrote meanwhile),
+     pull it first and lay only this device's own changes on top (merge.js) – never push an old copy over it.
+     One push at a time; a change during a push pushes again after it. `fresh` = a cloud row already pulled. */
+  const pushingRef = useRef(false); const pushAgainRef = useRef(false);
+  const pushNow = async (fresh = null) => {
+    if (!user) return;
+    if (pushingRef.current) { pushAgainRef.current = true; return; }
+    pushingRef.current = true;
+    try {
+      let cur = { profile: pRef.current, log: logRef.current, activities: actsRef.current };
+      let remote = fresh;
+      if (!remote && remoteAtRef.current > 0) { const meta = await pullRemoteMeta(user.id); if (meta && meta.updatedAt > remoteAtRef.current) remote = await pullRemote(user.id); }
+      let merged = false;
+      if (remote && remote.updatedAt > remoteAtRef.current) {
+        const m = mergeSync({ remote: { profile: cleanProfile(remote.profile || {}), log: cleanLog(remote.log || {}), activities: cleanActs(remote.activities || {}) }, local: cur, pending: pendingRef.current });
+        cur = { profile: migrateProfile(m.profile), log: m.log, activities: m.activities }; merged = true;
+        setPRaw(cur.profile); logRef.current = cur.log; setLog(cur.log); actsRef.current = cur.activities; setActs(cur.activities);
+        store.set("ultraplan-profile", cur.profile); store.set("ultraplan-log", cur.log); store.set("ultraplan-activities", cur.activities);
+      }
+      const sent = pendingRef.current;
+      const stamp = Math.max(Date.now(), (remote?.updatedAt || 0) + 1, remoteAtRef.current + 1);
+      await pushRemote(user.id, { ...cur, updatedAt: stamp });
+      sawRemote(stamp); metaRef.current = { updatedAt: stamp }; store.set("ultraplan-meta", metaRef.current);
+      if (pendingRef.current === sent) { pendingRef.current = emptyPending(); store.set("ultraplan-pending", pendingRef.current); } // a change during the push stays pending
+      setSyncMsg(merged ? t("Nyere data fra en anden enhed er hentet og flettet med dine ændringer {time}.", { time: clock() }) : t("Gemt i skyen {time}", { time: clock() }));
+    } catch (e) { setSyncMsg(t("Synk fejlede: {msg}", { msg: e.message })); }
+    finally { pushingRef.current = false; if (pushAgainRef.current) { pushAgainRef.current = false; pushNow(); } }
+  };
   // Wipe everything stored on this device. Used at logout and when a different account logs in, so two people
   // sharing a phone never see or upload each other's data.
   const clearLocal = () => {
-    setPRaw(DEFAULT); setLog({}); setActs({}); metaRef.current = { updatedAt: 0 };
-    for (const k of ["ultraplan-profile", "ultraplan-log", "ultraplan-activities", "ultraplan-meta", "ultraplan-owner"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+    setPRaw(DEFAULT); setLog({}); setActs({}); metaRef.current = { updatedAt: 0 }; pendingRef.current = emptyPending(); remoteAtRef.current = 0;
+    for (const k of ["ultraplan-profile", "ultraplan-log", "ultraplan-activities", "ultraplan-meta", "ultraplan-owner", "ultraplan-pending", "ultraplan-remote-at"]) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
   };
   const logout = async () => { await signOut(); clearLocal(); setSyncMsg(""); setAuthMsg(null); };
   // Delete the account (Mere → Konto): two taps, then the server deletes connections, synced data and the login, and
@@ -539,16 +586,12 @@ export default function App() {
         // A pull that never answers (captive portal, flaky network) must not leave the app on the splash screen forever.
         const remote = await Promise.race([pullRemote(user.id), new Promise((_, rej) => setTimeout(() => rej(new Error(t("skyen svarede ikke – viser det, der ligger på enheden"))), 12000))]);
         const localAt = switched ? 0 : metaRef.current.updatedAt || 0;
-        if (remote && remote.updatedAt >= localAt) {
-          const rp = cleanProfile(remote.profile || {}), rl = cleanLog(remote.log || {}), ra = cleanActs(remote.activities || {});
-          setPRaw(migrateProfile(rp)); setLog(rl); setActs(ra);
-          store.set("ultraplan-profile", rp); store.set("ultraplan-log", rl); store.set("ultraplan-activities", ra);
-          metaRef.current = { updatedAt: remote.updatedAt }; store.set("ultraplan-meta", metaRef.current);
-          setSyncMsg(t("Hentet fra skyen {time}", { time: clock() }));
-        } else if (localAt > 0) {
-          await pushRemote(user.id, { profile: p, log, activities: acts, updatedAt: localAt });
-          setSyncMsg(t("Gemt i skyen {time}", { time: clock() }));
-        }
+        const known = !switched && remoteAtRef.current > 0; // this device knows which cloud version it last saw
+        if (remote && known && remote.updatedAt > remoteAtRef.current) {
+          // newer in the cloud than this device last saw: take it, with this device's own unsynced changes on top
+          if (hasPending(pendingRef.current)) await pushNow(remote); else adoptRemote(remote);
+        } else if (remote && !known && remote.updatedAt >= localAt) adoptRemote(remote); // first sync on this device: the old rule
+        else if (localAt > 0 && (!remote || !known || hasPending(pendingRef.current))) await pushNow();
         pulledRef.current = true;
       } catch (e) { setSyncMsg(t("Synk fejlede: {msg}", { msg: e.message })); }
       setPulled(true);
@@ -557,10 +600,27 @@ export default function App() {
   // After any change: push, debounced.
   useEffect(() => {
     if (!user || !pulledRef.current || !dirty) return;
-    const snap = { profile: p, log, activities: acts, updatedAt: metaRef.current.updatedAt };
-    const tmr = setTimeout(() => pushRemote(user.id, snap).then(() => setSyncMsg(t("Gemt i skyen {time}", { time: clock() }))).catch((e) => setSyncMsg(t("Synk fejlede: {msg}", { msg: e.message }))), 1500);
+    const tmr = setTimeout(() => pushNow(), 1500);
     return () => clearTimeout(tmr);
   }, [dirty, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Back in the foreground (a PWA open for days): is the cloud newer than what this device last saw? Then take it now,
+  // before anything on this device is changed on top of an old copy (at most every 30 s).
+  const lastCloudCheckRef = useRef(0);
+  useEffect(() => {
+    if (!user || !pulled) return;
+    const onBack = async () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastCloudCheckRef.current < 30_000 || pushingRef.current) return;
+      lastCloudCheckRef.current = Date.now();
+      try {
+        const meta = await pullRemoteMeta(user.id);
+        if (!meta || !(remoteAtRef.current > 0) || meta.updatedAt <= remoteAtRef.current) return;
+        const remote = await pullRemote(user.id); if (!remote) return;
+        if (hasPending(pendingRef.current)) await pushNow(remote); else adoptRemote(remote);
+      } catch { /* offline: the next push merges */ }
+    };
+    document.addEventListener("visibilitychange", onBack); window.addEventListener("focus", onBack);
+    return () => { document.removeEventListener("visibilitychange", onBack); window.removeEventListener("focus", onBack); };
+  }, [user?.id, pulled]); // eslint-disable-line react-hooks/exhaustive-deps
   const login = async (e) => {
     e?.preventDefault();
     if (cooldown > 0) return;
@@ -1267,7 +1327,7 @@ export default function App() {
       const text = await askCoach({ question, history, context });
       const done = [...next, { role: "assistant", text, at: Date.now() }];
       setChat(done); saveChat(done);
-    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup }); setChat(chat); }
+    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup, login: !!e.login }); setChat(chat); }
     setCoachBusy(false);
   };
   // Let the coach propose plan parameters from the watch data; the engine builds the plan, the runner applies it.
@@ -1282,7 +1342,7 @@ export default function App() {
       const context = coachContext({ p, plan, cur, log, acts, acwrFor, insights, todayStr, maxHR, advice, extra: coachExtra() });
       const { proposal: pr, text } = await proposePlan({ context });
       setProposal({ ...pr, note: text || pr.note, diff: proposalDiff(pr) });
-    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup }); }
+    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup, login: !!e.login }); }
     setProposing(false);
   };
   const applyProposal = () => {
@@ -1726,7 +1786,7 @@ export default function App() {
               {chat.map((m, i) => <div key={m.at + "-" + i} className={`msg ${m.role}`}>{m.text}</div>)}
               {coachBusy && <div className="msg assistant muted">{t("Tænker…")}</div>}
             </div>
-            {coachErr && <div className="advice warn">{coachErr.text}</div>}
+            {coachErr && <div className="advice warn">{coachErr.text}{coachErr.login && <> <button className="linkbtn" type="button" onClick={() => { setView("more"); setOpenMore("konto"); }}>{t("Log ind")}</button></>}</div>}
             {!coachBusy && <div className="chips ask-chips">{suggested.map((q) => <button key={q} type="button" onClick={() => ask(q)}>{q}</button>)}</div>}
             <form className="chatform composer" onSubmit={(e) => { e.preventDefault(); ask(); }}>
               <textarea ref={coachQRef} rows={1} aria-label={t("Spørg AI-træneren")} value={coachQ} maxLength={800} disabled={coachBusy} placeholder={t("Skriv til træneren …")}

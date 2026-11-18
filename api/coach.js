@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
 
 /* AI coach – a Vercel serverless function. The browser posts the runner's numbers (no name, no e-mail) and a
    question; Claude answers as Ultraplan's coach. Without a key the app shows a friendly "not set up" message.
@@ -15,6 +16,29 @@ import Anthropic from "@anthropic-ai/sdk";
    English and explains the Danish keys of the context JSON; the context itself is sent as the app built it. */
 
 export const config = { maxDuration: 60 };
+
+/* Who may ask: with Supabase set up (it is in production), only a logged-in runner – the caller's session is checked
+   like api/invite.js does – so the paid AI key cannot be used by anyone who finds the URL. Per user at most RATE_MAX
+   questions an hour per server instance (a cheap brake, not a quota). Without Supabase (a local build) it stays open. */
+const RATE_MAX = 40, RATE_WIN = 3600_000;
+const rate = new Map();
+export function overRate(id, now = Date.now()) {
+  const list = (rate.get(id) || []).filter((t) => now - t < RATE_WIN);
+  if (list.length >= RATE_MAX) { rate.set(id, list); return true; }
+  list.push(now); rate.set(id, list); return false;
+}
+export async function coachCaller(req, { createClientImpl = createClient } = {}) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anon) return { open: true };
+  const token = String(req.headers?.authorization || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return { status: 401, why: "login" };
+  try {
+    const { data, error } = await createClientImpl(url, anon, { auth: { persistSession: false, autoRefreshToken: false } }).auth.getUser(token);
+    if (error || !data?.user) return { status: 401, why: "expired" };
+    return { id: data.user.id };
+  } catch { return { status: 401, why: "expired" }; }
+}
 
 const PROVIDERS = {
   anthropic: { key: "ANTHROPIC_API_KEY", label: "Anthropic", model: "claude-opus-5", anthropicURL: undefined, chatURL: null, beta: true },
@@ -145,6 +169,9 @@ export default async function handler(req, res) {
   const mode = body?.mode === "plan" ? "plan" : "chat";
   const lang = body?.lang === "en" ? "en" : "da";
   const L = (da, en) => (lang === "en" ? en : da); // user-facing messages follow the app's language
+  const caller = await coachCaller(req);
+  if (caller.status === 401) return json(res, 401, { login: true, error: caller.why === "login" ? L("Log ind under Mere → Konto for at bruge AI-træneren.", "Log in under More → Account to use the AI coach.") : L("Din session er udløbet. Log ind igen for at bruge AI-træneren.", "Your session has expired. Log in again to use the AI coach.") });
+  if (caller.id && overRate(caller.id)) return json(res, 429, { error: L("Du har stillet mange spørgsmål den sidste time. Prøv igen lidt senere.", "You have asked a lot of questions in the last hour. Try again a little later.") });
   const question = String(body?.question || "").trim().slice(0, 800);
   const history = Array.isArray(body?.history) ? body.history.slice(-8) : [];
   const context = body?.context && typeof body.context === "object" ? body.context : null;
