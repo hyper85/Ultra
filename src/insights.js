@@ -1,6 +1,7 @@
 import { ymd, parseLocal, addDays, mondayOf, kind, restingHRSeries } from "./import.js";
 import { t } from "./i18n.js";
 import { hrAt, hrShare, karvonen } from "./hr.js";
+import { longRunPace } from "./race.js";
 
 /* ================= insights: what the app has learned about the runner =================
    Pure functions over the plan, the weekly log and the activities. Everything here is deterministic and
@@ -138,7 +139,8 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const easyAbove = cap && easyRuns.length >= 4 ? easyRuns.filter((a) => a.hr > cap + 3).length / easyRuns.length : null;
   const easyHR = easyRuns.length ? Math.round(mean(easyRuns.map((a) => a.hr))) : null;
   // The runner's typical easy pace: median min/km of easy runs at or under the cap.
-  const easyPaces = easyRuns.filter((a) => a.min > 0 && (!cap || a.hr <= cap + 3)).map((a) => a.min / a.km);
+  // Treadmill runs are left out: the watch's distance on a belt is often short, so their pace reads too slow.
+  const easyPaces = easyRuns.filter((a) => a.min > 0 && !a.treadmill && (!cap || a.hr <= cap + 3)).map((a) => a.min / a.km);
   // Without heart rate (a watch or Strava setting), the easy pace is the median of the ordinary weekday runs
   // (3–16 km, not the long or hard day, RPE at most 5 when typed) over the last 8 finished weeks – marked as estimated.
   let easyPaceMinKm = easyPaces.length >= 3 ? median(easyPaces) : null, easyPaceEst = false;
@@ -146,7 +148,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
     const plain = [];
     for (const r of done.slice(-8)) for (const i of [0, 1, 2, 3, 4, 5, 6]) {
       if (i === r.longDay || i === r.qDay) continue;
-      for (const a of byDay[ymd(addDays(parseLocal(r.key), i))] || []) if (a.min > 0 && a.km >= 3 && a.km <= 16 && !(a.rpe > 5)) plain.push(a.min / a.km);
+      for (const a of byDay[ymd(addDays(parseLocal(r.key), i))] || []) if (a.min > 0 && !a.treadmill && a.km >= 3 && a.km <= 16 && !(a.rpe > 5)) plain.push(a.min / a.km);
     }
     if (plain.length >= 3) { easyPaceMinKm = median(plain); easyPaceEst = true; }
   }
@@ -216,7 +218,11 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (findings.length === 0) add("empty", "info", t("Appen kender dig ikke endnu. Log dine ture i et par uger, så dukker mønstrene op her."));
   const order = { warn: 0, info: 1, good: 2 };
   findings.sort((a, b) => order[a.level] - order[b.level]);
-  const summary = { sleepAvg, easyPace, easyPaceMinKm, easyPaceEst, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
+  // The race forecast's pace: the runner's own long runs when there are 2+, else the easy pace (race.js longRunPace).
+  const lrp = longRunPace(acts, { maxHR, restHR: p.restHR, level: p.level || 2 });
+  const racePaceMinKm = lrp?.pace ?? easyPaceMinKm;
+  const racePaceBasis = lrp ? { kind: "long", n: lrp.n } : easyPaceMinKm ? { kind: easyPaceEst ? "plain" : "easy" } : null;
+  const summary = { racePaceMinKm, racePaceBasis, sleepAvg, easyPace, easyPaceMinKm, easyPaceEst, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
     skippedDay: skipped ? day(skipped.i) : null, extraDay: usedFree ? day(usedFree.i) : null };
   return { summary, findings, weeks };
 }
