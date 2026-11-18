@@ -100,14 +100,16 @@ export function buildCoachPlan(p) {
     let session = w.session, focus = w.focus, deload = !!w.deload, recovery = null;
     if (recoverFrom) {
       recovery = { after: recoverFrom.name, hours: recoverFrom.hours, planned: w.km };
-      if (!ev[W.b2bDay] && !w.race) days[W.b2bDay] = 0;
       if (!w.deload && !w.recovery) {
+        // 60 % of the planned week (back-to-back included), the back-to-back run goes, days under 3 km go, and what
+        // they leave is spread over the remaining days pro rata – not all on the long run.
         const target = Math.round(days.reduce((a, b, i) => a + (ev[i] ? 0 : b), 0) * 0.6);
+        if (!ev[W.b2bDay] && !w.race) days[W.b2bDay] = 0;
         for (let i = 0; i < 7; i++) { if (ev[i]) continue; const v = Math.round(days[i] * 0.6); days[i] = v >= 3 ? v : 0; }
-        // the rounding lands on the longest day, so the week is exactly 60 %
         const free = [0, 1, 2, 3, 4, 5, 6].filter((i) => !ev[i] && days[i] > 0).sort((a, b) => days[b] - days[a]);
-        if (free.length) days[free[0]] += target - free.reduce((a, i) => a + days[i], 0);
-      }
+        const sum = free.reduce((a, i) => a + days[i], 0);
+        if (sum > 0) { const k = target / sum; for (const i of free) days[i] = Math.round(days[i] * k); days[free[0]] += target - free.reduce((a, i) => a + days[i], 0); }
+      } else if (!ev[W.b2bDay] && !w.race && !w.deload) days[W.b2bDay] = 0; // a week the coach planned as easy is only labelled
       session = "Kun roligt"; deload = true;
     }
     recoverFrom = Object.values(ev).find((e) => (e.hours || 0) > 6) || null;
@@ -180,7 +182,7 @@ export function buildPlan(p, { easyPaceMinKm } = {}) {
     } else if (i <= weeks - taper) {
       phase = "Ultra-prep";
       const j = i - rebuild - build;
-      km = Math.round(peak * 0.7 + peak * 0.3 * Math.min(1, j / Math.max(1, ultra - 1)));
+      km = Math.round(peak * 0.7 + peak * 0.3 * Math.min(1, (j - 1) / Math.max(1, ultra - 1))); // week 1 at 0.7 × peak: no jump from the build's 0.65
       if (j % 3 === 0 && j !== ultra) { deload = true; km = Math.round(km * 0.68); }
       quality = ["Bakker 8×90 s", "2×15 min tempo", "Løbstempo 2×15 min", "3×10 min tærskel", "2×20 min tempo"][j % 5];
       focus = deload ? "Nedtrapningsuge før de store weekender." : "Back-to-back weekend. Kit- og lygtetest. 60–90 g kulhydrat/t.";
@@ -203,6 +205,7 @@ export function buildPlan(p, { easyPaceMinKm } = {}) {
     let longDay = avail[p.longDay] >= 3 ? p.longDay : order.find((d) => avail[d] >= 3);
     if (longDay == null) { longDay = order.find((d) => avail[d] >= 2); if (longDay != null && !isRace) lng = Math.min(lng, 16); } // no long slot: long run is capped
     if (longDay == null) { longDay = order.find((d) => avail[d] >= 1); if (longDay != null && !isRace) lng = Math.min(lng, 8); }
+    if (isRace && realRace) longDay = (race.getDay() + 6) % 7; // race week: the race is on the race's own weekday, not the usual long-run day
     const b2bDay = longDay == null ? null : (longDay + 1) % 7;
     if (b2bDay == null || avail[b2bDay] < 2) sun = 0;
     const maxRun = Math.min(7, Math.max(2, (p.maxRunDays || 4) - (injured ? 1 : 0)));
@@ -227,11 +230,29 @@ export function buildPlan(p, { easyPaceMinKm } = {}) {
     if (sun && b2bDay != null) days[b2bDay] = sun;
     // The hard day's km is its steps (warm-up + work + recoveries + cool-down, sessions.js), never a share of the
     // week: the card's text and its km are one list. What it gives or takes goes to the week's easy days.
+    // Never over the week's target: a session that needs more than its share takes it from the easy days (down to 3 km);
+    // if that is not enough, the hard day keeps what fits and its card fits the warm-up and cool-down to it (sessions.js).
     const steps = qDay != null && days[qDay] > 0 ? sessionSteps(quality, { easyPaceMinKm: paceE }) : null;
     if (steps) {
-      const diff = days[qDay] - steps.km; days[qDay] = steps.km;
       const easyDays = runDays.filter((d) => d !== qDay && d !== longDay && d !== b2bDay && days[d] > 0);
-      if (easyDays.length && diff) for (const d of easyDays) days[d] = Math.max(3, Math.min(cap(d), Math.round((days[d] + diff / easyDays.length) * 2) / 2));
+      const have = days[qDay], want = steps.km;
+      const r2 = (x) => Math.round(x * 2) / 2;
+      if (want <= have) { // the session is shorter: what it frees goes to the easy days (never over their cap)
+        days[qDay] = want;
+        for (const d of easyDays) { const add = Math.min(r2((have - want) / easyDays.length), cap(d) - days[d]); if (add > 0) days[d] += add; }
+      } else { // it needs more: taken from the easy days down to 3 km, and the hard day gets exactly what was taken
+        const room = easyDays.reduce((a, d) => a + Math.max(0, days[d] - 3), 0);
+        const take = Math.min(want - have, room);
+        let taken = 0;
+        for (const d of easyDays) { const sh = room ? Math.min(Math.max(0, days[d] - 3), r2((take * Math.max(0, days[d] - 3)) / room)) : 0; days[d] -= sh; taken += sh; }
+        days[qDay] = have + taken;
+      }
+    }
+    // Rounding in the distribution can land a little over the week's target: trim it from the easy days (largest first).
+    if (!isRace) {
+      let over = days.reduce((a, b) => a + b, 0) - km;
+      const trim = [0, 1, 2, 3, 4, 5, 6].filter((d) => d !== longDay && d !== b2bDay && days[d] > 2).sort((a, b) => (a === qDay) - (b === qDay) || days[b] - days[a]);
+      for (const d of trim) { if (over <= 0) break; const cut = Math.min(over, days[d] - 2); days[d] -= cut; over -= cut; } // easy days first, the hard day last
     }
     const total = days.reduce((a, b) => a + b, 0);
     const unplaced = Math.max(0, km - total);
@@ -738,7 +759,7 @@ export default function App() {
   // Write weekly totals from the imported activities into the log. Imported km always win for weeks that have activities;
   // RPE is only estimated where the user has not typed one.
   const applyActivities = (nextActs, includeHikes, base = logRef.current) => {
-    const weeks = weeklyTotals(nextActs, { includeHikes, maxHR });
+    const weeks = weeklyTotals(nextActs, { includeHikes, maxHR, restHR: p.restHR });
     const n = { ...base };
     for (const [k, v] of Object.entries(n)) if (v.auto && !weeks[k]) { const { km, auto, rpeAuto, rpe, n: _n, xmin, xn, xload, vert, ekm, ...rest } = v; n[k] = rpeAuto ? rest : { ...rest, ...(rpe != null ? { rpe } : {}) }; }
     for (const [k, w] of Object.entries(weeks)) {
@@ -1021,7 +1042,7 @@ export default function App() {
   const clearImports = () => { if (!confirm(t("Fjern alle importerede aktiviteter? Tal du selv har skrevet, bliver stående."))) return; applyActivities({}, p.includeHikes); saveActs({}); setImportMsg(null); };
   const nActs = Object.keys(acts).length;
   const recentAvg = useMemo(() => {
-    const weeks = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR });
+    const weeks = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR, restHR: p.restHR });
     const keys = [1, 2, 3, 4].map((w) => ymd(addDays(thisMonday(), -7 * w))).filter((k) => weeks[k]);
     return keys.length ? Math.round(keys.reduce((a, k) => a + weeks[k].km, 0) / keys.length) : null;
   }, [acts, p.includeHikes, maxHR]);
@@ -1034,7 +1055,8 @@ export default function App() {
   // RPE 8 counts like an 8 km run at RPE 5). Strength and HIIT tire the body, but not the running tissues as much.
   // A week with km but no RPE (imported runs without heart rate) is estimated at RPE 5 and marked as an estimate.
   // Climb counts in the load: a week's effort km (km + vertical metres / 100) × RPE when the runs carry elevation.
-  const loadOf = (l) => { if (!l) return null; const run = l.km ? (l.ekm > l.km ? l.ekm : l.km) * (l.rpe || 5) : 0; const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
+  // effort km = km + climb/100, computed from the km shown (a km typed over the watch's must not keep its old ekm)
+  const loadOf = (l) => { if (!l) return null; const eff = l.km ? +l.km + (+l.vert > 0 ? +l.vert / 100 : Math.max(0, (+l.ekm || 0) - +l.km)) : 0; const run = eff * (l.rpe || 5); const x = l.xload ? l.xload / 12 : 0; return run || x ? Math.round(run + x) : null; };
   const baseline = (+p.currentKm || 0) * 5;
   // The first week with any load in the log: from there on (inside the plan) a week with nothing logged is a week
   // without training, and it counts as 0 in the chronic load. Skipping it made the chronic load too high after a sick
@@ -1071,7 +1093,7 @@ export default function App() {
   // in the week's RPE field overrides it for the load and ACWR – easy to mistake for one run's RPE ("2, it felt easy"),
   // which makes a week with a tempo and a 26 km long run count as very light. So: the runs' value shows as the field's
   // placeholder, clearing the field goes back to it, and a typed value 3+ away from it (heart-rate RPE is rough) gets a note with "Brug {n}".
-  const autoRpe = useMemo(() => { const w = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR }); return Object.fromEntries(Object.entries(w).filter(([, v]) => v.rpe).map(([k, v]) => [k, v.rpe])); }, [acts, p.includeHikes, maxHR]);
+  const autoRpe = useMemo(() => { const w = weeklyTotals(acts, { includeHikes: p.includeHikes, maxHR, restHR: p.restHR }); return Object.fromEntries(Object.entries(w).filter(([, v]) => v.rpe).map(([k, v]) => [k, v.rpe])); }, [acts, p.includeHikes, maxHR]);
   const rpeOff = (key) => { const l = log[key]; const a = autoRpe[key]; return l && l.rpe !== "" && l.rpe != null && !l.rpeAuto && a && Math.abs(+l.rpe - a) >= 3 ? { typed: +l.rpe, auto: a } : null; };
   const applyRunsRpe = (key) => { const l = log[key] || {}; const a = autoRpe[key]; saveLog({ ...log, [key]: { ...l, rpe: a ?? "", rpeAuto: a != null } }); };
   const rpeNote = (key) => { const o = rpeOff(key); return o ? (
@@ -1128,7 +1150,10 @@ export default function App() {
     // A trigger that already held on Monday (last week's ACWR or km) cuts the whole week from Monday, so a day the
     // runner skips is not moved onto the days after it. A trigger that appears during the week (this week's ACWR,
     // resting HR) cuts from today; the days before it stay as planned and what was run counts against the cap.
-    const from = (lastA != null && lastA > 1.5) || overKm ? 0 : todayIdx;
+    // A trigger during the week: today counts as done once today has a run, and the days behind keep what was RUN
+    // (not what was planned), so the week's total is real km plus what is left.
+    const midWeek = !((lastA != null && lastA > 1.5) || overKm);
+    const from = midWeek ? todayIdx + (dayKm[todayIdx] > 0 ? 1 : 0) : 0;
     const ranSoFar = dayKm.slice(0, from).reduce((a, b) => a + b, 0);
     const cap = lastRow && !recWeek ? Math.round(lastRow.km * f) : null;
     const b2b = curBase.sun > 0 && curBase.longDay != null ? (curBase.longDay + 1) % 7 : -1;
@@ -1142,7 +1167,7 @@ export default function App() {
     // what is left of the week's plan (the back-to-back run included) × f, and never above the cap
     const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => i >= from && !ev[i]).reduce((a, i) => a + curBase.days[i], 0);
     const left = Math.max(0, Math.round(cap != null ? Math.min(cap - ranSoFar, planned * f) : planned * f));
-    let days = curBase.days.map((v, i) => (i < from || ev[i] ? v : 0));
+    let days = curBase.days.map((v, i) => (ev[i] ? v : i < from ? (midWeek ? dayKm[i] || 0 : v) : 0));
     const ld = curBase.longDay != null && open.includes(curBase.longDay) ? curBase.longDay : null;
     const long = ld != null ? Math.min(curBase.days[ld], Math.round(left * (open.length > 1 ? 0.5 : 1))) : 0;
     if (ld != null) days[ld] = long;
@@ -1159,6 +1184,7 @@ export default function App() {
     }
     for (const i of easy) if (days[i] > 0 && days[i] < 3) { rest += days[i]; days[i] = 0; }
     if (rest > 0 && ld != null) { const add = Math.min(rest, curBase.days[ld] - days[ld]); days[ld] += add; rest -= add; }
+    if (rest < 0) { const big = [...easy].sort((a, b) => days[b] - days[a])[0] ?? ld; if (big != null) days[big] = Math.max(0, days[big] + rest); } // rounding went over: back to the cap
     const km = days.reduce((x, y) => x + y, 0);
     const reason = hrHigh ? t("hvilepuls {hr}", { hr: hrNow }) : curA != null && curA > 1.5 ? t("ACWR {v} denne uge", { v: curA.toFixed(2) }) : lastA != null && lastA > 1.5 ? `ACWR ${lastA.toFixed(2)}` : t("{km} km mod {plan} planlagt", { km: lastLog.km, plan: lastRow.km });
     return { ...curBase, days, km, target: curBase.km, lng: ev[curBase.longDay] ? 0 : days[curBase.longDay ?? 5] || 0, sun: 0, quality: "Rolig – ingen hård session", qDay: null,
@@ -1254,7 +1280,7 @@ export default function App() {
     : <div className="advice warn">{t("Kunne ikke kopiere automatisk. Markér teksten og kopiér den:")}<textarea className="send-text" readOnly value={sendMsg.text} onFocus={(e) => e.target.select()} /></div>);
   const [mealShift, setMealShift] = useState(0); // "Andre forslag": rolls the day's meal ideas
   const nutritionFor = (dayType, around = {}) => {
-    const targets = dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType, hybrid });
+    const targets = dayTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all", dayType, hybrid, km: around.km || 0 });
     return { targets, meals: mealIdeas({ diet: p.diet || "all", intol: p.intol || [], dayType, body: p.body, protein: targets.protein, weight: p.weight, shift: mealShift, ...around }) };
   };
   const planRows = plan.rows.map((r) => (r.key === cur.key ? cur : r));
@@ -1302,7 +1328,7 @@ export default function App() {
   const [coachQ, setCoachQ] = useState("");
   const coachQRef = useRef(null); // the composer textarea: grows with the text, shrinks back after a send
   // Body goal, strength and today's nutrition targets, so the coach can answer about lifting and food too.
-  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === 5, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.fitnessAge } : null, krop_mål: p.body || "keep", træningsstil: hybrid ? "hybrid (styrke og løb vægtes lige, egen plan)" : plan.coach ? "trænerplan" : "ultra (løb først)", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
+  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === cur.longDay, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.ageFloor ? "under 20" : fitness.fitnessAge } : null, krop_mål: p.body || "keep", træningsstil: hybrid ? "hybrid (styrke og løb vægtes lige, egen plan)" : plan.coach ? "trænerplan" : "ultra (løb først)", styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachErr, setCoachErr] = useState(null);
   // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.

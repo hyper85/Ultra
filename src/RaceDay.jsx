@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { t, tn } from "./i18n.js";
-import { parseTime, fmtTime, fmtPace, paceToMin, predictFinish, splits, fuelling, kitList, loadKit, saveKit } from "./race.js";
+import { parseTime, fmtTime, fmtPace, paceToMin, predictFinish, stopMin, splits, fuelling, kitList, loadKit, saveKit } from "./race.js";
 
 /* Løbsdag: goal time and prediction, pacing splits, fuelling and the kit list. Shown under Plan; opens from the race
    card on I dag. The kit ticks live on the device only (they are not training data). */
@@ -10,7 +10,7 @@ const clock = (startHHMM, min) => { const [h, m] = String(startHHMM || "06:00").
 function LapPlan({ lp, raceVert }) {
   let cum = 0, km = 0;
   const vPer = raceVert ? Math.round(raceVert / lp.laps.length) : null;
-  const rows = lp.laps.map((l, i) => { const target = parseTime(l.target) || 0; cum += target; km += +l.km; const moving = Math.max(1, target - (lp.stopMin || 0)); return { n: i + 1, km: Math.round(km * 10) / 10, lapKm: +l.km, target, moving, pace: moving / +l.km, cum, at: clock(lp.start, cum) }; });
+  const rows = lp.laps.map((l, i) => { const target = parseTime(l.target) || 0; cum += target; km += +l.km; const moving = Math.max(1, target - (i < lp.laps.length - 1 ? lp.stopMin || 0 : 0)); /* the last lap ends at the finish, not a depot */ return { n: i + 1, km: Math.round(km * 10) / 10, lapKm: +l.km, target, moving, pace: moving / +l.km, cum, at: clock(lp.start, cum) }; });
   const total = rows.length ? rows[rows.length - 1].cum : 0;
   const cutIdx = (lp.cutoffAfterLap || rows.length - 1) - 1;
   const cutRow = rows[cutIdx];
@@ -62,7 +62,7 @@ export default function RaceDay({ p, easyPace, racePace, raceBasis, onGoal, lapP
       {tab === "pace" && <>
       <div className="row2">
         <label>{t("Måltid (timer og minutter)")}<input type="text" inputMode="numeric" placeholder={predicted ? fmtTime(predicted) : "fx 1230"} value={p.raceGoal || ""} onChange={(e) => onGoal(e.target.value)} /></label>
-        <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{longBasis ? t("ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+", { n: raceBasis.n, pace: fmtPace(easyPaceMinKm), km, vert }) : easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
+        <div className="racepred"><span className="muted">{t("Appens skøn")}</span><b>{predicted ? fmtTime(predicted) : "–"}</b><small className="muted">{stopMin(km) ? t("inkl. ca. {n} min i depoter · ", { n: stopMin(km) }) : ""}{longBasis ? t("ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+", { n: raceBasis.n, pace: fmtPace(easyPaceMinKm), km, vert }) : easyPaceMinKm ? t("ud fra dit rolige tempo {pace}/km, {km} km og {vert} m+", { pace: easyPace, km, vert }) : t("ud fra dit niveau, {km} km og {vert} m+ (log rolige ture, så bliver skønnet dit eget)", { km, vert })}</small></div>
       </div>
       {p.raceGoal && !goalMin && <div className="advice warn">{t("Skriv tiden som timer og minutter, fx 1230.")}</div>}
       {rows.length > 0 && (

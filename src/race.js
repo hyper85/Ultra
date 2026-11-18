@@ -9,25 +9,30 @@ import { hrAt } from "./hr.js";
 export const parseTime = (s) => {
   if (!s) return null;
   const raw = String(s).trim();
+  const dec = /^(\d{1,2})[.,](\d)$/.exec(raw); // "12,5" = 12.5 hours, not 12:05
+  if (dec) return +dec[1] * 60 + +dec[2] * 6;
   const bare = /^(\d{1,2})(\d{2})$/.exec(raw); // "1230" or "930" from a numeric keypad
   const m = bare ? [raw, bare[1], bare[2]] : /^\s*(\d{1,2})\s*[:h.,]\s*(\d{1,2})(?:\s*[:m]\s*(\d{1,2}))?\s*$/i.exec(raw);
   if (!m) return null;
   const min = +m[1] * 60 + +m[2] + (m[3] ? +m[3] / 60 : 0);
-  return min > 0 && +m[2] < 60 ? min : null;
+  return min > 0 && +m[2] < 60 && !(m[3] && +m[3] >= 60) ? min : null;
 };
 export const fmtTime = (min) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return m === 60 ? `${h + 1}:00` : `${h}:${String(m).padStart(2, "0")}`; };
 export const fmtPace = (minKm) => { const m = Math.floor(minKm), s = Math.round((minKm - m) * 60); return s === 60 ? `${m + 1}:00` : `${m}:${String(s).padStart(2, "0")}`; };
-export const paceToMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m ? +m[1] + +m[2] / 60 : null; };
+export const paceToMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m && +m[2] < 60 ? +m[1] + +m[2] / 60 : null; };
 
 const LEVEL_PACE = { 1: 7.0, 2: 6.25, 3: 5.75, 4: 5.25 }; // easy pace when the log has none yet, min/km
 
 /* Predicted finish in minutes. Climb counts as distance (100 m ≈ 0.8 km of effort), and pace drifts with the
    distance: about +8 % per doubling past a half marathon, less for experienced runners. */
+// One climb rule everywhere (the weekly effort km, hill benefit, long runs and the forecast): 100 m up = 1 km (ITRA).
+export const effortKm = (km, vert = 0) => (+km || 0) + (+vert || 0) / 100;
+// Aid stations in an ultra: about 5 min per 21 km lap/section after the first (the coach's lap plan budgets 5 per lap).
+export const stopMin = (km) => (km > 42 ? Math.floor(km / 21) * 5 : 0);
 export const driftFor = (km, level = 2) => 1 + (level >= 3 ? 0.06 : 0.08) * Math.max(0, Math.log2(Math.max(1, km / 21)));
 export const predictFinish = ({ km, vert = 0, easyPaceMinKm, level = 2 }) => {
   const pace = easyPaceMinKm || LEVEL_PACE[level] || 6.25;
-  const effortKm = km + vert / 125;
-  return Math.round(effortKm * pace * driftFor(km, level));
+  return Math.round(effortKm(km, vert) * pace * driftFor(km, level) + stopMin(km)); // running time + aid stations
 };
 
 /* The pace the runner actually holds over a long distance: the median "flat pace" of the long runs (18 km or more)
@@ -40,7 +45,7 @@ export function longRunPace(acts = {}, { until, maxHR, restHR, level = 2, days =
   const end = until || ymd(new Date()); const from = ymd(addDays(parseLocal(end), -days));
   const cap = maxHR ? hrAt(0.75, { maxHR, restHR }) + 3 : null;
   const paces = Object.values(acts).filter((a) => kind(a.type) === "run" && !a.treadmill && a.day >= from && a.day <= end && a.km >= minKm && a.min > 0 && (!cap || !a.hr || a.hr <= cap))
-    .map((a) => a.min / ((a.km + (a.vert || 0) / 125) * driftFor(a.km, level)))
+    .map((a) => a.min / (effortKm(a.km, a.vert) * driftFor(a.km, level)))
     .filter((x) => x > 3 && x < 12).sort((x, y) => x - y);
   if (paces.length < 2) return null;
   const mid = paces.length >> 1;
@@ -58,10 +63,11 @@ export function splits({ km, totalMin, vert = 0, carbsPerHour, mlPerHour }) {
   const wsum = segKm.reduce((s, k, i) => s + k * w[i], 0);
   const base = totalMin / wsum; // min per km at multiplier 1
   let cum = 0;
+  const half = marks.reduce((b, x, j) => (Math.abs(x - km / 2) < Math.abs(marks[b] - km / 2) ? j : b), 0);
   return marks.map((x, i) => {
-    const pace = base * w[i]; cum += segKm[i] * pace;
-    const climb = Math.round((vert * segKm[i]) / km);
-    const note = i === 0 ? t("Start absurd roligt. Gå hver stigning.") : x === km ? t("Sidste stykke: alt hvad der er tilbage.") : i === Math.floor(n / 2) ? t("Halvvejs. Tjek fødder, salt og humør.") : cum > 240 && cum - segKm[i] * pace <= 240 ? t("Efter 4 timer: skift til rigtig mad, hvis gels kvalmer.") : "";
+    const pace = base * w[i]; cum += segKm[i] * pace; if (i === n - 1) cum = totalMin; // no float dust at the finish
+    const climb = Math.round((vert * x) / km) - Math.round((vert * (i ? marks[i - 1] : 0)) / km); // sums to the total
+    const note = i === 0 ? t("Start absurd roligt. Gå hver stigning.") : x === km ? t("Sidste stykke: alt hvad der er tilbage.") : i === half && i > 0 ? t("Halvvejs. Tjek fødder, salt og humør.") : cum > 240 && cum - segKm[i] * pace <= 240 ? t("Efter 4 timer: skift til rigtig mad, hvis gels kvalmer.") : "";
     return { km: x, segKm: segKm[i], pace, cum, climb, carbs: Math.round((cum / 60) * carbsPerHour), ml: Math.round((cum / 60) * mlPerHour / 100) * 100, note };
   });
 }

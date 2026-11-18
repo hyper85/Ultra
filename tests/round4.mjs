@@ -37,7 +37,7 @@ for (const [at, want] of [["2026-10-21T09:00:00", /★ Eventyrsport BakkeTrail o
 {
   const { browser, page } = await openApp({ lang: "da", width: 390, at: "2026-10-10T07:00:00" });
   const f = await page.locator(".today-sub.fuel").innerText();
-  ok(/^Ca\. 1:\d\d · ~\d0 g kulhydrat ≈ \d geler · \d,\d l at drikke · sigt efter ~350 m\+$/.test(f), `long-run line: ${f}`);
+  ok(/^Ca\. 1:\d\d · ~\d+0 g kulhydrat ≈ \d+ geler · \d(,\d)? l at drikke · sigt efter ~350 m\+$/.test(f), `long-run line: ${f}`);
   await tab(page, 1); await page.getByRole("button", { name: /Sådan gør du/ }).click(); await page.waitForTimeout(150);
   ok(await page.locator(".guide p.fuel").count() === 1, "fuel line in the Plan guide");
   await browser.close();
@@ -84,7 +84,7 @@ for (const [at, want] of [["2026-10-21T09:00:00", /★ Eventyrsport BakkeTrail o
   await tab(page, 2);
   const tile = page.locator(".tile", { hasText: /Prognose/ });
   const tt = (await tile.innerText()).replace(/\n/g, " ");
-  ok(/Prognose \d{1,2}:\d\d ud fra dit rolige tempo/.test(tt), `forecast tile: ${tt}`);
+  ok(/Prognose \d{1,2}:\d\d (inkl\. ca\. \d+ min i depoter · )?ud fra dit rolige tempo/.test(tt), `forecast tile: ${tt}`);
   await tile.click(); await page.waitForTimeout(500);
   ok(await page.locator("#raceday[open]").count() === 1, "tapping the forecast opens Løbsdag");
   await tab(page, 3);

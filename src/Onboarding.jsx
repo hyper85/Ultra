@@ -64,12 +64,6 @@ export const PRESETS = [
 ];
 const presetKey = (sched) => PRESETS.find(([, , mk]) => mk().every((x, i) => x.avail === sched?.[i]?.avail))?.[0] || null;
 
-export const goalKcal = (bmr, goal) => {
-  const adj = goal === "lean" ? -300 : 0;
-  const q = goal === "perform" ? 100 : 0;
-  const rows = [[t("Lang tur / løbsdag"), bmr * 1.95 + adj], [t("Kvalitet / styrke"), bmr * 1.7 + adj + q], [t("Rolig løbedag"), bmr * 1.45 - 400 + adj], [t("Hviledag"), bmr * 1.3 - 450 + adj]];
-  return rows.map(([n, c]) => [n, Math.max(Math.round(bmr * 1.15 / 10) * 10, Math.round(c / 10) * 10)]);
-};
 export const proteinG = (weight, body) => Math.round(weight * (body === "lean" ? 2.2 : 2));
 
 // The panels, in order: the welcome screen and the diet step are gone (diet lives under Mere → Kost).

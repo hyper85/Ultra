@@ -43,9 +43,11 @@ tired runner on a Tuesday evening. Not medical advice; say so when pain is invol
 
 ## Nutrition
 
-- BMR (Mifflin-St Jeor, sex-specific). Day types: long run/race ×1.95, quality ×1.7, easy ×1.45
-  −400, rest ×1.3 −450. Goal "leaner": −300 kcal/day, max 0.5 kg/week; goal "time": +100 on
-  quality days. Never below 1.15 × BMR.
+- BMR (Mifflin-St Jeor, sex-specific). Maintenance = BMR × 1.45 (everyday life, FAO/WHO/UNU 2004)
+  + the day's training: running ≈ 1 kcal per kg per km (typical day when unknown: long 22 km,
+  quality 10, easy 8), strength ≈ 250 kcal. Goal "leaner": −300 kcal/day, max 0.5 kg/week; goal
+  "time": +100 on quality days. Never below 1.15 × BMR. (An older table, rest ×1.3 −450 and easy
+  ×1.45 −400, sat 500–1100 kcal under maintenance – under the RED-S low-energy line.)
 - Protein 2 g/kg (2.2 when losing weight). Carbohydrate follows the work: 40 g/h early in the
   plan, 60–90 g/h in ultra-prep on runs > 90 min; practise the gut in training.
 - Diet-aware suggestions: omnivore, vegetarian, vegan (check gels), low-carb (still fuel long

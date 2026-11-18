@@ -79,7 +79,7 @@ export const fitType = (sport, sub) => {
   if (sport === 17) return "Hike";
   if (sport === 2) return sub === 6 || sub === 58 ? "VirtualRide" : "Ride";
   if (sport === 5) return "Swim";
-  if (sport === 10 || sport === 4) return sub === 20 ? "WeightTraining" : sub === 26 ? "Yoga" : "Workout";
+  if (sport === 10 || sport === 4) return sub === 20 ? "WeightTraining" : sub === 43 ? "Yoga" : "Workout"; // FIT sub_sport 43 = yoga (26 is cardio training, not yoga)
   if (sport === 62) return "HIIT";
   return "Workout";
 };

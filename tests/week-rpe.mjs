@@ -4,8 +4,8 @@
 import { openApp, check, mk } from "./seed.mjs";
 const { ok, done } = check();
 const run = (day, km, min, hr) => ({ [`${day}-Run`]: mk(day, km, min, "Run", hr) });
-// week of 26 Oct: easy 135, tempo 157, easy 129, long 140 → about RPE 5 from heart rate (max 186)
-const week = { ...run("2026-10-26", 5, 33, 135), ...run("2026-10-28", 9, 50, 157), ...run("2026-10-29", 8, 50, 129), ...run("2026-10-31", 20, 130, 140) };
+// week of 26 Oct: 145, tempo 160, 140, long 147 → about RPE 5 from heart rate (reserve: max 186, rest 49)
+const week = { ...run("2026-10-26", 5, 33, 145), ...run("2026-10-28", 9, 50, 160), ...run("2026-10-29", 8, 50, 140), ...run("2026-10-31", 20, 130, 147) };
 {
   const { browser, page, errors } = await openApp({ lang: "da", width: 390, at: "2026-10-30T09:00:00", extraActs: week, logPatch: { "2026-10-26": { km: 42, rpe: 2, auto: true } } });
   const card = page.locator(".week-panel");

@@ -23,7 +23,8 @@ export function restingBaseline({ wellness, log = {}, profileRest, beforeKey }) 
   if (beforeKey) {
     const d = restingHRSeries(wellness || {}, { days: 28, until: ymd(addDays(parseLocal(beforeKey), -1)) });
     if (d.rows.length >= 10) return { normal: d.normal, source: "garmin", n: d.rows.length };
-    const ws = Object.keys(log || {}).filter((k) => k < beforeKey && +log[k]?.hr > 0).sort().slice(-8).map((k) => +log[k].hr);
+    const since = ymd(addDays(parseLocal(beforeKey), -56)); // the 8 weeks before, not any 8 logged weeks
+    const ws = Object.keys(log || {}).filter((k) => k < beforeKey && k >= since && +log[k]?.hr > 0).sort().slice(-8).map((k) => +log[k].hr);
     if (ws.length >= 3) return { normal: Math.round(median(ws)), source: "log", n: ws.length };
   }
   return +profileRest > 0 ? { normal: +profileRest, source: "profile", n: 0 } : null;
@@ -106,13 +107,19 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const weeks = logged.map((r) => ({ key: r.key, i: r.i, plan: r.km, ran: log[r.key].km, ratio: r.km ? log[r.key].km / r.km : null, rpe: log[r.key].rpe ?? null, hr: log[r.key].hr ?? null }));
   const ratios = weeks.map((w) => w.ratio).filter((x) => x != null);
   const n = weeks.length;
-  const hit = ratios.filter((x) => x >= 0.85 && x <= 1.2).length;
+  // "On plan" like Fremskridt counts it: every finished week with plan km, an unlogged one as 0 km (under).
+  const rated = done.filter((r) => r.km > 0);
+  const hit = rated.filter((r) => { const x = (+log[r.key]?.km || 0) / r.km; return x >= 0.85 && x <= 1.2; }).length;
+  const nRated = rated.length;
   const med = median(ratios);
   const tendency = n >= 3 && med != null ? (med < 0.8 ? "under" : med > 1.15 ? "over" : "on") : null;
 
-  // Streak: consecutive completed weeks with anything logged, counted back from the last completed week.
+  // Streak, the same as the I dag chip: weeks in a row with a run or another session, this week included once it has one.
+  const trained = (k) => (log[k]?.km > 0) || (log[k]?.xn > 0);
+  const allDone = plan.rows.filter((r) => r.key < todayKey);
   let streak = 0;
-  for (let k = done.length - 1; k >= 0; k--) { if (log[done[k].key]?.km > 0) streak++; else break; }
+  for (let k = allDone.length - 1; k >= 0; k--) { if (trained(allDone[k].key)) streak++; else break; }
+  if (trained(todayKey)) streak++;
 
   // Weekday pattern: planned run days that get skipped, and free days the runner uses anyway.
   const pattern = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ i, planned: 0, ranPlanned: 0, free: 0, ranFree: 0 }));
@@ -177,7 +184,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   if (watch.uger_med_data >= 3 && watch.snit_km_sidste_4 != null && p.currentKm != null && Math.abs(watch.snit_km_sidste_4 - p.currentKm) >= Math.max(5, 0.15 * p.currentKm))
     add("watch-base", "info", t("Dit ur siger {km} km/uge de sidste 4 uger, planen regner med {base}.{tail}", { km: watch.snit_km_sidste_4, base: p.currentKm, tail: coach ? t(" Det påvirker ACWR-baselinen.") : t(" Planen og ACWR bliver mere præcise med det rigtige tal.") }),
       { label: t("Brug {km} km/uge som base", { km: watch.snit_km_sidste_4 }), patch: { currentKm: watch.snit_km_sidste_4 } });
-  if (n >= 3 && tendency === "on" && hit / n >= 0.5) add("on-plan", "good", t("Du rammer planen: {hit} af {n} uger inden for 85–120 %.", { hit, n }));
+  if (n >= 3 && tendency === "on" && nRated && hit / nRated >= 0.5) add("on-plan", "good", t("Du rammer planen: {hit} af {n} uger inden for 85–120 %.", { hit, n: nRated }));
   if (tendency === "under") add("under", "warn", t("Du løber typisk {pct} % af det planlagte ({n} uger). Enten er planen for stor til din hverdag, eller også mangler der dage. En lavere top holder du bedre end en plan, du springer over.", { pct: Math.round(med * 100), n }),
     coach ? null : { label: t("Sænk toppen 10 %"), patch: { peakScale: r1(Math.max(0.6, (p.peakScale || 1) - 0.1)) } });
   if (tendency === "over") add("over", "warn", t("Du løber typisk {pct} % af det planlagte ({n} uger). Planens tal er et loft. Er ACWR grøn uge efter uge, kan toppen hæves lidt – ellers er det her, skader kommer fra.", { pct: Math.round(med * 100), n }),
@@ -222,7 +229,7 @@ export function buildInsights({ plan, log = {}, acts = {}, p = {}, todayKey, max
   const lrp = longRunPace(acts, { maxHR, restHR: p.restHR, level: p.level || 2 });
   const racePaceMinKm = lrp?.pace ?? easyPaceMinKm;
   const racePaceBasis = lrp ? { kind: "long", n: lrp.n } : easyPaceMinKm ? { kind: easyPaceEst ? "plain" : "easy" } : null;
-  const summary = { racePaceMinKm, racePaceBasis, sleepAvg, easyPace, easyPaceMinKm, easyPaceEst, weeksLogged: n, hitRate: n ? r1(hit / n) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
+  const summary = { racePaceMinKm, racePaceBasis, sleepAvg, easyPace, easyPaceMinKm, easyPaceEst, weeksLogged: n, hitRate: nRated ? r1(hit / nRated) : null, medianRatio: med != null ? r1(med) : null, tendency, streak, runsPerWeek, longRunRate: longRate != null ? r1(longRate) : null, easyAboveCap: easyAbove != null ? r1(easyAbove) : null, easyHR, easyCap: cap, efficiencyPct, restHRDelta,
     skippedDay: skipped ? day(skipped.i) : null, extraDay: usedFree ? day(usedFree.i) : null };
   return { summary, findings, weeks };
 }
