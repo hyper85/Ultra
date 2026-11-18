@@ -112,7 +112,6 @@ export default {
   "Højdemeter (valgfri)": "Climb in metres (optional)",
   "fx 1200": "e.g. 1200",
   "Datoen skal ligge efter i dag.": "The date must be after today.",
-  "Kun {n} uger til løbet. Planen bliver komprimeret til minimum 8 uger, så hold igen med ambitionerne.": "Only {n} weeks to the race. The plan is compressed to a minimum of 8 weeks, so keep the ambitions in check.",
   "{n} uger fra mandag {date} til løbet.": "{n} weeks from Monday {date} to the race.",
   "Hvad vil du med det?": "What do you want from it?",
 
@@ -344,4 +343,5 @@ export default {
   "indsæt nøglen": "paste the key",
   "Forbind Garmin": "Connect Garmin",
   "Hvilepuls fra feltet {field}.": "Resting heart rate from the field {field}.",
+  "Kun {n} uger til løbet. Planen er 8 uger og slutter på løbsdagen, så du starter et stykke inde i den. Hold igen med ambitionerne.": "Only {n} weeks to the race. The plan is 8 weeks and ends on race day, so you start some way into it. Keep your ambitions modest.",
 };

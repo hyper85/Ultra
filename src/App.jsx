@@ -17,7 +17,7 @@ const actKind = kind; // the today screen shadows `kind` with the day's label
 import { activeCoachPlan, eventsInWeek, coachPlanFromFile, normalizeCoachPlan, coachLabelDa } from "./coachplan.js";
 import { buildInsights, coachContext, hrPeak, restingBaseline } from "./insights.js";
 import { hrAt, karvonen } from "./hr.js";
-import { describeSession, describeLong, describeEasy, sessionName, longRunPlan } from "./sessions.js";
+import { describeSession, describeLong, describeEasy, sessionName, longRunPlan, sessionSteps, easyPaceFor } from "./sessions.js";
 import { askCoach, proposePlan, loadChat, saveChat, SUGGESTED } from "./coach.js";
 import { t, tn, locale, getLang } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
@@ -122,13 +122,18 @@ export function buildCoachPlan(p) {
 }
 
 /* ================= plan engine ================= */
-export function buildPlan(p) {
+export function buildPlan(p, { easyPaceMinKm } = {}) {
   const level = p.level || 2;
-  const start = parseLocal(p.startDate || PLAN_START);
+  const paceE = easyPaceMinKm > 0 ? easyPaceMinKm : easyPaceFor(level);
+  let start = parseLocal(p.startDate || PLAN_START);
   // A profile without a race yet (the questionnaire is not done): plan 16 weeks for 50 km, so nothing divides by NaN.
   const raceD = p.raceDate ? parseLocal(p.raceDate) : null;
-  const race = raceD && !isNaN(raceD) && raceD > start ? raceD : addDays(start, 16 * 7);
-  const weeks = Math.max(8, Math.floor(Math.round((race - start) / 86400000) / 7) + 1);
+  const realRace = !!(raceD && !isNaN(raceD) && raceD > start);
+  const race = realRace ? raceD : addDays(start, 16 * 7);
+  let weeks = Math.floor(Math.round((race - start) / 86400000) / 7) + 1;
+  // Under 8 weeks to the race: the plan is still 8 weeks, but it ENDS on the race – it starts earlier, so the runner
+  // joins it part of the way in. Stretching it instead put the taper and the race week after the real race.
+  if (weeks < 8) { if (realRace) start = addDays(mondayOf(race), -7 * 7); weeks = 8; }
   const raceKm = +p.raceKm > 0 ? +p.raceKm : 50;
   const injured = p.injury === "injured", sore = p.injury === "sore";
   // Never below a small floor: a runner who types 0 km still needs a plan that starts somewhere.
@@ -219,6 +224,14 @@ export function buildPlan(p) {
     }
     if (longDay != null) days[longDay] = lng;
     if (sun && b2bDay != null) days[b2bDay] = sun;
+    // The hard day's km is its steps (warm-up + work + recoveries + cool-down, sessions.js), never a share of the
+    // week: the card's text and its km are one list. What it gives or takes goes to the week's easy days.
+    const steps = qDay != null && days[qDay] > 0 ? sessionSteps(quality, { easyPaceMinKm: paceE }) : null;
+    if (steps) {
+      const diff = days[qDay] - steps.km; days[qDay] = steps.km;
+      const easyDays = runDays.filter((d) => d !== qDay && d !== longDay && d !== b2bDay && days[d] > 0);
+      if (easyDays.length && diff) for (const d of easyDays) days[d] = Math.max(3, Math.min(cap(d), Math.round((days[d] + diff / easyDays.length) * 2) / 2));
+    }
     const total = days.reduce((a, b) => a + b, 0);
     const unplaced = Math.max(0, km - total);
     rows.push({ i, wkStart, key: ymd(wkStart), iso: isoWeek(wkStart), phase, km: total, target: km, unplaced, lng, sun, deload, isRace, quality, focus, days, longDay, qDay, runDays, sched, schedLabel });
@@ -598,7 +611,11 @@ export default function App() {
   const setDay = (i, patch) => { const k = p.altWeeks ? schedTab : "A"; const next = sched.map((d, j) => (j === i ? { ...d, ...patch } : d)); setP({ ...p, sched: { ...(p.sched || {}), [k]: next } }); };
   const toggle = (key, d) => { const s = new Set(p[key]); s.has(d) ? s.delete(d) : s.add(d); setP({ ...p, [key]: [...s].sort() }); };
 
-  const plan = useMemo(() => (p.coachMode !== false ? buildCoachPlan(p) : buildPlan(p)), [p]);
+  // The runner's easy pace sizes the hard sessions' steps (sessions.js). It comes from the insights, which need the
+  // plan, so it is kept in state and the plan is rebuilt once when it changes (it does not depend on the hard day's km).
+  const [planPace, setPlanPace] = useState(null);
+  const paceE = planPace || easyPaceFor(p.level);
+  const plan = useMemo(() => (p.coachMode !== false ? buildCoachPlan(p) : buildPlan(p, { easyPaceMinKm: paceE })), [p, paceE]);
   const CP = useMemo(() => activeCoachPlan(p), [p.coachPlan]); // eslint-disable-line react-hooks/exhaustive-deps
   const liftDays = plan.coach ? CP.week.liftDays : p.liftDays;
   // Hybrid is an opt-in style for the app's own plan; the coach plan ignores it (its days, km and sessions stay).
@@ -653,7 +670,8 @@ export default function App() {
     </div>
   );
   const afterRace = todayStr > p.raceDate;            // the race is behind us
-  const startD = parseLocal(p.startDate);
+  const startD = parseLocal(plan.rows[0]?.key || p.startDate); // the plan's own first Monday (the coach plan has its own start)
+  const planStartKey = ymd(startD);
   const curSchedLabel = curBase.schedLabel;
 
   /* ---- Strava / Garmin import ---- */
@@ -708,17 +726,19 @@ export default function App() {
         if (!gotSheet) errors.push(...sheetErrors);
       } catch (err) { errors.push(err?.message || t("{name}: kunne ikke læses.", { name: f.name })); console.error("import", f.name, err); }
     }
-    let logBase = log; let got = {}; let skippedCols = []; let daysN = 0;
+    // Built on the newest log/activities/profile, not the ones captured when the import started: coming back from the
+    // file picker starts a silent Strava sync, and its runs must not be lost to this import's older copy.
+    let logBase = logRef.current; let got = {}; let skippedCols = []; let daysN = 0;
     if (wellness.length) {
       // imported values win where the user has not typed a number (import.js wellnessIntoLog)
-      const wl = wellnessIntoLog(log, wellness); const n = wl.log; got = wl.got; skippedCols = wl.skipped;
+      const wl = wellnessIntoLog(logRef.current, wellness); const n = wl.log; got = wl.got; skippedCols = wl.skipped;
       logBase = n; if (!parsed.length) saveLog(n);
       // Daily rows (a 4-week report) go to the profile's day store, for the day-by-day chart and the coach.
       const days = Object.assign({}, ...wellness.map((w) => w.days || {}));
       daysN = Object.keys(days).length;
-      if (daysN) setP({ ...p, wellness: mergeWellnessDays(p.wellness, days) });
+      if (daysN) setP((prev) => ({ ...prev, wellness: mergeWellnessDays(prev.wellness, days) }));
     }
-    const merged = mergeActivities(acts, parsed);
+    const merged = mergeActivities(actsRef.current, parsed);
     const { next, removed } = dedupeStore(merged.next);
     const added = merged.added, swapped = merged.replaced + removed, enriched = merged.enriched;
     let weeks = {};
@@ -767,17 +787,27 @@ export default function App() {
   // How to run the week: the hard session with its zone, the long run, the easy runs with the runner's own pace.
   // Used for the current week on Plan and for any week unfolded under "Alle uger".
   const [guideFull, setGuideFull] = useState({}); // weeks whose how-to text is unfolded (titles always show)
+  // A hard session as its steps: warm-up, strides, the work, cool-down – each with time and km – then the total and
+  // how it should feel. Falls back to the plain text for days that are not step sessions.
+  const kmFmt = (x) => x.toLocaleString(locale(), { maximumFractionDigits: 1 });
+  const stepList = (g) => (g.parts ? (
+    <div className="steps-wrap">
+      <ol className="steps">{g.parts.map((pt) => <li key={pt.key} className={`step step-${pt.key}`}><span className="step-name"><b>{pt.label}</b><small>{pt.zone}</small></span><span className="step-meta"><b>{t("{min} min", { min: pt.min })}</b><small>{kmFmt(pt.km)} km</small></span></li>)}</ol>
+      <p className={`step-total ${g.over ? "warn" : ""}`}>{g.total}</p>
+      <p className="step-about">{g.about}</p>
+    </div>
+  ) : <p>{g.text}</p>);
   const renderGuide = (r) => { const full = !!guideFull[r.key]; return (
     <div className={`guide ${full ? "" : "compact"}`}>
       {Object.entries(r.events || {}).map(([d, e]) => <div key={e.date} className="event"><b>★ {e.name} {dayLow(+d)}{e.km ? ` · ${e.km} km` : ""}</b><span className="zone">{[e.kind === "walk" ? t("Gang") : t("Løb"), e.start ? t("start {time}", { time: e.start }) : null, e.hours ? `${e.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(e.hours) })}` : null].filter(Boolean).join(" · ")}</span><p>{e.result ? `✓ ${t("Gennemført")}: ${[e.result.km ? `${e.result.km} km` : null, e.result.total || null, e.result.ascent ? `${e.result.ascent} m+` : null].filter(Boolean).join(" · ")}. ` : ""}{e.note || t("Eventet erstatter planens dag.")}{(e.hours || 0) > 6 ? ` ${t("Over 6 timer: ugen efter er sat til restitution.")}` : ""}</p></div>)}
       {r.recovery && <div className="event"><b>{t("Restitution efter {name}", { name: r.recovery.after })}</b><p>{r.recovery.planned > r.km ? t("Ugen er sat ned fra {from} til {km} km, kun rolige ture, ingen back-to-back. Mærk efter i benene før hvert pas.", { from: r.recovery.planned, km: r.km }) : t("Træneren har planlagt ugen som restitution: {km} km, kun rolige ture. Mærk efter i benene før hvert pas.", { km: r.km })}</p></div>}
       {r.isRace ? <div><b>{t("Løbsuge")}</b><p>{t(r.focus)}</p></div>
-        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { ...hp, easyPace: insights.summary.easyPace }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span><p>{g.text}</p></div>; })()
+        : r.qDay != null && r.days[r.qDay] > 0 ? (() => { const g = describeSession(r.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: r.days[r.qDay] }); return <div><b>{t("Hård session {day} · {quality}", { day: dayLow(r.qDay), quality: sessionName(r.quality) })}</b><span className="zone">{g.zone}</span>{stepList(g)}</div>; })()
         : null}
       {r.longDay != null && r.lng > 0 && !r.isRace && <div><b>{t("Lang tur {day} · {km} km", { day: dayLow(r.longDay), km: r.lng })}</b><p>{describeLong({ km: r.lng, carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60", ...hp, phase: r.phase })}</p>{(() => { const l = longRunPlan({ km: r.lng, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: r.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <p className="fuel">{l}</p> : null; })()}</div>}
       {r.sun > 0 && r.longDay != null && <div><b>{t("Back-to-back {day} · {km} km", { day: dayLow((r.longDay + 1) % 7), km: r.sun })}</b><p>{t("Dagen efter den lange tur, på trætte ben: puls under {hr}, gå stigningerne, {carbs} g kulhydrat i timen.", { hr: hrAt(0.7, hp), carbs: r.phase === "Ultra-prep" ? "60–90" : "40–60" })}</p></div>}
       {full && !r.isRace && liftDays.map((i) => { const sp = strengthFor(r); const k = liftDays.indexOf(i); const ses = sp.sessions.length ? sp.sessions[k % sp.sessions.length] : null; if (!ses) return null; return <div key={i} className="lift"><b>{ses.name} {dayLow(i)}{ses.focus ? ` · ${ses.focus}` : ""}</b>{ses.minutes ? <span className="zone">{t("ca. {n} min", { n: ses.minutes })}</span> : null}<p>{ses.exercises.map((e) => e.label || e.name).join(" · ")}{r.days[i] > 0 ? ` ${t("(efter løbeturen)")}` : ""}</p></div>; })}
-      {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, maxHR, easyPace: insights.summary.easyPace })}</p></div>; })()}
+      {full && (() => { const easy = r.days.filter((v, i) => v > 0 && i !== r.qDay && i !== r.longDay && !(r.sun > 0 && i === (r.longDay + 1) % 7)); if (!easy.length) return null; const list = easy.length > 1 ? `${easy.slice(0, -1).join(", ")} ${t("og")} ${easy[easy.length - 1]}` : String(easy[0]); return <div><b>{t("Rolige ture")} · {list} km</b><p>{describeEasy({ km: list, ...hp, easyPace: insights.summary.easyPace })}</p></div>; })()}
       <button type="button" className="linkbtn guide-more" aria-expanded={!!guideFull[r.key]} onClick={() => setGuideFull((g) => ({ ...g, [r.key]: !g[r.key] }))}>{guideFull[r.key] ? t("Skjul forklaringen") : t("Sådan gør du ›")}</button>
     </div>
   ); };
@@ -832,7 +862,7 @@ export default function App() {
     const ev = r.events?.[i];
     if (raceDay) lines.push([`${p.raceName || t("Løbet")} · ${p.raceKm} km`, t("Start absurd roligt, gå hver stigning, spis fra minut 30.")]);
     else if (ev) lines.push([`★ ${ev.name}${ev.km ? ` · ${ev.km} km` : ""}`, [ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null, ev.note || null].filter(Boolean).join(" · ")]);
-    else if (hard) { const g = describeSession(r.quality, { ...hp, easyPace: pace }); lines.push([t("Hård session {km} km · {quality}", { km: v, quality: sessionName(r.quality) }), g.zone]); }
+    else if (hard) { const g = describeSession(r.quality, { ...hp, easyPace: pace, easyPaceMinKm: paceE, km: v }); lines.push([t("Hård session {km} km · {quality}", { km: v, quality: sessionName(r.quality) }), g.zone]); }
     else if (long) lines.push([t("Lang tur {km} km", { km: v }), t("Puls under {hr} · gå stigningerne · {carbs} g kulhydrat/t", { hr: hrAt(0.75, hp), carbs })]);
     else if (b2b) lines.push([t("Back-to-back {km} km", { km: v }), t("På trætte ben · puls under {hr}", { hr: hrCap })]);
     else if (v > 0) lines.push([t("Rolig tur {km} km", { km: v }), pace ? t("Snakketempo · puls under {hr} · ca. {pace}/km", { hr: hrCap, pace }) : t("Snakketempo · puls under {hr}", { hr: hrCap })]);
@@ -957,19 +987,19 @@ export default function App() {
     for (let k = 1; k <= 4; k++) {
       const pk = ymd(addDays(d, -7 * k)); const l = log[pk]; const v = loadOf(l);
       if (v != null) { prev.push(v); if (l.rpeAuto || (l.km && !l.rpe)) est = true; }
-      else if (pk < p.startDate && baseline) { prev.push(baseline); est = true; }
-      else if (pk >= p.startDate && firstLoadKey && pk >= firstLoadKey) prev.push(0);
+      else if (pk < planStartKey && baseline) { prev.push(baseline); est = true; }
+      else if (pk >= planStartKey && firstLoadKey && pk >= firstLoadKey) prev.push(0);
     }
     const ownEst = !!(log[key]?.rpeAuto || (log[key]?.km && !log[key]?.rpe));
     const chronic = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
     return chronic > 0 ? { v: own / chronic, est: est || ownEst } : null;
   };
   const nPre = useMemo(() => {
-    const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < p.startDate);
+    const keys = [...Object.keys(log).filter((k) => log[k]?.km), ...Object.values(acts).map((x) => ymd(mondayOf(parseLocal(x.day))))].filter((k) => k < planStartKey);
     const earliest = keys.length ? keys.reduce((a, b) => (a < b ? a : b)) : null;
     const back = earliest ? Math.round((startD - parseLocal(earliest)) / 86400000 / 7) : 0;
     return Math.min(30, Math.max(4, back));
-  }, [log, acts, p.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [log, acts, planStartKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const preRows = Array.from({ length: nPre }, (_, j) => nPre - j).map((k) => { const d = addDays(startD, -7 * k); return { i: -k, key: ymd(d), wkStart: d, iso: isoWeek(d), pre: true }; });
   const preLogged = preRows.filter((r) => loadOf(log[r.key]) != null).length;
   const loads = plan.rows.map((r) => loadOf(log[r.key]));
@@ -1194,7 +1224,7 @@ export default function App() {
   if (adjRow) { advice = t("Trænerråd ({reason}): ugen er skåret ned til {km} km. Kun roligt, puls under {hr}.", { reason: adjRow.adjusted.reason, km: adjRow.km, hr: hrCap70 }); warn = true; }
   else if (cur.recovery) advice = t("Restitution efter {name}: {km} km, kun roligt. {acwr}", { name: cur.recovery.after, km: cur.km, hr: hrCap70, acwr: loadHigh ? t("Høj ACWR ({v}) er ventet efter eventet.", { v: Math.max(lastA || 0, curA || 0).toFixed(2) }) : "" });
   else if (cur.unplaced >= 3) { advice = t('Din hverdag giver plads til {km} af de {target} km, planen gerne vil have i denne uge. Enten åbner du en dag mere under "Din hverdag", eller også accepterer du de {km} km – det er ikke en fejl at leve et normalt liv.', { km: cur.km, target: cur.target }); warn = true; }
-  if (lastIdx != null && !adjRow && !cur.recovery) {
+  if (lastIdx != null && plan.rows[lastIdx].key === lastKey && !adjRow && !cur.recovery) { // only last week, not one further back
     const a = acwr[lastIdx]?.v; const l = log[plan.rows[lastIdx].key];
     if (a > 1.5) { advice = t("ACWR sidste uge var {acwr} – rødt. Hold denne uge på max {km} km, ingen hårde pas, og lad belastningen falde. Det er ikke at give op; det er at lade betonen hærde.", { acwr: a.toFixed(2), km: Math.round(plan.rows[lastIdx].km * 0.75) }); warn = true; }
     else if (l?.km && l.km > plan.rows[lastIdx].km * 1.4) { advice = t("Du løb {km} km mod {plan} planlagt. Planens tal er et loft. Ram ugens {week} km – og ikke mere.", { km: l.km, plan: plan.rows[lastIdx].km, week: cur.km }); warn = true; }
@@ -1203,6 +1233,7 @@ export default function App() {
 
   /* ---- what the app has learned about the runner (deterministic, see insights.js) ---- */
   const insights = useMemo(() => buildInsights({ plan, log, acts, p, todayKey, maxHR, includeHikes: p.includeHikes }), [plan, log, acts, p, todayKey, maxHR]);
+  useEffect(() => { const v = insights.summary.easyPaceMinKm; const r = v > 0 ? Math.round(v * 20) / 20 : null; if (r !== planPace) setPlanPace(r); }, [insights.summary.easyPaceMinKm]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showAllFindings, setShowAllFindings] = useState(false);
   const applyInsight = (f) => { setP({ ...p, ...f.action.patch }); };
 
@@ -1582,7 +1613,7 @@ export default function App() {
                 {(v > 0 || raceDay || ev || (lift && session)) && <h2 className="today-kind">{ev ? "★ " : ""}{kind}{d.time && v > 0 ? ` · ${TIME_ICON[d.time]} ${TIMES_T.find(([k]) => k === d.time)?.[1].toLowerCase()}` : ""}</h2>}
                 <div className="today-km">{ev && !(ran > 0) && !didOther.length ? (ev.km ? <><b>{ev.km}</b><span>km</span></> : <b className="today-rest text">★</b>) : raceDay && !(ran > 0) ? <><b>{p.raceKm}</b><span>km</span></> : ran > 0 ? <><b>{ran}</b><span>km</span></> : ev && otherKm > 0 ? <><b>{otherKm}</b><span>km</span></> : v > 0 ? <><b>{v}</b><span>km</span></> : <b className="today-rest text">{lift && session ? session.focus : kind}</b>}</div>
                 {hard && <div className="today-sub"><b>{sessionName(cur.quality)}</b></div>}
-                {hard && <div className="today-guide">{describeSession(cur.quality, { ...hp, easyPace: insights.summary.easyPace }).text}</div>}
+                {hard && <div className="today-guide">{stepList(describeSession(cur.quality, { ...hp, easyPace: insights.summary.easyPace, easyPaceMinKm: paceE, km: v }))}</div>}
                 {easy && <div className="today-sub">{describeEasy({ km: v, ...hp, easyPace: insights.summary.easyPace })}</div>}
                 {ev && <div className="today-sub"><b>{[ev.kind === "walk" ? t("Gang") : t("Løb"), ev.start ? t("start {time}", { time: ev.start }) : null, ev.hours ? `${ev.hoursEst ? "~" : ""}${t("{h} timer", { h: fmtHours(ev.hours) })}` : null].filter(Boolean).join(" · ")}</b></div>}
                 {ev && ev.result && <div className="today-ran">✓ {t("Gennemført")}: {[ev.result.km ? `${ev.result.km} km` : null, ev.result.total || null, ev.result.ascent ? `${ev.result.ascent} m+` : null, ev.result.avgHR ? `${t("puls")} ${ev.result.avgHR}` : null].filter(Boolean).join(" · ")}</div>}
@@ -1598,7 +1629,7 @@ export default function App() {
                 {!v && !lift && !raceDay && !ev && tomorrow && <div className="today-sub muted">{t("I morgen: {what}", { what: tomorrow })}</div>}
                 {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Justeret af trænerråd ({reason}).", { reason: adjRow.adjusted.reason })} {t("Original:")} {adjRow.adjusted.original[ti] || t("hvile")}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
-                {v > 0 && lift && session && <div className="today-sub">{t("+ {name} i dag efter løbet:", { name: session.name })} {session.exercises.map((e) => e.label || e.name).join(", ")}</div>}
+                {v > 0 && lift && session && <div className="today-also"><b>{t("+ {name} i dag efter løbet:", { name: session.name })}</b><ul>{session.exercises.map((e, k) => <li key={k}>{e.label || e.name}</li>)}</ul></div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ {t("Logget")} · {ran} km{todayVert > 0 ? ` · ${todayVert} m+` : ""}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
                 {todayRuns.length > 0 && (
@@ -2000,7 +2031,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />● {t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
+            <div className="legend">{Object.entries(PH).map(([k, c]) => <span key={k}><i style={{ background: c }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />{t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
             <div className="import-row" style={{ marginTop: 10 }}>
               <button type="button" className="btn ghost" onClick={exportICS}>{t("Læg planen i din kalender (.ics)")}</button>
             </div>
@@ -2021,7 +2052,7 @@ export default function App() {
                 <summary><h2>{t("Pulszoner")}</h2><span className="acc-sum">{t("maks {n}", { n: maxHR })}</span><span className="chev" aria-hidden="true">›</span></summary>
                 <p>{t("Makspuls brugt:")} <b>{maxHR}</b>{!p.maxHR && ` ${t("(estimat – skriv din målte ind)")}`}. {t("Hvilepuls {hr}.", { hr: p.restHR })}</p>
                 <p className="muted">{karvonen(hp) ? t("Zonerne er pulsreserve (Karvonen): hvilepuls + en procent af forskellen op til makspuls ({reserve} slag). Det er det samme som Garmin og Strava med indstillingen % af pulsreserve.", { reserve: maxHR - hp.restHR }) : t("Zonerne er % af makspuls. Skriv din hvilepuls ind under Dig, så bruger appen pulsreserven (Karvonen) ligesom Garmin og Strava.")}</p>
-                {(() => { const pk = hrPeak(acts, { until: todayKey }); if (!pk) return null; const higher = pk.hr > maxHR; return (
+                {(() => { const pk = hrPeak(acts, { until: todayStr }); if (!pk) return null; const higher = pk.hr > maxHR; return (
                   <div className={`hr-peak${higher || !p.maxHR ? " offer" : ""}`}>
                     <p>{t("Højeste puls målt på et løb det seneste år: {hr} ({d}).", { hr: pk.hr, d: parseLocal(pk.day).toLocaleDateString(locale(), { day: "numeric", month: "short" }) })}
                       {pk.skipped.length > 0 && ` ${tn(pk.skipped.length, "En enlig top på {hr} er sprunget over som fejlmåling.", "{n} enlige toppe (højest {hr}) er sprunget over som fejlmålinger.", { hr: pk.skipped[0].hr })}`}

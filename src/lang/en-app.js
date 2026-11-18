@@ -666,4 +666,6 @@ export default {
   "i dag {n}": "today {n}",
   "Ugens snit fra dit ur": "The week's average from your watch",
   "Belastningen steg for hurtigt – ugen her tages ned.": "The load rose too fast – this week is taken down.",
+  "Serveren svarede ikke som forventet. Prøv igen om lidt.": "The server did not answer as expected. Try again in a moment.",
+  "AI-træneren svarede ikke som forventet. Prøv igen om lidt.": "The AI coach did not answer as expected. Try again in a moment.",
 };

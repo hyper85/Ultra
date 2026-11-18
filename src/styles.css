@@ -424,6 +424,7 @@ details.strava { margin-bottom: 12px; }
 
 /* overblik */
 .dash .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 719px) { .dash .tiles > :last-child:nth-child(odd) { grid-column: 1 / -1; } } /* no lone half tile at the end */
 .tile { display: grid; gap: 2px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); border-left: 4px solid var(--line); }
 .tile small { color: var(--muted); font-size: 12px; }
 .tile b { font-family: "Barlow Condensed", Impact, sans-serif; font-size: 26px; line-height: 1.05; }
@@ -463,7 +464,7 @@ details.strava { margin-bottom: 12px; }
 .chart .zone-hard, .sw.zone-hard { fill: var(--zone-hard); background: var(--zone-hard); }
 .chart .zbar .hit { fill: transparent; }
 .chart .zbar:hover .hit { fill: rgba(255, 255, 255, .05); }
-.legend { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 4px 0 0 -8px; font-size: 13px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; font-size: 13px; }
 .legend > span { white-space: nowrap; }
 .zone-sum { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); background: var(--panel-2); border-radius: 0 8px 8px 0; }
 .zone-sum.good { border-left-color: var(--green); } .zone-sum.warn { border-left-color: var(--amber); } .zone-sum.bad { border-left-color: var(--red); }
@@ -813,3 +814,31 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 .rpe-off { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .rpe-off .btn { flex: 0 0 auto; }
 .rpe-flag { background: var(--amber); color: #111; border: none; border-radius: 999px; font-weight: 800; min-width: 32px; min-height: 32px; margin-right: 6px; cursor: pointer; }
+
+/* Hard session as steps (sessions.js describeSession().parts): a small timeline, warm-up and cool-down green,
+   strides amber, the work orange – the same colours as the zones elsewhere in the app. */
+.steps-wrap { text-align: left; }
+.steps { list-style: none; margin: 10px 0 0; padding: 0; position: relative; }
+.steps::before { content: ""; position: absolute; left: 8px; top: 20px; bottom: 20px; width: 2px; background: var(--line); border-radius: 1px; }
+.step { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0 8px 26px; position: relative; }
+.step + .step { border-top: 1px solid rgba(255, 255, 255, .05); }
+.step::before { content: ""; position: absolute; left: 3px; top: 50%; width: 12px; height: 12px; border-radius: 50%; transform: translateY(-50%); background: var(--green); box-shadow: 0 0 0 3px var(--panel); }
+.step-strides::before { background: var(--amber); }
+.step-main::before { background: var(--orange); width: 14px; height: 14px; left: 2px; }
+.step-name, .step-meta { display: flex; flex-direction: column; min-width: 0; }
+.step-name b { font-weight: 600; font-size: 15px; color: var(--text); }
+.step-main .step-name b { color: var(--orange-2); }
+.step-name small, .step-meta small { color: var(--muted); font-size: 12px; }
+.step-meta { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.step-meta b { font-weight: 600; font-size: 15px; }
+.step-total { margin: 8px 0 0; font-weight: 600; font-size: 14px; }
+.step-total.warn { color: var(--amber); font-weight: 500; }
+.step-about { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.guide .steps-wrap { margin-top: 2px; }
+
+/* "+ Styrke A i dag efter løbet" on a run + strength day: a small list, not a centred wall of text. */
+.today-also { margin: 14px 0 0; padding: 10px 12px; text-align: left; background: rgba(179, 136, 255, .08); border: 1px solid rgba(179, 136, 255, .25); border-radius: 12px; font-size: 13px; }
+.today-also b { display: block; color: var(--violet); font-weight: 600; margin-bottom: 4px; }
+.today-also ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 14px; }
+.today-also li { break-inside: avoid; padding: 2px 0; color: #d8d8d8; }
+@media (max-width: 359px) { .today-also ul { columns: 1; } }
