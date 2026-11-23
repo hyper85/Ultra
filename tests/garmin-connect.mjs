@@ -10,8 +10,9 @@ const session = { access_token: "sess", refresh_token: "ref", token_type: "beare
 const days = {}; for (let i = 0; i < 14; i++) { const d = new Date(Date.UTC(2026, 9, 15 + i)).toISOString().slice(0, 10); days[d] = { hr: 48 + (i % 3), sleep: 6 + (i % 4) / 2, hrv: 50 + i }; }
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "Europe/Copenhagen", serviceWorkers: "block" });
-// a movable clock: window.__skew (ms) is added to Date.now, to step past the foreground re-sync's 15 minutes
-await ctx.addInitScript(() => { const now = Date.now.bind(Date); window.__skew = 0; Date.now = () => now() + window.__skew; });
+// a fixed, movable clock: the test's days are 15–28 Oct, so "today" is 29 Oct (the Overblik chart shows the last 28 days);
+// window.__skew (ms) moves it on, to step past the foreground re-sync's 15 minutes
+await ctx.addInitScript(({ T }) => { const RD = Date; const off = T - RD.now(); window.__skew = 0; globalThis.Date = class extends RD { constructor(...a) { super(...(a.length ? a : [RD.now() + off + window.__skew])); } static now() { return RD.now() + off + window.__skew; } }; }, { T: new Date("2026-10-29T09:00:00").getTime() });
 await ctx.addInitScript(({ base, log, acts, session }) => {
   if (sessionStorage.getItem("seeded")) return; sessionStorage.setItem("seeded", "1");
   localStorage.setItem("ultraplan-profile", JSON.stringify(base)); localStorage.setItem("ultraplan-log", JSON.stringify(log)); localStorage.setItem("ultraplan-activities", JSON.stringify(acts)); localStorage.setItem("ultraplan-lang", "da");

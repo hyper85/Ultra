@@ -17,7 +17,9 @@ Vercel-deploy opdaterer også Android-appen uden ny upload.
       "Powered by Strava").
 - [ ] **Garmin Personal API.** Nøglen er personlig. Tjek Garmins vilkår for, om en app til andre må bede brugere om
       deres egen nøgle. Alternativet er Garmins partnerprogram (sat på pause for nye ansøgninger i 2026).
-- [ ] **AI-træneren koster penge pr. kald** (OpenCode Zen). Med flere brugere: loft pr. bruger pr. dag.
+- [ ] **AI-træneren koster penge pr. kald** (OpenCode Zen). Siden 18/11 kræver den login og har en bremse på 40
+      spørgsmål i timen pr. bruger pr. serverinstans (`api/coach.js`). Med flere brugere: et rigtigt loft pr. bruger pr.
+      dag (gemt i Supabase, ikke i serverens hukommelse) og en månedlig udgiftsgrænse hos udbyderen.
 - [ ] **Domæne.** `ultra-lime-nu.vercel.app` virker, men et eget domæne (fx `ultraplan.dk`) er pænere i butikken og
       kan ikke tages fra dig. Skift domæne FØR Android-pakken bygges: domænet er bagt ind i pakken.
 

@@ -347,4 +347,6 @@ export default {
   "ud fra dine {n} lange ture de sidste 8 uger (svarer til {pace}/km på flad vej), {km} km og {vert} m+": "from your {n} long runs of the last 8 weeks (equal to {pace}/km on the flat), {km} km and {vert} m+",
   "under 20": "under 20",
   "inkl. ca. {n} min i depoter · ": "incl. about {n} min at aid stations · ",
+  "Skriv din vægt, højde og alder under Mere → Dig, så regner appen dagens kost ud.": "Enter your weight, height and age under More → You, and the app works out the day's food.",
+  "Udfyld Dig": "Fill in You",
 };
