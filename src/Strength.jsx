@@ -25,7 +25,14 @@ export function StrengthSession({ session, rest, showHow = true, compact = false
 
 /* Today's nutrition: the numbers, the reason, and the day's meals behind a tap. The ideas rotate with the date; the meal
    before and after the session are tagged, long runs get a line for what to take along, and "Andre forslag" rolls new ones. */
-export function NutritionCard({ targets, meals, title = t("Dagens kost"), open = false, onMore }) {
+export function NutritionCard({ targets, meals, title = t("Dagens kost"), open = false, onMore, onSetup }) {
+  // Without weight, height and age there is no energy to compute (it read "10 kcal · 0 g protein"): ask for them.
+  if (onSetup) return (
+    <section className="panel kost">
+      <h2 style={{ margin: 0 }}>{title}</h2>
+      <p className="muted" style={{ margin: "8px 0 0" }}>{t("Skriv din vægt, højde og alder under Mere → Dig, så regner appen dagens kost ud.")} <button type="button" className="linkbtn" onClick={onSetup}>{t("Udfyld Dig")}</button></p>
+    </section>
+  );
   if (!targets) return null;
   return (
     <section className="panel kost">
