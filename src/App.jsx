@@ -10,7 +10,7 @@ const Onboarding = lazy(() => import("./Onboarding.jsx"));
 const RaceDay = lazy(() => import("./RaceDay.jsx"));
 const Dashboard = lazy(() => import("./Dashboard.jsx"));
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel } from "./strength.js";
-import { dayTargets, dayTypeOf, weekTargets, mealIdeas, DAY_TYPES } from "./nutrition.js";
+import { dayTargets, dayTypeOf, mealIdeas } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
 import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
@@ -1380,7 +1380,6 @@ export default function App() {
   };
 
   const zones = [[t("Z1 restitution"), .5, .6, t("Gang, nedjog")], [t("Z2 aerob"), .6, .7, t("80 % af al løb. Hele sætninger.")], [t("Z3 tempo"), .7, .8, t("Behageligt hårdt")], [t("Z4 tærskel"), .8, .9, t("Én sætning ad gangen")], [t("Z5 VO2"), .9, 1, t("Kun korte intervaller")]];
-  const macroRows = weekTargets({ bmr, weight: p.weight, body: p.body, goal: p.goal, diet: p.diet || "all" });
   const maxKm = Math.max(...planRows.map((r) => r.km));
 
   if (!authReady || !ready || (user && !pulled)) return <div className="splash"><h1>Ultraplan</h1><p className="muted">{t("Et øjeblik…")}</p></div>;
@@ -1739,7 +1738,7 @@ export default function App() {
                 {dayEdit?.key === cur.key && dayEdit.i === ti && renderDayForm(v)}
               </section>
               {shareMsg && <div className="advice">{shareMsg}</div>}
-              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} onMore={() => setMealShift((n) => n + 1)} />
+              <NutritionCard targets={todayNut.targets} meals={todayNut.meals} onMore={() => setMealShift((n) => n + 1)} onSetup={+p.weight > 0 && +p.height > 0 && +p.age > 0 ? null : () => { setView("more"); setOpenMore("dig"); }} />
               </div>
 
               <div className="today-b">
@@ -1896,7 +1895,7 @@ export default function App() {
             </div>
             {planMsg && <div className={`advice ${planMsg.warn ? "warn" : ""}`}>{planMsg.text}</div>}
           </details>
-          <details className="panel acc">
+          <details className="panel acc" id="dig" open={openMore === "dig"}>
             <summary><h2>{t("Dig")}</h2><span className="acc-sum">{[p.age ? t("{n} år", { n: p.age }) : null, p.weight ? `${p.weight} kg` : null, p.restHR ? t("hvilepuls {n}", { n: p.restHR }) : null].filter(Boolean).join(" · ")}</span><span className="chev" aria-hidden="true">›</span></summary>
             <div className="row2">
               <label>{t("Alder")}<input type="number" inputMode="numeric" value={p.age} onChange={set("age")} /></label>
