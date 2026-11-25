@@ -96,4 +96,22 @@ const P = (o) => ({ startDate: "2026-11-02", raceDate: "", raceKm: "", currentKm
   ok(errors.length === 0, `no errors ${errors.join(";")}`);
   await browser.close();
 }
+// ---- strength mode with a logged session: counts sessions everywhere, no km, mode-aware AI coach
+{
+  const d = (avail) => ({ avail, time: "", note: "" }); const wk = [d("normal"), d("normal"), d("normal"), d("normal"), d("normal"), d("long"), d("normal")];
+  const lift = { ...mk("2026-11-23", 0, 50, "WeightTraining"), kind: "strength" };
+  const { browser, page, errors } = await openApp({ lang: "da", at: "2026-11-25T09:00:00", extraActs: { "2026-11-23-WeightTraining": lift }, patch: { coachMode: false, mode: "strength", style: "hybrid", raceDate: "", raceKm: "", raceName: "", startDate: "2026-11-02", liftDays: [0, 2, 4], sched: { A: wk, B: wk } } });
+  const body = async () => (await page.locator("main").innerText()).replace(/\s+/g, " ");
+  let x = await body();
+  ok(/UGEN 1 \/ 3 styrkepas/i.test(x) && /Uge 4 ·/.test(await page.locator(".meta-chip").first().innerText()), "I dag: a logged session counts, and a rolling plan says Uge 4 (not 'af 16')");
+  ok(!/(\d+×[\d–]+(\/\w+)?) \1/.test(x), "an exercise shows its sets × reps once");
+  await tab(page, 1); x = await body();
+  ok(/UGE 4 1 \/ 3 styrkepas/i.test(x) && !/\d km/.test(x) && await page.locator(".ribbon").count() === 0, "Plan: sessions instead of km, no empty km chart");
+  await tab(page, 2); x = await body();
+  ok(/Denne uge 1 \/ 3 styrkepas/.test(x) && !/Planen indtil nu/.test(x), "Fremskridt: the week tile counts sessions, no km-plan tile");
+  await tab(page, 3); x = await body();
+  ok(/Hvornår skal jeg lægge vægt på\?/.test(x) && !/lange tur|Foreslå plan ud fra mine tal/.test(x), "Træner: strength questions, no running-plan proposal");
+  ok(errors.length === 0, `no errors ${errors.join(";")}`);
+  await browser.close();
+}
 done();

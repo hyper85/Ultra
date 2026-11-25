@@ -287,7 +287,7 @@ export function buildPlan(p, { easyPaceMinKm } = {}) {
     const phaseLabel = phase === "Ultra-prep" && !ultraRace ? "Løbsspecifik" : phase;
     rows.push({ i, wkStart, key: ymd(wkStart), iso: isoWeek(wkStart), phase, phaseLabel, km: total, target: km, unplaced, lng, sun, deload, isRace, quality, focus, days, longDay, qDay: strengthOnly ? null : qDay, runDays: strengthOnly ? [] : runDays, sched, schedLabel });
   }
-  return { rows, weeks, peak, restart };
+  return { rows, weeks, peak, restart, rolling, mode };
 }
 
 /* ================= app ================= */
@@ -1303,12 +1303,16 @@ export default function App() {
   // Yesterday had plan km, no run, no event (same week, not Monday): I dag says so, and the coach gets a question for it.
   const missedYesterday = (() => { const ti = (new Date().getDay() + 6) % 7; if (ti === 0 || beforePlan) return null; const y = ti - 1; const yKm = cur.days[y] || 0; if (!(yKm > 0) || dayKm[y] > 0 || cur.events?.[y] || (adjRow && !adjRow.adjusted.original[y])) return null; return { km: yKm, other: otherByDay[ymd(addDays(parseLocal(cur.key), y))] || [] }; })();
   // Suggested questions: the ones the week calls for first, then the standing four, four in all.
-  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr }); const latest = daily.rows[daily.rows.length - 1]; const hrNow = latest && latest.day >= ymd(addDays(parseLocal(todayStr), -2)) ? latest.hr : log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); const normal = restNormal ?? (daily.rows.length >= 7 ? daily.normal : p.restHR); if (normal && hrNow >= normal + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...SUGGESTED.map((x) => t(x))].slice(0, 4); })();
+  // "Kun styrke": the week counts strength sessions, not km
+  const liftsDone = mode === "strength" ? [0, 1, 2, 3, 4, 5, 6].reduce((a, i) => a + (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).filter((x) => kind(x.type) === "strength").length, 0) : 0;
+  // A rolling plan (no race) has no last week: "Uge 4", not "Uge 4 af 16".
+  const weekOf = (r, cap = true) => plan.rolling ? t(cap ? "Uge {i}" : "uge {i}", { i: r.i }) : t(cap ? "Uge {i} af {n}" : "uge {i} af {n}", { i: r.i, n: plan.weeks });
+  const suggested = (() => { const q = []; if (nextEvent && nextEvent.days >= 0 && nextEvent.days <= 7) q.push(t("Hvordan skal jeg gribe {name} an?", { name: nextEvent.name })); if (missedYesterday) q.push(t("Jeg sprang gårsdagens tur over – hvad nu?")); const lastDone = plan.rows.filter((r) => r.key < cur.key).pop(); const a = lastDone ? acwrFor(lastDone.key) : null; if (a && a.v > 1.3) q.push(t("Er min belastning for høj lige nu?")); const daily = restingHRSeries(p.wellness, { days: 28, until: todayStr }); const latest = daily.rows[daily.rows.length - 1]; const hrNow = latest && latest.day >= ymd(addDays(parseLocal(todayStr), -2)) ? latest.hr : log[cur.key]?.hr || (lastDone ? log[lastDone.key]?.hr : null); const normal = restNormal ?? (daily.rows.length >= 7 ? daily.normal : p.restHR); if (normal && hrNow >= normal + 4) q.push(t("Min hvilepuls er høj – skal jeg løbe i dag?")); return [...q, ...(SUGGESTED[plan.coach ? "race" : mode] || SUGGESTED.race).map((x) => t(x))].slice(0, 4); })();
   /* ---- "Send uge til træner": a compact text of one week, copied to the clipboard ---- */
   const num = (x, d = 1) => (x == null || x === "" ? null : Number(x).toLocaleString(locale(), { maximumFractionDigits: d }));
   const weekText = (r) => {
     const l = log[r.key] || {}; const a = acwrFor(r.key);
-    const head = `Ultraplan · ${t("uge {i} af {n}", { i: r.i, n: plan.weeks })} (${fmt(r.wkStart)}–${fmt(addDays(r.wkStart, 6))}) · ${t(r.phaseLabel || r.phase)}${r.recovery ? ` · ${t("restitution")}` : r.deload ? ` · ${t("let uge")}` : ""}`;
+    const head = `Ultraplan · ${weekOf(r, false)} (${fmt(r.wkStart)}–${fmt(addDays(r.wkStart, 6))}) · ${t(r.phaseLabel || r.phase)}${r.recovery ? ` · ${t("restitution")}` : r.deload ? ` · ${t("let uge")}` : ""}`;
     const tot = `${t("Plan")} ${r.km} km · ${t("løbet {km} km", { km: num(l.km || 0) })}${l.xn ? ` · ${tn(l.xn, "1 andet pas", "{n} andre pas")} (${l.xmin} min)` : ""}${l.vert ? ` · ${l.vert} m+` : ""}`;
     const lines = DAYS.map((dn, i) => {
       const day = ymd(addDays(r.wkStart, i)); const ev = r.events?.[i];
@@ -1698,8 +1702,6 @@ export default function App() {
           // What tomorrow holds, for the rest-day card: the next day in this week, or next week's Monday.
           const tomorrow = (() => { const r2 = ti < 6 ? cur : plan.rows.find((r) => r.key > cur.key) || null; const j = ti < 6 ? ti + 1 : 0; if (!r2) return null; const v2 = r2.days[j] || 0; const e2 = r2.events?.[j]; const l2 = liftDays.includes(j);
             if (e2) return `★ ${e2.name}`; if (r2.isRace && j === r2.longDay) return t("Løbsdag"); if (v2 > 0) return `${j === r2.longDay ? t("Lang tur") : j === r2.qDay ? t("Hård session") : t("Rolig tur")} ${v2} km${l2 ? ` + ${liftName(j)}` : ""}`; if (l2) { const s2 = sessionFor(j); return s2 ? `${s2.name}${s2.focus ? ` · ${s2.focus}` : ""}` : liftName(j); } return t("Hvile"); })();
-          // "Kun styrke": the week counts strength sessions, not km
-          const liftsDone = mode === "strength" ? [0, 1, 2, 3, 4, 5, 6].reduce((a, i) => a + (otherByDay[ymd(addDays(parseLocal(cur.key), i))] || []).filter((x) => kind(x.type) === "strength").length, 0) : 0;
           const pct = mode === "strength" ? Math.min(100, Math.round((liftsDone / Math.max(1, liftDays.length)) * 100)) : Math.min(100, Math.round(((curLog.km || 0) / Math.max(1, cur.km)) * 100));
           const dateStr = new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
           if (afterRace) return (
@@ -1730,7 +1732,7 @@ export default function App() {
               <div className="today-head">
                 <h1 className="today-date">{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</h1>
                 <div className="meta-chips">
-                  <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })} · {t(cur.phaseLabel || cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
+                  <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{weekOf(cur)} · {t(cur.phaseLabel || cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
                   {nextEvent && !(nextEvent.days >= 1 && nextEvent.days <= 3) && <span className="meta-chip event">★ {nextEvent.date === todayStr ? t("{name} i dag", { name: nextEvent.name }) : tn(nextEvent.days, "{name} i morgen", "{name} om {n} dage", { name: nextEvent.name })}</span>}
                 </div>
               </div>
@@ -1845,7 +1847,7 @@ export default function App() {
               ))}
             </div>
             {insights.findings.length > 3 && <button type="button" className="linkbtn" onClick={() => setShowAllFindings((v) => !v)}>{showAllFindings ? t("Vis færre") : t("Vis alle {n}", { n: insights.findings.length })}</button>}
-            {!plan.coach && (<>
+            {!plan.coach && mode !== "strength" && (<>
             <h2 className="sub">{t("Lad AI-træneren foreslå en plan")}</h2>
             <p className="muted">{t("Foreslår top, niveau, løbedage og lang tur ud fra dine tal. Intet ændres, før du trykker Anvend.")}</p>
             {!proposal && <button className="btn ghost" type="button" onClick={askForPlan} disabled={proposing || coachBusy}>{proposing ? t("Regner…") : t("Foreslå plan ud fra mine tal")}</button>}
@@ -2078,14 +2080,14 @@ export default function App() {
             <h1 className="screen-title" style={{ margin: 0 }}>{t("Fremskridt")}</h1>
             <div className="seg" role="tablist">{[["overblik", "Overblik"], ["log", "Log"]].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => { setView(k); window.scrollTo(0, 0); }}>{t(l)}</button>)}</div>
             {emptyCard}
-            {view === "log" ? renderLog() : <ErrorBoundary area="overblik"><Suspense fallback={null}><Dashboard hasRace={hasRace} plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} maxHR={maxHR} /></Suspense></ErrorBoundary>}
+            {view === "log" ? renderLog() : <ErrorBoundary area="overblik"><Suspense fallback={null}><Dashboard hasRace={hasRace} strengthWeek={mode === "strength" ? { done: liftsDone, n: liftDays.length } : null} plan={plan} cur={cur} log={log} acts={acts} p={p} acwrFor={acwrFor} insights={insights} liftDays={liftDays} todayKey={todayKey} includeHikes={!!p.includeHikes} fitness={fitness} onRaceDay={goRaceDay} maxHR={maxHR} /></Suspense></ErrorBoundary>}
           </section>
         )}
         <section className="stack">
           {view === "plan" && (<>
           <h1 className="screen-title">{t("Plan")}</h1>
           <div className="panel">
-            <div className="panel-head"><h2>{t("Uge {i} af {n}", { i: cur.i, n: plan.weeks })}</h2><span className="panel-num"><b>{curLog.km || 0}</b> / {cur.km} km</span></div>
+            <div className="panel-head"><h2>{weekOf(cur)}</h2>{mode === "strength" ? <span className="panel-num"><b>{liftsDone}</b> / {tn(liftDays.length, "1 styrkepas", "{n} styrkepas")}</span> : <span className="panel-num"><b>{curLog.km || 0}</b> / {cur.km} km</span>}</div>
             <div className="meta-chips" style={{ marginBottom: 6 }}>
               <span className="meta-chip">{fmt(cur.wkStart)}–{fmt(addDays(cur.wkStart, 6))}</span>
               <span className="meta-chip"><i className="phase-dot" style={{ background: PH[cur.phase] }} />{t(cur.phaseLabel || cur.phase)}{cur.deload && cur.phase !== "Nedtrapning" ? ` · ${t("let uge")}` : ""}</span>
@@ -2147,7 +2149,7 @@ export default function App() {
                           {!r.pre && <span className="wkdays hide-phone">{DAYS.map((d, i) => { const v = r.days[i]; return <span key={i} className={v ? (i === r.longDay ? "long" : i === r.qDay ? "hard" : "run") : liftDays.includes(i) ? "lift" : ""}><small>{d}</small>{v || (liftDays.includes(i) ? "S" : "–")}{km[i] > 0 && <em className={v && km[i] >= v * 0.9 ? "ok" : ""}>{km[i]}</em>}</span>; })}</span>}
                         </span>
                         <span className="wkkm">
-                          {!r.pre && <b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}<small> km</small></b>}
+                          {!r.pre && mode !== "strength" && <b style={r.unplaced >= 3 ? { color: "var(--amber)" } : undefined} title={r.unplaced >= 3 ? t("Planen ville gerne {target} km – hverdagen giver plads til {km}", { target: r.target, km: r.km }) : undefined}>{r.km}<small> km</small></b>}
                           {ran > 0 && <span className={`ran ${ranCls}`}>✓ {ran} km</span>}
                         </span>
                         <span className="chev" aria-hidden="true">›</span>
@@ -2170,6 +2172,7 @@ export default function App() {
 
           <div className="panel">
             <h2>{t("Hele planen")}</h2>
+            {mode === "strength" ? <p className="muted">{t("{n} styrkepas om ugen, hver 4. uge en let uge med et sæt mindre.", { n: liftDays.length })}</p> : <>
             <div className="ribbon">
               {planRows.map((r) => (
                 <div key={r.i} className={r.i === cur.i ? "cur" : ""} title={t("Uge {i} · plan {km} km", { i: r.i, km: r.km }) + (log[r.key]?.km ? ` · ${t("løbet {km} km", { km: log[r.key].km })}` : "")}
@@ -2179,7 +2182,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="legend">{[...new Set(plan.rows.map((r) => r.phaseLabel || r.phase))].map((k) => <span key={k}><i style={{ background: PH[k] }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />{t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div>
+            <div className="legend">{[...new Set(plan.rows.map((r) => r.phaseLabel || r.phase))].map((k) => <span key={k}><i style={{ background: PH[k] }} />{t(k)}</span>)}<span><i style={{ background: "var(--muted)", opacity: .5 }} />{t("let uge")}</span><span><i style={{ background: "rgba(255,255,255,.45)" }} />{t("løbet")}</span></div></>}
             <div className="import-row" style={{ marginTop: 10 }}>
               <button type="button" className="btn ghost" onClick={exportICS}>{t("Læg planen i din kalender (.ics)")}</button>
             </div>

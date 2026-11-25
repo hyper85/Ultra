@@ -43,9 +43,10 @@ export async function proposePlan({ context }) {
 }
 
 // Danish; the screen renders each with t().
-export const SUGGESTED = [
-  "Hvordan griber jeg denne uge an?",
-  "Hvad skal jeg spise før og under den lange tur?",
-  "Jeg er øm efter sidste tur – hvad gør jeg?",
-  "Passer planen til min form lige nu?",
-];
+// One list per training mode, so a strength-only user is not asked about the long run.
+export const SUGGESTED = {
+  race: ["Hvordan griber jeg denne uge an?", "Hvad skal jeg spise før og under den lange tur?", "Jeg er øm efter sidste tur – hvad gør jeg?", "Passer planen til min form lige nu?"],
+  hybrid: ["Hvordan griber jeg denne uge an?", "Hvordan kombinerer jeg styrke og løb på samme dag?", "Hvad skal jeg spise på en styrkedag?", "Passer planen til min form lige nu?"],
+  strength: ["Hvordan griber jeg denne uge an?", "Hvornår skal jeg lægge vægt på?", "Hvad skal jeg spise for at bygge muskler?", "Jeg er øm efter sidste pas – hvad gør jeg?"],
+  fitness: ["Hvordan griber jeg denne uge an?", "Hvordan bliver jeg hurtigere uden et løb at træne mod?", "Jeg er øm efter sidste tur – hvad gør jeg?", "Passer planen til min form lige nu?"],
+};
