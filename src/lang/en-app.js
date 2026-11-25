@@ -705,4 +705,13 @@ export default {
   "Tillad ældre ture igen": "Allow older runs again",
   "Slet alle ture, loggen, hvilepuls og søvn? Ældre ture hentes ikke igen. Kan ikke fortrydes.": "Delete all runs, the log, resting HR and sleep? Older runs will not be fetched again. Cannot be undone.",
   "Historikken er slettet. Nye ture fra i dag kommer med som normalt.": "The history is deleted. New runs from today come in as usual.",
+  "{n} styrkepas om ugen, hver 4. uge en let uge med et sæt mindre.": "{n} strength sessions a week, every 4th week an easy week with one set less.",
+  "uge {i}": "week {i}",
+  "{pct} % af planen · uge {i}": "{pct} % of the plan · week {i}",
+  "Hvordan kombinerer jeg styrke og løb på samme dag?": "How do I combine strength and running on the same day?",
+  "Hvad skal jeg spise på en styrkedag?": "What should I eat on a strength day?",
+  "Hvornår skal jeg lægge vægt på?": "When should I add weight?",
+  "Hvad skal jeg spise for at bygge muskler?": "What should I eat to build muscle?",
+  "Jeg er øm efter sidste pas – hvad gør jeg?": "I am sore after my last session – what do I do?",
+  "Hvordan bliver jeg hurtigere uden et løb at træne mod?": "How do I get faster without a race to train for?",
 };
