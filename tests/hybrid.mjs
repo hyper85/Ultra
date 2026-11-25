@@ -1,4 +1,4 @@
-/* Hybrid training (opt-in): strength is a goal next to the running, up to 5 sessions as a split, a 15 % lower running
+/* Hybrid training (opt-in): strength is a goal next to the running, up to 6 sessions as a split, a 15 % lower running
    top, and no leg session the day before the long run or the hard session. It only applies to the app's own plan:
    the coach plan and the default ultra style are unchanged. node tests/hybrid.mjs */
 import { openApp, check } from "./seed.mjs";
@@ -9,8 +9,8 @@ const tab = (page, i) => page.locator("nav.tabbar button").nth(i).click().then((
   const { buildStrength, HYBRID_MAX } = await import("../src/strength.js");
   const H = (count, guard = []) => buildStrength({ gear: "gym", phase: "Opbygning", week: 4, count, style: "hybrid", guard });
   const kinds = (r) => r.sessions.map((s) => s.kind).join(",");
-  ok(HYBRID_MAX === 5 && kinds(H(1)) === "full" && kinds(H(2)) === "legs,upper" && kinds(H(3)) === "legs,upper,full" && kinds(H(4)) === "legs,upper,power,pull" && kinds(H(5)) === "legs,push,pull,power,full", `splits 1–5: ${[1, 2, 3, 4, 5].map((n) => kinds(H(n))).join(" | ")}`);
-  ok(H(7).sessions.length === 5 && H(5).sessions.map((s) => s.key).join("") === "ABCDE", "at most 5 sessions, keyed A–E");
+  ok(HYBRID_MAX === 6 && kinds(H(1)) === "full" && kinds(H(2)) === "legs,upper" && kinds(H(3)) === "legs,upper,full" && kinds(H(4)) === "legs,upper,power,pull" && kinds(H(5)) === "legs,push,pull,power,full" && kinds(H(6)) === "legs,push,pull,power,upper,full", `splits 1–6: ${[1, 2, 3, 4, 5, 6].map((n) => kinds(H(n))).join(" | ")}`);
+  ok(H(7).sessions.length === 6 && H(6).sessions.map((s) => s.key).join("") === "ABCDEF", "at most 6 sessions, keyed A–F");
   ok(H(5).sessions.every((s) => s.exercises.length === 5 && s.exercises.every((e) => e.name && e.how && e.sets > 0)), "every hybrid session has five exercises with a cue and sets");
   ok(H(3).sessions[0].exercises[0].sets === 4 && /5–8/.test(H(3).sessions[0].exercises[0].reps), "build phase is heavy: 4 × 5–8");
   const g = H(2, [true, false]);
@@ -36,7 +36,7 @@ const todayText = async (page) => { await tab(page, 0); return (await page.locat
   ok(await planText(a.page) === await planText(b.page), "coach plan: the plan tab (days, km, strength) is identical with hybrid set");
   await tab(b.page, 4);
   await b.page.locator("#strength > summary").click(); await b.page.waitForTimeout(150);
-  ok(/Hybrid kan vælges, når du bruger appens egen plan/.test(await b.page.locator("#strength").innerText()), "coach plan: the strength panel says hybrid is for the app's own plan");
+  ok(/Træningsform vælges, når du bruger appens egen plan/.test(await b.page.locator("#strength").innerText()), "coach plan: the strength panel says the training mode is for the app's own plan");
   ok(a.errors.length + b.errors.length === 0, `no errors ${[...a.errors, ...b.errors].join(";")}`);
   await a.browser.close(); await b.browser.close();
 }
@@ -52,15 +52,16 @@ const todayText = async (page) => { await tab(page, 0); return (await page.locat
   ok(th < tu && th >= Math.round(tu * 0.8), `hybrid running top lower (${tu} → ${th} km)`);
   await tab(h.page, 4);
   await h.page.locator("#strength > summary").click(); await h.page.waitForTimeout(150);
-  const panel = h.page.locator("#strength");
-  ok(await panel.getByRole("button", { name: "Hybrid – løb og styrke" }).getAttribute("aria-pressed") === "true", "the style chip shows Hybrid");
+  const panel = h.page.locator("#strength"); const modeP = h.page.locator("#mode");
+  await modeP.locator("> summary").click(); await h.page.waitForTimeout(150);
+  ok(await modeP.getByRole("button", { name: /^Hybrid – løb og styrke/ }).getAttribute("aria-pressed") === "true", "Træningsform shows Hybrid");
   const txt = (await panel.innerText()).replace(/\s+/g, " ");
   ok(["Styrke A", "Styrke B", "Styrke C", "Styrke D", "Styrke E"].every((n) => txt.includes(n)), "five sessions A–E in the strength panel");
   // Friday is the day before Saturday's long run: never a leg session there
   const fri = (txt.match(/Styrke [A-E] · fre · [^·]*/) || [""])[0];
   ok(fri && !/Ben|Hele kroppen/.test(fri), `Friday's session is not legs (${fri.slice(0, 50)})`);
   // switching back to ultra gives 3 sessions and the old top again
-  await panel.getByRole("button", { name: "Ultra – løb først" }).click(); await h.page.waitForTimeout(200);
+  await modeP.getByRole("button", { name: /^Løb mod et løb/ }).click(); await h.page.waitForTimeout(200);
   const txt2 = (await panel.innerText()).replace(/\s+/g, " ");
   ok(txt2.includes("Styrke C") && !txt2.includes("Styrke D"), "back to ultra: three sessions");
   ok(await top(h.page) === tu, "back to ultra: the running top is the ultra one again");
@@ -74,7 +75,9 @@ const todayText = async (page) => { await tab(page, 0); return (await page.locat
   const e = await openApp({ lang: "en", at: "2026-10-27T07:00:00", patch: { coachMode: false, style: "hybrid", liftDays: [0, 1, 3, 4] } });
   await tab(e.page, 4); await e.page.locator("#strength > summary").click(); await e.page.waitForTimeout(150);
   const txt = (await e.page.locator("#strength").innerText()).replace(/\s+/g, " ");
-  ok(/Training style/.test(txt) && /Hybrid – running and strength/.test(txt) && /Strength D/.test(txt) && !/Styrke|løb først/.test(txt), `English strength panel (${txt.slice(0, 90)})`);
+  await e.page.locator("#mode > summary").click(); await e.page.waitForTimeout(150);
+  const mt = (await e.page.locator("#mode").innerText()).replace(/\s+/g, " ");
+  ok(/Training mode/i.test(mt) && /Hybrid – running and strength/.test(mt) && /Strength D/.test(txt) && !/Styrke|Løb mod/.test(txt + mt), `English strength and mode panels (${mt.slice(0, 90)})`);
   ok(e.errors.length === 0, `no errors ${e.errors.join(";")}`);
   await e.browser.close();
 }

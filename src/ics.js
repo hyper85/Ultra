@@ -23,7 +23,7 @@ export function planToICS({ rows, liftDays = [], liftName = () => t("Styrke"), r
   const seq = Math.floor(now.getTime() / 60000); // minutes since 1970: a later export always has a higher sequence
   const add = (day, summary, desc) => ev.push(["BEGIN:VEVENT", `UID:ultraplan-${dt(day)}@ultraplan`, `SEQUENCE:${seq}`, `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`, `DTSTART;VALUE=DATE:${dt(day)}`, `DTEND;VALUE=DATE:${dt(next(day))}`, `SUMMARY:${esc(summary)}`, desc ? `DESCRIPTION:${esc(desc)}` : null, "TRANSP:OPAQUE", "X-MICROSOFT-CDO-BUSYSTATUS:BUSY", "END:VEVENT"].filter(Boolean).map(fold).join("\r\n"));
   for (const r of rows) {
-    const week = t("Uge {i} af {n} · {phase}", { i: r.i, n: rows.length, phase: t(r.phase) }) + (r.recovery ? ` · ${t("restitution")}` : r.deload ? ` · ${t("let uge")}` : "");
+    const week = t("Uge {i} af {n} · {phase}", { i: r.i, n: rows.length, phase: t(r.phaseLabel || r.phase) }) + (r.recovery ? ` · ${t("restitution")}` : r.deload ? ` · ${t("let uge")}` : "");
     const notes = [
       r.adjusted ? t("Justeret af trænerråd ({reason}).", { reason: r.adjusted.reason }) : null,
       r.recovery ? t("Restitution efter {name}", { name: r.recovery.after }) : null,

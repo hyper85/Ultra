@@ -13,3 +13,11 @@ export const DIETS = [
   ["lowcarb", "Lavkulhydrat i hverdagen", "Få kulhydrater til daglig. Lange ture kræver stadig sukker."],
 ];
 export const INTOL = ["Laktose", "Gluten", "Nødder"];
+
+/* Training modes (App.jsx modeOf, the questionnaire's first step, Mere → Træningsform). Danish; shown with t(). */
+export const MODES = [
+  ["race", "Løb mod et løb", "5 km til ultra. En plan frem til løbsdagen med nedtrapning."],
+  ["hybrid", "Hybrid – løb og styrke", "Styrke og løb vægtes lige: op til 6 styrkepas som split og en lidt lavere løbetop. Med eller uden løb."],
+  ["strength", "Kun styrke", "Styrkeprogram 2–6 dage om ugen. Ingen løbeplan; ture og cardio kan stadig logges."],
+  ["fitness", "Form uden løb", "Løb for formens skyld: 4-ugers blokke, der bygger op og holder formen. Ingen løbsdato."],
+];

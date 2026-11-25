@@ -5,7 +5,7 @@ import { BODY, GEAR, pickLiftDays } from "./strength.js";
 import { RACES, vertFor, distanceKm, myPosition } from "./races.js";
 import { t, locale } from "./i18n.js";
 import LangSwitch from "./LangSwitch.jsx";
-import { INJURY, AREAS, DIETS, INTOL } from "./options.js";
+import { INJURY, AREAS, DIETS, INTOL, MODES } from "./options.js";
 export { INJURY, AREAS, DIETS, INTOL };
 
 // The coach's own plan (coach-plan.json) as a card next to the three computed models: fixed weeks and dates.
@@ -24,7 +24,7 @@ const GOALS = [
   ["finish", "Gennemføre", "Kom i mål hel og glad. Kvaliteten holdes moderat."],
   ["perform", "Gennemføre på tid", "Lidt mere kvalitet, lidt mere mad på de hårde dage."],
 ];
-const LIFTS = [[0, "Ingen"], [1, "1 pas"], [2, "2 pas"], [3, "3 pas"]];
+const LIFTS = [[0, "Ingen"], [1, "1 pas"], [2, "2 pas"], [3, "3 pas"], [4, "4 pas"], [5, "5 pas"], [6, "6 pas"]];
 const MODELS = [
   { key: "min", name: "Minimum", dLevel: 0, dDays: 0, peakScale: 0.8, who: "Samme dage, lavere top (80 %). Til dig med lidt tid eller skavanker." },
   { key: "bal", name: "Balanceret", dLevel: 0, dDays: 0, peakScale: 1, who: "Den vi anbefaler ud fra dine svar. Stiger roligt fra din base." },
@@ -67,17 +67,20 @@ const presetKey = (sched) => PRESETS.find(([, , mk]) => mk().every((x, i) => x.a
 export const proteinG = (weight, body) => Math.round(weight * (body === "lean" ? 2.2 : 2));
 
 // The panels, in order: the welcome screen and the diet step are gone (diet lives under Mere → Kost).
-const ORDER = [1, 2, 3, 4, 5, 7];
+const ORDER = [0, 1, 2, 3, 4, 5, 7]; // 0 = training mode; "Kun styrke" and "Form uden løb" skip the race, "Kun styrke" the running form
 export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, onDone, rerun }) {
-  const [step, setStep] = useState(1);
-  const idx = ORDER.indexOf(step);
+  const [step, setStep] = useState(0);
   const [pos, setPos] = useState(null); const [posMsg, setPosMsg] = useState(null);
   const findNear = async () => { setPosMsg(t("Finder din position…")); const p0 = await myPosition(); if (!p0) { setPos(null); setPosMsg(t("Kunne ikke få din position. Tillad placering i browseren, eller vælg et løb i listen.")); return; } setPos(p0); setPosMsg(null); };
   const raceList = pos ? [...RACES].map((r) => ({ ...r, dist: distanceKm(pos.lat, pos.lon, r.lat, r.lon) })).sort((a, b) => a.dist - b.dist) : RACES;
-  const [d, setD] = useState(() => ({ ...initial, body: initial.body || "keep", gear: initial.gear || "home", liftCount: initial.liftDays ? initial.liftDays.length : 2, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
+  const [d, setD] = useState(() => ({ ...initial, mode: MODES.some(([k]) => k === initial.mode) ? initial.mode : initial.style === "hybrid" ? "hybrid" : "race", body: initial.body || "keep", gear: initial.gear || "home", liftCount: initial.liftDays ? initial.liftDays.length : 2, startDate: rerun ? initial.startDate : ymd(mondayOf(new Date())) }));
+  const mode = d.mode;
+  const noRace = mode === "fitness" || mode === "strength";
+  const order = ORDER.filter((s) => !(s === 1 && noRace) && !(s === 3 && mode === "strength"));
+  const idx = order.indexOf(step);
   const set = (k) => (e) => setD({ ...d, [k]: e.target.type === "number" ? (e.target.value === "" ? "" : +e.target.value) : e.target.value });
   const setDay = (i, patch) => { const A = (d.sched?.A || []).map((x, j) => (j === i ? { ...x, ...patch } : x)); const longs = A.map((x, j) => (x.avail === "long" ? j : -1)).filter((j) => j >= 0); setD({ ...d, sched: { ...(d.sched || {}), A, B: d.sched?.B || A.map((x) => ({ ...x })) }, ...(longs.length === 1 ? { longDay: longs[0] } : {}) }); };
-  const STEPS = ["Velkommen", "Løbet", "Dig", "Din form", "Din krop", "Din hverdag", "Kost", "Din plan"];
+  const STEPS = ["Træning", "Løbet", "Dig", "Din form", "Din krop", "Din hverdag", "Kost", "Din plan"];
   const shortDate = (date) => date.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 
   const maxHR = d.maxHR || Math.round(d.sex === "f" ? 206 - 0.88 * (d.age || 40) : 211 - 0.64 * (d.age || 40));
@@ -95,15 +98,19 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
   }), [d]); // eslint-disable-line react-hooks/exhaustive-deps
   const balanced = useMemo(() => buildPlan({ ...d, level: d.level || 2, peakScale: 1 }), [d]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const canNext = step === 1 ? raceOk && +d.raceKm > 0 : step === 2 ? d.age > 0 && d.weight > 0 && d.height > 0 : step === 3 ? d.currentKm > 0 : true;
-  const next = () => setStep((s) => ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(s) + 1)]);
-  const back = () => setStep((s) => ORDER[Math.max(0, ORDER.indexOf(s) - 1)]);
+  // the race: required to run toward one; optional in hybrid (empty = a rolling plan)
+  const raceEmpty = !d.raceDate && !d.raceName;
+  const canNext = step === 1 ? (mode === "hybrid" && raceEmpty) || (raceOk && +d.raceKm > 0) : step === 2 ? d.age > 0 && d.weight > 0 && d.height > 0 : step === 3 ? d.currentKm > 0 : true;
+  const next = () => setStep((s) => order[Math.min(order.length - 1, order.indexOf(s) + 1)]);
+  const back = () => setStep((s) => order[Math.max(0, order.indexOf(s) - 1)]);
   const liftDaysFor = (x) => pickLiftDays(x.sched?.A || [], { longDay: x.longDay, qualityDay: x.qualityDay ?? 2, count: x.liftCount ?? 2 });
-  const finish = (x) => { const { liftCount, ...rest } = x; return { ...rest, liftDays: liftDaysFor(x), onboarded: true }; };
+  const finish = (x) => { const { liftCount, ...rest } = x; return { ...rest, style: x.mode === "hybrid" ? "hybrid" : "ultra", ...(x.mode === "fitness" || x.mode === "strength" || (x.mode === "hybrid" && !x.raceDate) ? { raceDate: "", raceName: "" } : {}), liftDays: liftDaysFor(x), onboarded: true }; };
   const choose = (m) => onDone({ ...finish(m.v), coachMode: false });
   // Same race as the coach's plan (or already on it): offer the coach's fixed weeks as the first choice.
   const coachPlan = activeCoachPlan(initial);
-  const coach = d.raceDate === coachPlan.race.date || initial.coachMode !== false ? coachCard(coachPlan) : null;
+  // the coach's plan is offered only to a runner who has one (the bundled plan is the owner's own coach plan)
+  const hasCoach = initial.coachMode === true || !!initial.coachAvailable || !!initial.coachPlan?.data;
+  const coach = hasCoach && mode === "race" && (d.raceDate === coachPlan.race.date || initial.coachMode === true) ? coachCard(coachPlan) : null;
   const chooseCoach = () => onDone({ ...finish(d), raceName: coachPlan.race.name, raceDate: coachPlan.race.date, raceKm: coachPlan.race.km, raceVert: coachPlan.race.vert, startDate: coachPlan.weeks[0].start, coachMode: true });
   const sched = d.sched?.A || [];
   const longDays = DAYS.map((n, i) => [n, i]).filter(([, i]) => sched[i]?.avail === "long");
@@ -114,15 +121,27 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
     <div className="ob">
       <div className="ob-head">
         <h1>Ultraplan</h1>
-        <div className="ob-progress" aria-label={t("Trin {step} af {n}", { step: idx + 1, n: ORDER.length })}><span style={{ width: `${((idx + 1) / ORDER.length) * 100}%` }} /></div>
-        <div className="muted">{t("{step} af {n} · {title}", { step: idx + 1, n: ORDER.length, title: t(STEPS[step]) })}</div>
+        <div className="ob-progress" aria-label={t("Trin {step} af {n}", { step: idx + 1, n: order.length })}><span style={{ width: `${((idx + 1) / order.length) * 100}%` }} /></div>
+        <div className="muted">{t("{step} af {n} · {title}", { step: idx + 1, n: order.length, title: t(STEPS[step]) })}</div>
       </div>
+
+      {step === 0 && (
+        <section className="panel ob-panel" style={{ position: "relative" }}>
+          <LangSwitch className="corner" />
+          <h2 style={{ paddingRight: 150 }}>{t("Hvad vil du træne?")}</h2>
+          {rerun && <p className="muted">{t("Dine nuværende svar er udfyldt på forhånd.")}</p>}
+          <p className="muted">{t("Du kan skifte når som helst under Mere → Træningsform.")}</p>
+          <div className="ob-cards mode-cards">
+            {MODES.map(([k, n, s]) => <button key={k} type="button" className={mode === k ? "on" : ""} aria-pressed={mode === k} onClick={() => setD({ ...d, mode: k, liftCount: k === "strength" ? Math.max(3, d.liftCount ?? 2) : k === "hybrid" ? Math.max(3, d.liftCount ?? 2) : d.liftCount })}><b>{t(n)}</b><span>{t(s)}</span></button>)}
+          </div>
+          {navBtns()}
+        </section>
+      )}
 
       {step === 1 && (
         <section className="panel ob-panel" style={{ position: "relative" }}>
-          <LangSwitch className="corner" />
-          <h2 style={{ paddingRight: 150 }}>{t("Løbet")}</h2>
-          {rerun && <p className="muted">{t("Dine nuværende svar er udfyldt på forhånd.")}</p>}
+          <h2>{t("Løbet")}</h2>
+          {mode === "hybrid" && <p className="muted">{t("Har du et løb i kalenderen? Så bygger planen frem mod det. Ellers spring over, så kører planen i 4-ugers blokke.")}</p>}
           <div className="row-between"><span className="muted">{t("Vælg et kendt løb, eller skriv dit eget.")}</span><button type="button" className="linkbtn" onClick={findNear}>{pos ? t("Sorteret efter afstand") : t("Find løb nær mig")}</button></div>
           {posMsg && <div className="muted" style={{ marginTop: 4 }}>{posMsg}</div>}
           <div className="chips race-chips">{raceList.map((r) => <button key={r.name} type="button" className={d.raceName === r.name ? "on" : ""} onClick={() => setD({ ...d, raceName: r.name, raceKm: r.km[r.km.length - 1], raceVert: vertFor(r, r.km[r.km.length - 1]) })}>{r.name}{r.dist != null ? <span className="muted"> · {r.dist} km</span> : null}</button>)}</div>
@@ -213,7 +232,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
           <h2>{t("Din hverdag")}</h2>
           <p className="muted">{t("Ret kun de dage, der er anderledes. Kort = under 45 min · normal = 1–1½ time · lang = 2 timer eller mere.")}</p>
           <div className="row2">
-            <label>{t("Løbedage om ugen")}<select value={d.maxRunDays} onChange={(e) => setD({ ...d, maxRunDays: +e.target.value })}>{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{t("{n} dage", { n })}</option>)}</select></label>
+            {mode !== "strength" && <label>{t("Løbedage om ugen")}<select value={d.maxRunDays} onChange={(e) => setD({ ...d, maxRunDays: +e.target.value })}>{[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t("{n} dage", { n })}</option>)}</select></label>}
           </div>
           <div className="chips">
             {PRESETS.map(([k, label, mk]) => <button key={k} type="button" className={presetKey(sched) === k ? "on" : ""} onClick={() => setD({ ...d, sched: { A: mk(), B: mk() }, longDay: mk().findIndex((x) => x.avail === "long") })}>{t(label)}</button>)}
@@ -229,15 +248,15 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
           {longDays.length > 1 && <label>{t("Lang tur helst")}
             <select value={d.longDay} onChange={(e) => setD({ ...d, longDay: +e.target.value })}>{longDays.map(([n, i]) => <option key={i} value={i}>{n}</option>)}</select>
           </label>}
-          {longDays.length === 0 && <div className="advice warn">{t('Sæt mindst én dag til "Lang" – det er dagen til den lange tur.')}</div>}
+          {longDays.length === 0 && mode !== "strength" && <div className="advice warn">{t('Sæt mindst én dag til "Lang" – det er dagen til den lange tur.')}</div>}
           <div className="muted" style={{ marginTop: 14 }}>{t("Styrke om ugen (30–45 min pr. pas)")}</div>
-          <div className="chips">{LIFTS.map(([n, l]) => <button key={n} type="button" className={(d.liftCount ?? 2) === n ? "on" : ""} onClick={() => setD({ ...d, liftCount: n })}>{t(l)}</button>)}</div>
+          <div className="chips">{LIFTS.filter(([n]) => (mode === "race" || mode === "fitness" ? n <= 3 : mode === "strength" ? n >= 1 : true)).map(([n, l]) => <button key={n} type="button" className={(d.liftCount ?? 2) === n ? "on" : ""} onClick={() => setD({ ...d, liftCount: n })}>{t(l)}</button>)}</div>
           {(d.liftCount ?? 2) > 0 && (
             <div className="ob-cards" style={{ marginTop: 8 }}>
               {GEAR.map(([k, n, s]) => <button key={k} type="button" className={(d.gear || "home") === k ? "on" : ""} onClick={() => setD({ ...d, gear: k })}><b>{t(n)}</b><span>{t(s)}</span></button>)}
             </div>
           )}
-          {navBtns(<button className="btn" onClick={next} disabled={longDays.length === 0}>{t("Vis min plan")}</button>)}
+          {navBtns(<button className="btn" onClick={next} disabled={longDays.length === 0 && mode !== "strength"}>{t("Vis min plan")}</button>)}
         </section>
       )}
 
@@ -245,10 +264,19 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
         <section className="ob-result">
           <div className="panel ob-panel">
             <h2>{t("Din plan")}</h2>
-            <p className="muted">{t("Vælg den plan, du kan holde i {n} uger.", { n: weeksToRace || t("alle") })}</p>
+            <p className="muted">{mode === "strength" ? t("Styrke er planen. Løb og cardio kan du logge som ekstra.") : noRace || (mode === "hybrid" && !d.raceDate) ? t("En løbende plan i 4-ugers blokke: tre uger op, en let. Vælg den, du kan holde.") : t("Vælg den plan, du kan holde i {n} uger.", { n: weeksToRace || t("alle") })}</p>
             {d.injury === "injured" && <div className="advice warn">{t("Alle tre starter med 4 ugers genopbygning og én løbedag mindre, fordi du er skadet. Toppen er sænket 10 %.")}</div>}
             {d.injury === "sore" && <div className="advice">{t("De første 3 uger er uden bakker og hårde intervaller på grund af ømheden.")}</div>}
-            <div className="model-grid">
+            {mode === "strength" ? (
+              <div className="model-grid">
+                <div className="model rec">
+                  <div className="model-tag">{t("Kun styrke")}</div>
+                  <h3>{t("{n} styrkepas om ugen", { n: d.liftCount ?? 3 })}</h3>
+                  <p className="muted">{t("Et split, der skifter øvelser uge for uge og følger 4-ugers blokke: tre uger tungere, en let.")}</p>
+                  <button className="btn" onClick={() => choose({ v: { ...d, maxRunDays: 0 } })}>{t("Start styrkeplanen")}</button>
+                </div>
+              </div>
+            ) : <div className="model-grid">
               {coach && (
                 <div className="model rec">
                   <div className="model-tag">{t("Din træner")}</div>
@@ -278,7 +306,7 @@ export default function Onboarding({ initial, DAYS, AVAIL, LEVELS, buildPlan, on
                   <button className="btn" onClick={() => choose(m)}>{t("Vælg {name}", { name: t(m.name).toLowerCase() })}</button>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
           <p className="muted" style={{ margin: "0 4px" }}>{t("Kost og styrke følger med: dagens tal på I dag, alt under Mere.")}</p>
           <div className="ob-nav"><button className="btn ghost" onClick={back}>{t("Tilbage")}</button></div>

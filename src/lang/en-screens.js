@@ -39,7 +39,6 @@ export default {
   "Tid de fleste dage": "Time most days",
   "Weekend + to hverdage": "Weekend + two weekdays",
   "Alle dage": "Every day",
-  "Velkommen": "Welcome",
   "Løbet": "The race",
   "Dig": "You",
   "Din form": "Your fitness",
