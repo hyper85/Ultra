@@ -25,14 +25,30 @@ Styrkepassene er bygget af bevægelsesmønstre (squat, hoftebøj, ét ben, læg,
 uge vælger sin variant, så to uger aldrig er ens. På trænerplanen er passene rettet mod et bjergultra: A = ben og hofte
 med step-ups, B = ryg og core (træk, rygstræk, to core-øvelser, bæring). Trænerens dage, ankelrutine og regel beholdes.
 
-## Hybrid – løb og styrke
+## Træningsform – løb, hybrid, styrke eller form
 
-Under Mere → Styrke kan du vælge træningsstil. "Ultra – løb først" (standard) er som altid: 2–3 korte pas, der støtter
-løbet. "Hybrid – løb og styrke" gør styrken til et mål i sig selv: op til 5 pas om ugen som split (1 hele kroppen ·
-2 ben/overkrop · 3 ben/overkrop/hele kroppen · 4 ben/overkrop/kraft/træk · 5 ben/bryst-skuldre/træk/kraft/hele kroppen),
-tungere dosis (4×5–8 i opbygningen), og løbetoppen er 15 % lavere, så der er plads til at restituere. Et benpas lægges
-aldrig dagen før den lange tur eller den hårde session, hvis et overkropspas kan tage dagen. Styrkedage kostes med
-150 kcal ekstra (ikke ved vægttab). Hybrid gælder kun appens egen plan: trænerplanen beholder sine dage, km og pas.
+Spørgeskemaet starter med "Hvad vil du træne?", og du kan skifte når som helst under Mere → Træningsform:
+
+- **Løb mod et løb** – 5 km til ultra. Planen bygger op mod løbsdagen og trapper ned (3 uger før ultra, 2 før maraton,
+  1 før kortere løb). Kortere løb får en langtur, der er længere end løbet, og en "Løbsspecifik" fase i stedet for ultra-prep.
+- **Hybrid – løb og styrke** – styrken er et mål i sig selv: op til 6 pas om ugen som split (1 hele kroppen ·
+  2 ben/overkrop · 3 ben/overkrop/hele kroppen · 4 ben/overkrop/kraft/træk · 5 ben/bryst-skuldre/træk/kraft/hele kroppen ·
+  6 ben/bryst-skuldre/træk/kraft/overkrop/hele kroppen), tungere dosis (4×5–8 i opbygningen) og en løbetop 15 % lavere.
+  Et benpas lægges aldrig dagen før den lange tur eller den hårde session, hvis et overkropspas kan tage dagen.
+  Styrkedage får 150 kcal ekstra (ikke ved vægttab). Med en løbsdato bygger planen mod løbet, uden kører den i blokke.
+- **Kun styrke** – 2–6 styrkepas om ugen og ingen løbeplan. Ugen tæller styrkepas; ture og cardio kan stadig logges.
+- **Form uden løb** – løb for formens skyld i 4-ugers blokke: tre uger op, en let uge. Toppen er et holdbart skridt over
+  din nuværende mængde (højst 1,5 × og +30 km), og planen kører videre uden slutdato.
+
+Uden et løb er der ingen nedtælling, Løbsdag eller prognose. Løbedage kan sættes fra 2 til 7. Den indbyggede trænerplan
+(Hammer Trail) tilbydes kun den profil, der allerede bruger den; andre kan importere deres egen træners plan under
+Mere → Trænerplan. Trænerplanen ignorerer træningsformen: den beholder sine dage, km og pas.
+
+## Slet historik
+
+Mere → Nulstil → "Slet historik" sletter ture, ugelog og daglig hvilepuls og sætter en startdato for historikken. Ture fra
+før den dag kommer ikke ind igen – hverken ved genindlæsning, Strava, Garmin eller filimport. "Tillad ældre ture igen"
+fjerner grænsen. Profil, plan og indstillinger bliver stående.
 
 ## Hvilepuls dag for dag
 

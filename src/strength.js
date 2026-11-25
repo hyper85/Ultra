@@ -195,7 +195,7 @@ export function buildStrength({ body = "keep", gear = "home", phase = "Opbygning
 // Which weekdays get strength: days with time that are not the long run, not the quality day, and not the day
 // before the long run, spread over the week. Falls back to Tuesday/Thursday.
 export function pickLiftDays(sched = [], { longDay = 5, qualityDay = 2, count = 2 } = {}) {
-  const n = Math.max(0, Math.min(3, count));
+  const n = Math.max(0, Math.min(6, count)); // up to 6 for hybrid and "Kun styrke"
   if (!n) return [];
   const before = (longDay + 6) % 7;
   const order = [1, 3, 4, 0, 2, 6, 5]; // Tue, Thu, Fri, Mon, Wed, Sun, Sat
@@ -217,10 +217,10 @@ const HYBRID_DOSE = {
   "Ultra-prep": { sets: 3, reps: "5–6", rest: "2 min", note: "Hybrid: tungt og kort, så benene stadig har noget til de lange ture." },
   Nedtrapning: { sets: 2, reps: "6", rest: "90 s", note: "Let. Bevægelserne holdes ved lige, intet må gøre ømt." },
 };
-const SPLITS = { 1: ["full"], 2: ["legs", "upper"], 3: ["legs", "upper", "full"], 4: ["legs", "upper", "power", "pull"], 5: ["legs", "push", "pull", "power", "full"] };
-export const HYBRID_MAX = 5;
+const SPLITS = { 1: ["full"], 2: ["legs", "upper"], 3: ["legs", "upper", "full"], 4: ["legs", "upper", "power", "pull"], 5: ["legs", "push", "pull", "power", "full"], 6: ["legs", "push", "pull", "power", "upper", "full"] };
+export const HYBRID_MAX = 6; // 6 = push/pull/legs twice over, for "Kun styrke"
 
-const sessionName = (k) => ({ A: t("Styrke A"), B: t("Styrke B"), C: t("Styrke C"), D: t("Styrke D"), E: t("Styrke E") })[k];
+const sessionName = (k) => ({ A: t("Styrke A"), B: t("Styrke B"), C: t("Styrke C"), D: t("Styrke D"), E: t("Styrke E"), F: t("Styrke F") })[k];
 
 function buildHybrid({ body, gear, phase, deload, isRace, count, week, guard }) {
   const pick = picker(gear, week);
@@ -247,7 +247,7 @@ function buildHybrid({ body, gear, phase, deload, isRace, count, week, guard }) 
   const slots = new Array(n).fill(null);
   for (let k = 0; k < n; k++) if (guard[k]) { const j = kinds.findIndex((x) => !T[x].legs); if (j >= 0) slots[k] = kinds.splice(j, 1)[0]; }
   for (let k = 0; k < n; k++) if (!slots[k]) slots[k] = kinds.shift();
-  const sessions = slots.map((kind, k) => { const s = T[kind]; const exercises = s.ex(); const key = "ABCDE"[k];
+  const sessions = slots.map((kind, k) => { const s = T[kind]; const exercises = s.ex(); const key = "ABCDEF"[k];
     return { key, kind, legs: s.legs, name: sessionName(key), focus: t(s.focus), exercises, minutes: 15 + 7 * exercises.length, rest }; });
   return { sessions, daily, note: t(note), rotates: true, hybrid: true };
 }

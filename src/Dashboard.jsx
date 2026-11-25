@@ -120,7 +120,7 @@ function PaceTrend({ ae }) {
   );
 }
 
-export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onRaceDay, maxHR }) {
+export default function Dashboard({ hasRace = true, plan, cur, log, acts, p, acwrFor, insights, liftDays = [], todayKey, includeHikes, fitness, onRaceDay, maxHR }) {
   const counted = (a) => { const k = kind(a.type); return k === "run" || (includeHikes && k === "hike"); };
   const runs = Object.values(acts).filter(counted);
   const curLog = log[cur.key] || {};
@@ -164,7 +164,7 @@ export default function Dashboard({ plan, cur, log, acts, p, acwrFor, insights, 
         <Tile label={t("Længste tur, 4 uger")} value={longest ?? "–"} unit=" km" sub={recent.length ? tn(recent.length, "1 tur · {per} pr. uge", "{n} ture · {per} pr. uge", { per: r1(recent.length / 4) }) : t("ingen ture i loggen")} />
         {(() => { const v28 = recent.reduce((a, x) => a + (x.vert || 0), 0); const k28 = recent.reduce((a, x) => a + x.km, 0); const race = p.raceKm > 0 && p.raceVert > 0 ? Math.round(p.raceVert / p.raceKm) : null; const mine = k28 > 0 ? Math.round(v28 / k28) : null; return v28 > 0 ? <Tile label={t("Højdemeter, 4 uger")} value={v28} unit=" m+" sub={race ? t("{mine} m/km · løbet kræver {race} m/km", { mine, race }) : t("{mine} m/km", { mine })} cls={race && mine != null ? (mine >= race * 0.6 ? "good" : mine >= race * 0.3 ? "warn" : "bad") : ""} /> : null; })()}
         <Tile label={t("Planen indtil nu")} value={done.length ? `${Math.round((ranToDate / Math.max(1, planKmToDate)) * 100)} %` : "–"} sub={done.length ? t("{ran} af {plan} km i alt · uge for uge: {hit} på planen", { ran: Math.round(ranToDate), plan: Math.round(planKmToDate), hit }) + (over ? t(", {n} over", { n: over }) : "") + (under ? t(", {n} under", { n: under }) : "") + (hikeKmDone >= 5 ? t(" · heraf {km} km gang", { km: Math.round(hikeKmDone) }) : "") : t("første uge er i gang")} cls={rated.length && hit === 0 && over > 0 ? "warn" : ""} />
-        {p.raceKm > 0 && (() => { const pace = insights.summary.racePaceMinKm; const basis = insights.summary.racePaceBasis; const min = predictFinish({ km: p.raceKm, vert: p.raceVert || 0, easyPaceMinKm: pace, level: p.level || 2 }); return (
+        {hasRace && p.raceKm > 0 && (() => { const pace = insights.summary.racePaceMinKm; const basis = insights.summary.racePaceBasis; const min = predictFinish({ km: p.raceKm, vert: p.raceVert || 0, easyPaceMinKm: pace, level: p.level || 2 }); return (
           <Tile label={t("Prognose")} value={fmtTime(min)} sub={`${p.raceGoal ? t("dit mål {goal} · ", { goal: p.raceGoal }) : ""}${stopMin(+p.raceKm) ? t("inkl. ca. {n} min i depoter · ", { n: stopMin(+p.raceKm) }) : ""}${basis?.kind === "long" ? t("ud fra dine {n} lange ture de sidste 8 uger", { n: basis.n }) : pace ? (insights.summary.easyPaceEst ? t("ud fra dit tempo (uden puls)") : t("ud fra dit rolige tempo")) : t("standardtempo, indtil loggen har rolige ture")}`} onClick={onRaceDay} title={onRaceDay ? t("Åbn Løbsdag") : undefined} />); })()}
         {fitness && <Tile label={t("Fitnessalder")} value={fitness.ageFloor ? t("under 20") : fitness.fitnessAge} unit={fitness.ageFloor ? "" : ` ${t("år")}`} sub={t("VO2 max {vo2}{est} · {cat}, bedre end {pct} %", { vo2: fitness.vo2, est, cat: category.toLowerCase(), pct: fitness.percentile })} cls={fitness.percentile >= 50 ? "good" : ""} />}
         {latest(vo2) != null && !fitness?.measured && <Tile label="VO2 max" value={latest(vo2)} sub={t("fra dit ur")} />}
