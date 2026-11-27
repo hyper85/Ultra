@@ -2,8 +2,12 @@ import { ymd, parseLocal, addDays, kind, restingHRSeries } from "./import.js";
 import { watchHistory, hrZoneWeeks } from "./insights.js";
 import { aerobicEfficiency, fmtPace, AE } from "./aerobic.js";
 import { predictFinish, fmtTime, stopMin } from "./race.js";
-import { t, tn, locale } from "./i18n.js";
+import { t, tn, locale, getLang } from "./i18n.js";
+import { COACH_DA } from "./coachplan.js";
 import { hrAt, karvonen } from "./hr.js";
+import { records, equivalents, fmtRaceTime } from "./records.js";
+import { liftProgress } from "./lifts.js";
+import { fmtKg } from "./Strength.jsx";
 
 /* Fremskridt → Overblik: the runner's numbers on one screen (App.jsx renders the title and the Overblik · Log segment
    above). One grid of stat tiles (the ACWR tile scrolls to its chart), then the pictures: weekly km against the plan,
@@ -172,6 +176,26 @@ export default function Dashboard({ hasRace = true, strengthWeek = null, plan, c
       </div>
 
       <div className="dash-grid">
+        {(() => { const rec = records(acts, { includeHikes }); if (rec.n < 3) return null; const eq = equivalents(acts, { today: todayStr }); const yr = (d) => parseLocal(d).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "2-digit" }); return (
+          <div className="panel" id="records">
+            <div className="row-between"><h2 style={{ margin: 0 }}>{t("Rekorder")}</h2><span className="muted">{tn(rec.n, "1 tur", "{n} ture")}</span></div>
+            <dl className="records">
+              <div><dt>{t("Længste tur")}</dt><dd><b>{rec.longest.km} km</b><small>{yr(rec.longest.day)}</small></dd></div>
+              <div><dt>{t("Største uge")}</dt><dd><b>{rec.week.km} km</b><small>{t("uge fra {d}", { d: yr(rec.week.key) })}</small></dd></div>
+              {rec.vert && <div><dt>{t("Mest stigning")}</dt><dd><b>{rec.vert.m} m+</b><small>{yr(rec.vert.day)}</small></dd></div>}
+              {rec.fastest && <div><dt>{t("Hurtigste tur, 5 km+")}</dt><dd><b>{fmtPace(rec.fastest.pace)}<small>/km</small></b><small>{rec.fastest.km} km · {yr(rec.fastest.day)}</small></dd></div>}
+            </dl>
+            {eq && <>
+              <h3 className="sub" style={{ margin: "14px 0 6px" }}>{t("Det kan du løbe")}</h3>
+              <div className="equiv">{eq.rows.map((r) => <div key={r.km}><span className="muted">{r.km === 21.1 ? t("Halvmaraton") : r.km === 42.2 ? t("Maraton") : `${r.km} km`}</span><b>{fmtRaceTime(r.min)}</b></div>)}</div>
+              <p className="muted" style={{ margin: "8px 0 0" }}>{t("Anslået ud fra din bedste tur de sidste 12 uger ({km} km på {time}, {d}). Løber du sjældent hurtigt, kan du mere.", { km: eq.basis.km, time: fmtRaceTime(eq.basis.min), d: fmtDay(eq.basis.day) })}</p>
+            </>}
+          </div>); })()}
+        {(() => { const rows = liftProgress(p.lifts).slice(0, 8); if (!rows.length) return null; return (
+          <div className="panel" id="lifts">
+            <div className="row-between"><h2 style={{ margin: 0 }}>{t("Styrke, kg")}</h2><span className="muted">{t("første → seneste")}</span></div>
+            <table className="lift-table"><tbody>{rows.map((r) => <tr key={r.name}><td>{(getLang() === "da" && COACH_DA[r.name.toLowerCase()]) || r.name}<small className="muted"> · {tn(r.n, "1 pas", "{n} pas")}</small></td><td className="num">{fmtKg(r.first)} → <b>{fmtKg(r.latest)}</b></td><td className={`num ${r.change > 0 ? "good" : ""}`}>{r.change > 0 ? `+${fmtKg(r.change)}` : r.change < 0 ? `−${fmtKg(-r.change)}` : "±0"}</td></tr>)}</tbody></table>
+          </div>); })()}
         {shown.some((r) => r.ran > 0) && <div className="panel">
           <div className="row-between"><h2 style={{ margin: 0 }}>{t("Km pr. uge")}</h2><span className="muted"><i className="sw plan" /> {t("plan")} <i className="sw ran" /> {t("løbet")}</span></div>
           <Bars rows={shown} cur={cur.key} />

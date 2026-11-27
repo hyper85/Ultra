@@ -1,4 +1,5 @@
 import { ymd, parseLocal } from "./import.js";
+import { cleanLifts } from "./lifts.js";
 
 /* Stored data the app did not write itself, or wrote and then lost half of (a phone killed mid-write, an old version,
    a cloud row edited by hand), must never stop the app: one null activity or an impossible date used to hang or crash
@@ -67,6 +68,7 @@ export function cleanProfile(p) {
   if ("style" in c && c.style !== "ultra" && c.style !== "hybrid") delete c.style;
   if ("mode" in c && !["race", "hybrid", "strength", "fitness"].includes(c.mode)) delete c.mode;
   if ("historyFrom" in c && !validDay(c.historyFrom)) delete c.historyFrom;
+  if ("lifts" in c) c.lifts = cleanLifts(c.lifts);
   if ("coachPlan" in c && c.coachPlan != null && !isObj(c.coachPlan)) delete c.coachPlan;
   return c;
 }
