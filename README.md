@@ -50,6 +50,22 @@ Mere → Nulstil → "Slet historik" sletter ture, ugelog og daglig hvilepuls og
 før den dag kommer ikke ind igen – hverken ved genindlæsning, Strava, Garmin eller filimport. "Tillad ældre ture igen"
 fjerner grænsen. Profil, plan og indstillinger bliver stående.
 
+## Styrkelog, Dagsform, ugens gennemgang, rekorder og hurtig log
+
+- **Styrkelog.** På en styrkedag har hver øvelse med vægt et kg-felt. Feltet viser, hvad du løftede sidst, foreslår næste
+  trin (1 kg under 20 kg, ellers 2,5 kg), når du har løftet samme vægt to gange i træk, og markerer en ny rekord.
+  Fremskridt → "Styrke, kg" viser første og seneste vægt pr. øvelse. AI-træneren får de seneste vægte med.
+- **Dagsform.** Et tal fra 0 til 100 på I dag, når uret leverer daglig hvilepuls: 100 minus fradrag for hvilepuls over din
+  normal (7,5 pr. slag), søvn under 7 timer (10 pr. time), HRV mere end 10 % under normal og ACWR over 1,3. Tryk på kortet
+  for at se hvert fradrag. Det er et pejlemærke, ikke en medicinsk måling.
+- **Ugens gennemgang.** Under Træner ser AI-træneren på sidste uge: hvad gik godt, hvad skal justeres, og ét fokus for
+  denne uge. Gennemgangen gemmes på enheden for den uge.
+- **Rekorder.** Fremskridt viser længste tur, største uge, mest stigning og hurtigste tur over 5 km. "Det kan du løbe"
+  anslår 5 km, 10 km, halvmaraton og maraton med Riegels formel ud fra din bedste tur de sidste 12 uger.
+- **Hurtig log.** I log-formularen kan du skrive "8 km på 48 min, hårdt" eller trykke på mikrofonen og sige det. Appen
+  udfylder felterne, og du gemmer selv. Mikrofonen bruger browserens talegenkendelse; i Chrome sendes lyden til Googles
+  tjeneste, så skriv i stedet, hvis du ikke vil det.
+
 ## Hvilepuls dag for dag
 
 Garmins pulsrapport (connect.garmin.com i browseren → Puls → 4 uger → ⋮ → Eksportér) lægger hvilepulsen ind dag for dag. Årsrapporten (1 år) har ét ugesnit pr. række og lægges kun i ugeloggen, så dagsværdierne bliver stående.

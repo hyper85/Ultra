@@ -1,9 +1,16 @@
 import Figure from "./figures.jsx";
 import { dayTypeLabel } from "./nutrition.js";
-import { t } from "./i18n.js";
+import { t, getLang } from "./i18n.js";
+import { liftInfo } from "./lifts.js";
+
+// Patterns done with body weight, a band or a jump: no kilo field there.
+const NO_KG = new Set(["core", "hop", "hip", "back"]);
+export const fmtKg = (kg) => String(kg).replace(".", getLang() === "da" ? "," : ".");
 
 /* One strength session: figure, name, sets × reps, and the one-line technique behind a tap. */
-export function StrengthSession({ session, rest, showHow = true, compact = false }) {
+/* With `onLift` every weighted exercise gets a kilo field: it shows last time's weight, suggests the next step once the
+   same weight was lifted twice in a row, and marks a record. `lifts` is p.lifts, `day` the day being logged. */
+export function StrengthSession({ session, rest, showHow = true, compact = false, lifts, day, onLift }) {
   if (!session) return null;
   return (
     <div className={`ex-session ${compact ? "compact" : ""}`}>
@@ -15,6 +22,16 @@ export function StrengthSession({ session, rest, showHow = true, compact = false
             <div>
               <b>{e.label || e.name}</b>{e.sets && !(e.label || "").includes(`${e.sets}×`) ? <span className="ex-dose"> {e.sets}×{e.reps}</span> : null}
               {showHow && e.how && <details className="ex-how"><summary>{t("Sådan")}</summary><p>{e.how}</p></details>}
+              {onLift && !NO_KG.has(e.pattern) && (() => { const li = liftInfo(lifts, e.name, day); return (
+                <div className="ex-kg">
+                  <input type="text" inputMode="decimal" key={`${day}-${li.today ?? ""}`} defaultValue={li.today != null ? fmtKg(li.today) : ""} placeholder={li.next ? fmtKg(li.next) : li.last ? fmtKg(li.last[1]) : "–"} aria-label={t("Kg i {name}", { name: e.label || e.name })}
+                    onBlur={(ev) => { if (ev.target.value.trim() !== (li.today != null ? fmtKg(li.today) : "")) onLift(e.name, ev.target.value); }} onKeyDown={(ev) => { if (ev.key === "Enter") ev.target.blur(); }} />
+                  <span className="ex-kg-unit">kg</span>
+                  {li.record ? <span className="ex-pr">{t("Ny rekord")}</span>
+                    : li.today != null ? (li.last ? <span className="muted">{t("sidst {kg}", { kg: fmtKg(li.last[1]) })}</span> : null)
+                    : li.next ? <span className="ex-next">{t("samme vægt to gange: prøv {kg}", { kg: fmtKg(li.next) })}</span>
+                    : li.last ? <span className="muted">{t("sidst {kg}", { kg: fmtKg(li.last[1]) })}</span> : null}
+                </div>); })()}
             </div>
           </div>
         ))}

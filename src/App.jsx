@@ -12,6 +12,9 @@ const Dashboard = lazy(() => import("./Dashboard.jsx"));
 import { BODY, GEAR, buildStrength, DAILY_ANKLE, gearLabel, pickLiftDays } from "./strength.js";
 import { dayTargets, dayTypeOf, mealIdeas } from "./nutrition.js";
 import { StrengthSession, NutritionCard } from "./Strength.jsx";
+import { addLift } from "./lifts.js";
+import { readinessFor } from "./readiness.js";
+import { parseQuick, speechCtor } from "./quicklog.js";
 import { quoteFor } from "./quotes.js";
 import { fitnessReport } from "./fitness.js";
 const actKind = kind; // the today screen shadows `kind` with the day's label
@@ -325,6 +328,8 @@ export default function App() {
   const remoteAtRef = useRef(0); // the cloud row's updated_at as this device last saw it (pulled or pushed); 0 = unknown
   const markPending = (part, keys) => { if (!keys.length) return; pendingRef.current = addPending(pendingRef.current, part, keys); store.set("ultraplan-pending", pendingRef.current); };
   const setP = (v) => { touch(); setPRaw((prev) => { const next = typeof v === "function" ? v(prev) : v; markPending("profile", changedKeys(prev, next)); return next; }); };
+  // Strength log: the day's weight for one exercise (lifts.js). Body-weight programmes (gear "none") have no kilo fields.
+  const setLift = (name, kg) => setP((prev) => ({ ...prev, lifts: addLift(prev.lifts, name, ymd(new Date()), kg) }));
   const [log, setLog] = useState({});          // keyed by the Monday of the week ("YYYY-MM-DD")
   const [acts, setActs] = useState({});        // imported activities keyed by id
   const logRef = useRef(log); logRef.current = log; const actsRef = useRef(acts); actsRef.current = acts;
@@ -966,6 +971,10 @@ export default function App() {
   const dayKm = dayKmFor(curBase.key);
   const isEditing = (key, i) => dayEdit?.key === key && dayEdit.i === i;
   // type: a named button ("Log dagens tur", "Log styrken") preselects its type; a tap on a day opens the chooser.
+  // Quick log (quicklog.js): a typed or dictated sentence fills the form; the runner still checks it and presses Gem.
+  const [quick, setQuick] = useState(""); const [quickMiss, setQuickMiss] = useState(false); const [listening, setListening] = useState(false);
+  const applyQuick = (text) => { const q = parseQuick(text); if (!q) { setQuickMiss(!!String(text).trim()); return; } setQuickMiss(false); setQuick(""); setDayForm((f) => ({ ...f, type: q.type, km: q.km === "" ? "" : String(q.km), min: q.min === "" ? "" : String(q.min), rpe: q.rpe === "" ? "" : String(q.rpe) })); };
+  const listen = () => { const C = speechCtor(); if (!C || listening) return; try { const rec = new C(); rec.lang = getLang() === "en" ? "en-US" : "da-DK"; rec.interimResults = false; rec.maxAlternatives = 1; rec.onresult = (e) => { const text = e.results?.[0]?.[0]?.transcript || ""; setQuick(text); applyQuick(text); }; rec.onend = () => setListening(false); rec.onerror = () => setListening(false); setListening(true); rec.start(); } catch { setListening(false); } };
   const openDay = (key, i, type = null, edit = null) => {
     const closing = isEditing(key, i);
     const a = edit ? acts[edit] : null; // a typed session to correct: the form starts with its numbers and replaces it on save
@@ -1042,6 +1051,12 @@ export default function App() {
         {!dayForm.type ? (
           <>
             <div className="dayform-ask">{(actsByDay[day] || []).length > 0 || (otherByDay[day] || []).length > 0 ? t("Tilføj et pas mere – hvad lavede du?") : t("Hvad lavede du?")}</div>
+            <div className="quicklog">
+              <input type="text" value={quick} onChange={(e) => { setQuick(e.target.value); setQuickMiss(false); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyQuick(quick); } }} placeholder={t("Skriv det: 8 km på 48 min, hårdt")} aria-label={t("Hurtig log")} enterKeyHint="done" />
+              {speechCtor() && <button type="button" className={`btn ghost mic ${listening ? "on" : ""}`} onClick={listen} aria-label={t("Indtal turen")} aria-pressed={listening} title={t("Bruger browserens talegenkendelse")}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg></button>}
+              <button type="button" className="btn ghost" onClick={() => applyQuick(quick)} disabled={!quick.trim()}>{t("Udfyld")}</button>
+            </div>
+            {quickMiss && <div className="muted quick-miss" role="status">{t("Det forstod jeg ikke. Skriv fx: 8 km på 48 min, eller vælg herunder.")}</div>}
             <div className="type-grid">{LOG_TYPES.map(([k, l, hint]) => <button key={k} type="button" className={`type-tile t-${k.toLowerCase()}`} onClick={() => setDayForm({ ...dayForm, type: k })}><b>{t(l)}</b><small>{t(hint)}</small></button>)}</div>
             <div className="dayform-row"><button className="btn ghost" type="button" onClick={() => setDayEdit(null)}>{t("Luk")}</button></div>
           </>
@@ -1194,6 +1209,9 @@ export default function App() {
   const restNormal = rhrBase?.normal ?? null;
   const hrHigh = !!(hrNow && restNormal && hrNow >= restNormal + 7);
   const hrWatch = !!(hrNow && restNormal && !hrHigh && hrNow >= restNormal + 4);
+  // Dagsform (readiness.js): today's watch values against the runner's own normal; only with daily values from the watch.
+  const dagsform = useMemo(() => readinessFor({ wellness: p.wellness, today: todayStr, yesterday: ymd(addDays(parseLocal(todayStr), -1)), acwr: lastA }), [p.wellness, todayStr, lastA]);
+  const liftProps = (p.gear || "gym") === "none" ? {} : { lifts: p.lifts, day: todayStr, onLift: setLift };
   const todayIdx = curBase.key === todayKey ? (new Date().getDay() + 6) % 7 : 0;
   // A recovery week after a long event is already cut (by the coach, or by the app at 60 %). The event's load makes
   // ACWR high on purpose, so only resting HR ≥ normal + 7 cuts such a week further – never ACWR or km a second time.
@@ -1388,9 +1406,12 @@ export default function App() {
   const [coachQ, setCoachQ] = useState("");
   const coachQRef = useRef(null); // the composer textarea: grows with the text, shrinks back after a send
   // Body goal, strength and today's nutrition targets, so the coach can answer about lifting and food too.
-  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === cur.longDay, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.ageFloor ? "under 20" : fitness.fitnessAge } : null, krop_mål: p.body || "keep", træningsstil: plan.coach ? "trænerplan" : { race: "løb mod et løb", hybrid: "hybrid (styrke og løb vægtes lige)", strength: "kun styrke (ingen løbeplan)", fitness: "form uden løb (løbende plan, ingen løbsdato)" }[mode], styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
+  const coachExtra = () => { const ti = (new Date().getDay() + 6) % 7; const v = cur.days[ti] || 0; const dt = dayTypeOf({ km: v, isLong: ti === cur.longDay, isHard: ti === cur.qDay, isRace: cur.isRace && ti === cur.longDay, lift: liftDays.includes(ti) }); const n = nutritionFor(dt); return { form: fitness ? { vo2max: fitness.vo2, målt: fitness.measured, kategori: fitness.category, percentil_for_alder_og_køn: fitness.percentile, fitnessalder: fitness.ageFloor ? "under 20" : fitness.fitnessAge } : null, krop_mål: p.body || "keep", træningsstil: plan.coach ? "trænerplan" : { race: "løb mod et løb", hybrid: "hybrid (styrke og løb vægtes lige)", strength: "kun styrke (ingen løbeplan)", fitness: "form uden løb (løbende plan, ingen løbsdato)" }[mode], styrke: { pas_pr_uge: liftDays.length, dage: liftDays.map((i) => DAYS[i]), udstyr: gearLabel(p.gear), pas: strengthPlan.sessions.map((x) => `${x.name}: ${x.exercises.map((e) => e.label || e.name).join(", ")}`), ...(p.lifts && Object.keys(p.lifts).length ? { seneste_kg: Object.fromEntries(Object.entries(p.lifts).slice(0, 24).map(([n, rows]) => [n, { kg: rows[rows.length - 1][1], dag: rows[rows.length - 1][0], pas: rows.length }])) } : {}) }, kost_i_dag: { dagtype: n.targets.dayType, kcal: n.targets.kcal, protein_g: n.targets.protein, kulhydrat_g: n.targets.carbs, fedt_g: n.targets.fat } }; };
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachErr, setCoachErr] = useState(null);
+  // Ugens gennemgang: the AI coach's review of the last full week, kept per week on this device (like the chat).
+  const [review, setReview] = useState(() => { try { const v = JSON.parse(localStorage.getItem("ultraplan-review") || "null"); return v && typeof v.text === "string" ? v : null; } catch { return null; } });
+  const [reviewing, setReviewing] = useState(false);
   // The chat is a window of fixed height, like any chat: newest message at the bottom, scrolled into view.
   const chatRef = useRef(null);
   // The chat flows in the page (no inner scroll box): a new message scrolls the page so it sits just above the composer.
@@ -1415,6 +1436,18 @@ export default function App() {
       setChat(done); saveChat(done);
     } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup, login: !!e.login }); setChat(chat); }
     setCoachBusy(false);
+  };
+  const askReview = async () => {
+    if (reviewing || coachBusy) return;
+    setReviewing(true); setCoachErr(null);
+    try {
+      const context = coachContext({ p, plan, cur, log, acts, acwrFor, insights, todayStr, maxHR, advice, extra: coachExtra() });
+      const question = "Giv ugens gennemgang af sidste uge (den seneste hele uge i seneste_uger). Tre korte afsnit uden overskrifter: først det der gik godt, så det der skal justeres, og til sidst ét konkret fokus for denne uge. Brug tallene. Højst 110 ord.";
+      const text = await askCoach({ question, history: [], context });
+      const v = { week: lastKey, text, at: Date.now() };
+      setReview(v); try { localStorage.setItem("ultraplan-review", JSON.stringify(v)); } catch { /* ignore */ }
+    } catch (e) { setCoachErr({ text: e.message, setup: !!e.setup, login: !!e.login }); }
+    setReviewing(false);
   };
   // Let the coach propose plan parameters from the watch data; the engine builds the plan, the runner applies it.
   const [proposal, setProposal] = useState(null);
@@ -1737,6 +1770,14 @@ export default function App() {
                 </div>
               </div>
               {coachOfferBox}
+              {dagsform && (() => { const dec = (n) => String(n).replace(".", getLang() === "da" ? "," : "."); const hrP = dagsform.parts.find((x) => x.k === "hr"); const slP = dagsform.parts.find((x) => x.k === "sleep");
+                const line = (x) => x.k === "hr" ? (x.d > 0 ? t("Hvilepuls {hr} er {d} over din normal ({n})", { hr: x.hr, d: x.d, n: x.normal }) : t("Hvilepuls {hr} mod normal {n}", { hr: x.hr, n: x.normal })) : x.k === "sleep" ? t("Søvn {h} t (under 7 t koster)", { h: dec(x.sleep) }) : x.k === "hrv" ? t("HRV {v} mod normal {n}", { v: Math.round(x.hrv), n: x.hrvNormal }) : t("Belastning, ACWR {v} (over 1,3 koster)", { v: dec(x.acwr.toFixed(2)) });
+                return (
+                <details className={`readiness ${dagsform.level}`} id="readiness">
+                  <summary><span className="rd-score">{dagsform.score}</span><span className="rd-text"><b>{t("Dagsform")} · {dagsform.level === "good" ? t("klar til dagens pas") : dagsform.level === "ok" ? t("hold igen i dag") : t("tag den roligt i dag")}</b><small>{t("Hvilepuls {hr} (normal {n})", { hr: hrP.hr, n: hrP.normal })}{slP ? ` · ${t("søvn {h} t", { h: dec(slP.sleep) })}` : ""}{dagsform.day !== todayStr ? ` · ${t("fra i går")}` : ""}</small></span></summary>
+                  <ul>{dagsform.parts.map((x) => <li key={x.k}><span>{line(x)}</span><b>{x.pts < 0 ? `−${dec(-x.pts)}` : t("intet fradrag")}</b></li>)}</ul>
+                  <p className="muted">{t("100 minus fradrag for høj hvilepuls, kort søvn, lav HRV og høj belastning. Et pejlemærke, ikke en medicinsk måling.")}</p>
+                </details>); })()}
               {lastWeek && ti <= 2 && (
                 <div className="advice recap">
                   <b>{t("Sidste uge:")}</b> {t("{km} af {plan} km", { km: lastWeek.km, plan: lastWeek.plan })}{lastWeek.pct != null && (lastWeek.pct < 85 || lastWeek.pct > 120) ? ` (${lastWeek.pct} %)` : ""}{lastWeek.xn ? ` · ${tn(lastWeek.xn, "1 andet pas", "{n} andre pas")} (${lastWeek.xmin} min)` : ""}{lastWeek.acwr != null ? ` · ACWR ${lastWeek.acwr.toFixed(2)}` : ""}{lastWeek.sleep ? ` · ${t("søvn {h} t", { h: lastWeek.sleep })}` : ""}. {lastWeek.verdict}
@@ -1768,13 +1809,13 @@ export default function App() {
                 {long && !raceDay && <div className="today-sub">{describeLong({ km: v, carbs, ...hp, phase: cur.phase })}</div>}
                 {long && !raceDay && !(ran > 0) && (() => { const l = longRunPlan({ km: v, easyPaceMinKm: insights.summary.easyPaceMinKm, phase: cur.phase, raceKm: p.raceKm, raceVert: p.raceVert }); return l ? <div className="today-sub fuel">{l}</div> : null; })()}
                 {b2b && <div className="today-sub">{t("Back-to-back på trætte ben. Puls under {hr}. {carbs} g kulhydrat/t.", { hr: hrCap, carbs })}</div>}
-                {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
+                {!v && !raceDay && !ev && lift && session && <><div className="today-sub">{session.minutes ? t("Ca. {min} min{rest}. ", { min: session.minutes, rest: session.rest ? t(", pause {rest}", { rest: session.rest }) : "" }) : ""}</div><StrengthSession session={session} rest={session.rest} compact {...liftProps} />{strengthPlan.daily.length > 0 && <div className="today-ankle">{t("Ankel:")} {strengthPlan.daily.join(" · ")}</div>}</>}
                 {!v && !raceDay && !ev && lift && !session && <div className="today-sub">{strengthPlan.note || t("Styrkedag. Kort og tungt, ingen løb.")}</div>}
                 {!v && !lift && !raceDay && !ev && <div className="today-sub">{t("Hviledag. Sov, spis, gå en tur.")}</div>}
                 {!v && !lift && !raceDay && !ev && tomorrow && <div className="today-sub muted">{t("I morgen: {what}", { what: tomorrow })}</div>}
                 {adjRow && !showOriginal && adjRow.adjusted.original[ti] !== v && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Justeret af trænerråd ({reason}).", { reason: adjRow.adjusted.reason })} {t("Original:")} {adjRow.adjusted.original[ti] || t("hvile")}{adjRow.adjusted.original[ti] ? " km" : ""}.</div>}
                 {v > 0 && p.injury === "injured" && cur.phase === "Genopbygning" && <div className="today-sub" style={{ color: "var(--amber)" }}>{t("Skadesfase: {quality}. Stop ved smerte, der ændrer skridtet.", { quality: sessionName(cur.quality) })}</div>}
-                {v > 0 && lift && session && <div className="today-also"><b>{t("+ {name} i dag efter løbet:", { name: session.name })}</b><ul>{session.exercises.map((e, k) => <li key={k}>{e.label || e.name}</li>)}</ul></div>}
+                {v > 0 && lift && session && <div className="today-also"><b>{t("+ {name} i dag efter løbet:", { name: session.name })}</b><ul>{session.exercises.map((e, k) => <li key={k}>{e.label || e.name}</li>)}</ul>{liftProps.onLift && <details className="ex-how lift-log"><summary>{t("Log kg")}</summary><StrengthSession session={session} compact showHow={false} {...liftProps} /></details>}</div>}
                 {d.note && <div className="today-note">{d.note}</div>}
                 {ran > 0 && <div className="today-ran">✓ {t("Logget")} · {ran} km{todayVert > 0 ? ` · ${todayVert} m+` : ""}{v > 0 ? ` · ${t("planen sagde {km} km", { km: v })}` : lift ? ` · ${t("planen havde {name}", { name: liftName(ti) })}` : ` · ${t("planen havde hvile")}`}{v > 0 && ran > v * 1.4 ? `. ${t("Planens tal er et loft, ikke et gulv.")}` : ""}</div>}
                 {todayRuns.length > 0 && (
@@ -1835,6 +1876,17 @@ export default function App() {
         {view === "coach" && (
         <section className="stack">
           <h1 className="screen-title">{t("Træner")}</h1>
+          {lastRow && (lastLog?.km > 0 || lastLog?.xn > 0 || lastLog?.xmin > 0 || review?.week === lastKey) && (
+          <div className="panel review" id="review">
+            <div className="panel-head"><h2>{t("Ugens gennemgang")}</h2><span className="muted">{t("uge {i}", { i: lastRow.i })} · {fmtRange(lastRow.wkStart, addDays(lastRow.wkStart, 6))}</span></div>
+            {review?.week === lastKey ? <>
+              <p className="review-text">{review.text}</p>
+              <button type="button" className="linkbtn" onClick={askReview} disabled={reviewing || coachBusy}>{reviewing ? t("Ser på ugen…") : t("Lav en ny")}</button>
+            </> : <>
+              <p className="muted">{t("AI-træneren ser på sidste uge: hvad gik godt, hvad skal justeres, og ét fokus for denne uge.")}</p>
+              <button type="button" className="btn ghost" onClick={askReview} disabled={reviewing || coachBusy}>{reviewing ? t("Ser på ugen…") : t("Få ugens gennemgang")}</button>
+            </>}
+          </div>)}
           <div className="panel coach-grid">
             <div>
             <h2 className="sub">{t("Det appen har lært om dig")}</h2>

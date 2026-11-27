@@ -842,3 +842,51 @@ h1.today-date { font-family: inherit; font-size: 14px; font-weight: 600; text-tr
 .today-also ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 14px; }
 .today-also li { break-inside: avoid; padding: 2px 0; color: #d8d8d8; }
 @media (max-width: 359px) { .today-also ul { columns: 1; } }
+
+/* Strength log: a kilo field under each weighted exercise */
+.ex-kg { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; font-size: 13px; }
+.ex-kg input { width: 72px; min-height: 44px; padding: 4px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.ex-kg-unit { color: var(--muted); }
+.ex-next { color: var(--volt); }
+.ex-pr { color: #0b0b0b; background: var(--volt); border-radius: 999px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
+
+/* Fremskridt: records, race equivalents and the strength table */
+.records { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; }
+.records > div { background: var(--panel-2); border-radius: var(--r-sm); padding: 10px 12px; min-width: 0; }
+.records dt { color: var(--muted); font-size: 12px; }
+.records dd { margin: 2px 0 0; display: grid; }
+.records dd b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.records dd b small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.records dd > small { color: var(--muted); font-size: 12px; }
+.equiv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+@media (min-width: 600px) { .equiv { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.equiv > div { background: var(--panel-2); border-radius: var(--r-sm); padding: 8px 6px; text-align: center; display: grid; gap: 2px; min-width: 0; }
+.equiv span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.equiv b { font-variant-numeric: tabular-nums; font-size: 15px; }
+.lift-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+.lift-table td { padding: 8px 4px; border-top: 1px solid var(--line); }
+.lift-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lift-table td.good { color: var(--green); }
+
+/* Dagsform: one number with its reasons behind a tap */
+.readiness { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r, 16px); padding: 0; }
+.readiness > summary { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; cursor: pointer; list-style: none; min-height: 44px; }
+.readiness > summary::-webkit-details-marker { display: none; }
+.rd-score { font-family: var(--display, inherit); font-size: 30px; font-weight: 800; line-height: 1; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.readiness.good .rd-score { color: var(--green); } .readiness.ok .rd-score { color: var(--amber); } .readiness.low .rd-score { color: var(--red); }
+.rd-text { display: grid; gap: 2px; min-width: 0; } .rd-text small { color: var(--muted); font-size: 13px; }
+.readiness ul { list-style: none; margin: 0; padding: 0 14px; display: grid; gap: 6px; font-size: 14px; }
+.readiness li { display: flex; justify-content: space-between; gap: 12px; } .readiness li b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.readiness p { margin: 10px 14px 12px; font-size: 13px; }
+/* Ugens gennemgang */
+.review-text { white-space: pre-wrap; margin: 8px 0 6px; line-height: 1.5; }
+/* Quick log */
+.quicklog { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.quicklog input { flex: 1 1 100%; min-width: 0; }
+.quicklog .btn { flex: 1; }
+.quicklog .mic { flex: 0 0 auto; }
+@media (min-width: 600px) { .quicklog { flex-wrap: nowrap; } .quicklog input { flex: 1; } .quicklog .btn { flex: 0 0 auto; } }
+.quicklog .mic { padding: 0 12px; display: inline-flex; align-items: center; }
+.quicklog .mic.on { color: var(--red); border-color: var(--red); }
+.quick-miss { margin: -4px 0 10px; font-size: 13px; }
+.lift-log { margin-top: 8px; } .lift-log .ex-session { margin-top: 8px; }
